@@ -110,7 +110,7 @@ final class PasteboardMonitor {
         }
 
         let plainText = PasteboardTypeMapper.readPlainText(from: item)
-        guard let data = PasteboardTypeMapper.readRawData(from: item, contentType: contentType) else {
+        guard let data = PasteboardTypeMapper.readRawData(from: item, contentType: contentType, pasteboard: pasteboard) else {
             return nil
         }
 

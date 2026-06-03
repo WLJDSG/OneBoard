@@ -33,31 +33,18 @@ final class ScreenshotCaptureService: NSObject {
         }
     }
 
-    // MARK: - 全屏截图（使用 CGWindowListCreateImage 公开 API）
+    // MARK: - 全屏截图
 
-    private func captureFullScreen() -> NSImage? {
-        // CGWindowListCreateImage 是公开 API，可捕获全屏窗口内容
-        // .bestResolution 返回 Retina 分辨率（像素尺寸），NSImage.size 使用屏幕点尺寸保证坐标计算正确
-        guard let screen = NSScreen.main,
-              let cgImage = CGWindowListCreateImage(
-                .infinite,
-                .optionOnScreenOnly,
-                kCGNullWindowID,
-                .bestResolution
-              ) else {
-            print("[Screenshot] CGWindowListCreateImage 返回 nil")
-            return nil
-        }
-        // size 使用屏幕点坐标尺寸（而非像素尺寸），确保后续裁剪坐标计算正确
-        return NSImage(cgImage: cgImage, size: screen.frame.size)
-    }
-
-    /// 备选方案：使用 screencapture 命令行（CGWindowListCreateImage 失败时回退）
+    /// 主方案：使用 screencapture 命令行（最可靠，正确处理权限和所有显示器）
     private func captureFullScreenViaSC() -> NSImage? {
         let tmpPath = NSTemporaryDirectory() + "oneboard_screenshot_\(UUID().uuidString).png"
         let task = Process()
         task.launchPath = "/usr/sbin/screencapture"
-        task.arguments = ["-t", "png", "-x", "-D", "1", tmpPath]
+        // -t png: PNG 格式
+        // -x: 静默模式（无提示音）
+        // -D <displayID>: 指定显示器（使用系统主显示器 ID，而非硬编码 1）
+        let displayID = CGMainDisplayID()
+        task.arguments = ["-t", "png", "-x", "-D", "\(displayID)", tmpPath]
         task.launch()
         task.waitUntilExit()
         guard task.terminationStatus == 0,
@@ -66,16 +53,40 @@ final class ScreenshotCaptureService: NSObject {
             return nil
         }
         try? FileManager.default.removeItem(atPath: tmpPath)
+        print("[Screenshot] screencapture 成功, displayID=\(displayID), size=\(image.size)")
         return image
     }
 
-    /// 尝试全屏截图，优先 CGWindowListCreateImage，失败则回退到 screencapture
+    /// 备选方案：CGWindowListCreateImage（公开 API，快速但可能因权限返回纯黑图）
+    private func captureFullScreenViaCGWindowList() -> NSImage? {
+        guard let screen = NSScreen.main else {
+            print("[Screenshot] NSScreen.main 为 nil")
+            return nil
+        }
+        // 使用屏幕 frame（非 CGRect.infinite），确保捕获正确的显示区域
+        let screenRect = screen.frame
+        guard let cgImage = CGWindowListCreateImage(
+            screenRect,
+            .optionOnScreenOnly,
+            kCGNullWindowID,
+            .bestResolution
+        ) else {
+            print("[Screenshot] CGWindowListCreateImage 返回 nil")
+            return nil
+        }
+        let image = NSImage(cgImage: cgImage, size: screenRect.size)
+        print("[Screenshot] CGWindowListCreateImage 成功, size=\(image.size)")
+        return image
+    }
+
+    /// 尝试全屏截图：优先 screencapture（最可靠），失败则回退 CGWindowList
     private func captureFullScreenWithFallback() -> NSImage? {
-        if let image = captureFullScreen() {
+        // screencapture 最可靠，优先使用
+        if let image = captureFullScreenViaSC() {
             return image
         }
-        print("[Screenshot] CGWindowListCreateImage 失败，回退到 screencapture")
-        return captureFullScreenViaSC()
+        print("[Screenshot] screencapture 失败，回退到 CGWindowListCreateImage")
+        return captureFullScreenViaCGWindowList()
     }
 
     // MARK: - 区域选择遮罩

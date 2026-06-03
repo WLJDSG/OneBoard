@@ -185,15 +185,29 @@ final class ClipboardListViewModel: ObservableObject {
             pasteboard.setData(entry.data, forType: NSPasteboard.PasteboardType.png)
             print("[ViewModel] ✅ 已写入剪贴板(图片): \(entry.data.count) bytes")
         case .fileURL:
-            if let path = String(data: entry.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !path.isEmpty {
-                let url = URL(fileURLWithPath: path)
+            if let rawString = String(data: entry.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !rawString.isEmpty {
+                // 兼容两种存储格式：直接路径 vs URL 字符串（旧数据）
+                let url: URL
+                if rawString.hasPrefix("file://") || rawString.hasPrefix("/.file/") {
+                    // URL 字符串（含文件引用），尝试解析并标准化
+                    if let parsed = URL(string: rawString) {
+                        url = parsed.standardizedFileURL
+                    } else {
+                        url = URL(fileURLWithPath: rawString)
+                    }
+                } else {
+                    // 直接文件路径
+                    url = URL(fileURLWithPath: rawString)
+                }
+                // 检查文件是否存在（避免写入无效引用）
+                let fileExists = FileManager.default.fileExists(atPath: url.path)
                 // 写入多种格式以确保兼容性
                 pasteboard.setString(url.path, forType: NSPasteboard.PasteboardType.string)  // 文件路径文本
                 pasteboard.setString(url.absoluteString, forType: NSPasteboard.PasteboardType.fileURL)  // file:// URL
-                // 同时写入实际文件引用
+                // 写入实际文件引用（NSURL 对象，Finder 可识别）
                 pasteboard.writeObjects([url as NSURL])
-                print("[ViewModel] ✅ 已写入剪贴板(文件): \(url.path)")
+                print("[ViewModel] ✅ 已写入剪贴板(文件): \(url.path) exists: \(fileExists)")
             } else {
                 print("[ViewModel] ⚠️ 文件路径解析失败")
             }
