@@ -79,12 +79,23 @@ final class AnnotationService: ObservableObject {
         layers.append(layer)
     }
 
-    func addHighlight(_ rect: CGRect) {
+    func addText(at point: CGPoint, text: String, fontSize: CGFloat = 18) {
+        // 根据文字长度估算初始 rect
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        let size = (text as NSString).size(withAttributes: attrs)
+        let rect = CGRect(
+            x: point.x,
+            y: point.y,
+            width: max(size.width + 16, 60),
+            height: max(size.height + 8, 30)
+        )
         let layer = AnnotationLayer(
-            tool: .highlight,
+            tool: .text,
             rect: rect,
-            color: selectedColor.withAlphaComponent(0.3),
-            lineWidth: 0
+            color: selectedColor,
+            text: text,
+            fontSize: fontSize
         )
         layers.append(layer)
     }
@@ -97,6 +108,23 @@ final class AnnotationService: ObservableObject {
             lineWidth: 0
         )
         layers.append(layer)
+    }
+
+    /// 更新文字标注的位置和大小
+    func updateTextLayer(id: UUID, rect: CGRect) {
+        guard let index = layers.firstIndex(where: { $0.id == id }) else { return }
+        layers[index].rect = rect
+    }
+
+    /// 更新文字标注的文本
+    func updateTextLayer(id: UUID, text: String) {
+        guard let index = layers.firstIndex(where: { $0.id == id }) else { return }
+        layers[index].text = text
+    }
+
+    /// 删除指定图层
+    func removeLayer(id: UUID) {
+        layers.removeAll { $0.id == id }
     }
 
     // MARK: - 操作
@@ -182,9 +210,10 @@ final class AnnotationService: ObservableObject {
                 drawArrowHead(for: layer, in: ctx)
             }
 
-        case .highlight:
-            ctx.setFillColor(layer.color.cgColor)
-            ctx.fill(layer.rect)
+        case .text:
+            if let text = layer.text {
+                drawText(text, rect: layer.rect, color: layer.color, fontSize: layer.fontSize, in: ctx)
+            }
 
         case .mosaic:
             drawMosaic(in: layer.rect, context: ctx)
@@ -192,6 +221,24 @@ final class AnnotationService: ObservableObject {
         }
 
         ctx.restoreGState()
+    }
+
+    private func drawText(_ text: String, rect: CGRect, color: NSColor, fontSize: CGFloat, in ctx: CGContext) {
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color
+        ]
+        let nsText = text as NSString
+        // 在 rect 内居中绘制
+        let textSize = nsText.size(withAttributes: attrs)
+        let drawRect = CGRect(
+            x: rect.minX + 4,
+            y: rect.midY - textSize.height / 2,
+            width: rect.width - 8,
+            height: textSize.height
+        )
+        nsText.draw(in: drawRect, withAttributes: attrs)
     }
 
     private func drawArrowHead(for layer: AnnotationLayer, in ctx: CGContext) {

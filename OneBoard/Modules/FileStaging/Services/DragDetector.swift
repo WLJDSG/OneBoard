@@ -42,12 +42,15 @@ final class DragDetector {
         recentPositions.removeAll()
     }
 
+    // MARK: - 高频轮询（30ms 间隔，作为 CGEventTap 的补充和兜底）
+
     private func startPolling() {
         pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
             guard let self else { return }
             let position = NSEvent.mouseLocation
-            if self.isDraggingSupportedContent || self.isLeftMouseButtonDown || !self.recentPositions.isEmpty {
+            // 只要左键按住或拖拽轨迹存在就检查，不依赖 pasteboard 类型检测
+            if self.isLeftMouseButtonDown || !self.recentPositions.isEmpty || self.isDraggingSupportedContent {
                 self.handleDrag(at: position)
             }
         }
@@ -71,8 +74,8 @@ final class DragDetector {
             },
             userInfo: userInfo
         ) else {
-            print("[DragDetector] CGEventTap 创建失败，可能缺少辅助功能权限")
-            print("[DragDetector] 将使用轮询模式兜底检测拖拽摇晃")
+            print("[DragDetector] CGEventTap 创建失败，可能缺少辅助功能权限。使用轮询模式兜底。")
+            print("[DragDetector] 请在设置中开启辅助功能权限以获得更可靠的检测。")
             return
         }
 
@@ -81,6 +84,7 @@ final class DragDetector {
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        print("[DragDetector] CGEventTap 已启用")
     }
 
     private func handleCGEvent(type: CGEventType, event: CGEvent) {
@@ -111,19 +115,27 @@ final class DragDetector {
 
     private func handleDrag(at position: CGPoint) {
         let inTopZone = isInTopTriggerZone(position)
-        guard isDraggingSupportedContent || inTopZone || isLeftMouseButtonDown || !recentPositions.isEmpty else {
+        let isDragging = isDraggingSupportedContent
+        let hasTrajectory = !recentPositions.isEmpty
+
+        guard isDragging || inTopZone || isLeftMouseButtonDown || hasTrajectory else {
             recentPositions.removeAll()
             return
         }
 
         let now = Date().timeIntervalSinceReferenceDate
         recentPositions.append((position, now))
-        recentPositions = recentPositions.filter { now - $0.timestamp < Constants.shakeWindowDuration }
+        // 保留最近 0.6s 的轨迹
+        recentPositions = recentPositions.filter { now - $0.timestamp < 0.6 }
 
-        if (detectShake() || inTopZone), now - lastTriggerTime > 1.0 {
+        // 放宽触发条件：摇动检测 OR 顶部区域（拖拽内容时）
+        let shakeDetected = detectShake()
+        let shouldTrigger = (shakeDetected && isDragging) || (inTopZone && isDragging)
+
+        if shouldTrigger, now - lastTriggerTime > 1.2 {
             lastTriggerTime = now
             recentPositions.removeAll()
-            print("[DragDetector] 检测到拖拽摇晃手势")
+            print("[DragDetector] 检测到拖拽手势 (shake: \(shakeDetected), topZone: \(inTopZone))")
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
             }
@@ -155,8 +167,9 @@ final class DragDetector {
         (NSEvent.pressedMouseButtons & 1) == 1
     }
 
+    /// 检测左右摇晃（放宽条件）
     private func detectShake() -> Bool {
-        guard recentPositions.count >= 4 else { return false }
+        guard recentPositions.count >= 3 else { return false }
 
         var directionChanges = 0
         var previousDirection: CGFloat = 0
@@ -169,7 +182,8 @@ final class DragDetector {
             let dt = current.timestamp - previous.timestamp
             let speed = hypot(dx, dy) / max(CGFloat(dt), 0.001)
 
-            guard speed > 160, abs(dx) > 5, abs(dx) > abs(dy) * 0.7 else { continue }
+            // 降低速度和位移阈值
+            guard speed > 100, abs(dx) > 3 else { continue }
 
             let direction: CGFloat = dx > 0 ? 1 : -1
             if previousDirection != 0, direction != previousDirection {
@@ -186,8 +200,8 @@ final class DragDetector {
             return false
         }
         let frame = screen.frame
-        let zoneWidth: CGFloat = 180
-        let zoneHeight: CGFloat = 44
+        let zoneWidth: CGFloat = 200
+        let zoneHeight: CGFloat = 48
         let zone = CGRect(
             x: frame.midX - zoneWidth / 2,
             y: frame.maxY - zoneHeight,

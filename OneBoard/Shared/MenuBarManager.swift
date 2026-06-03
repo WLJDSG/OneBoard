@@ -7,7 +7,7 @@ final class MenuBarManager: NSObject {
 
     private var statusItem: NSStatusItem!
     private var clipboardFloatingWindow: NSPanel?
-    var onSettings: (() -> Void)?  // 由 App 注入
+    var onSettings: (() -> Void)?
 
     private override init() { super.init() }
 
@@ -27,9 +27,8 @@ final class MenuBarManager: NSObject {
     @objc private func handleClick() {
         guard let event = NSApp.currentEvent else { return }
         if event.type == .rightMouseUp {
-            return  // 右键不做任何事
+            return
         }
-        // 左键 → 弹出菜单
         showMenu()
     }
 
@@ -55,29 +54,41 @@ final class MenuBarManager: NSObject {
             existing.close(); clipboardFloatingWindow = nil; return
         }
 
-        let hostingView = NSHostingView(rootView: ClipboardPopoverView())
+        let hostingView = ClipboardTrackingHostingView(
+            rootView: ClipboardPopoverView(),
+            onMouseExit: { [weak self] in
+                self?.closeClipboardFloatingWindow()
+            }
+        )
+        hostingView.wantsLayer = true
+
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: Constants.popoverWidth, height: Constants.popoverHeight),
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false
         )
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.title = "历史剪贴板"
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
         panel.contentView = hostingView
+
         FloatingWindowManager.positionAtTopRight(panel)
         panel.makeKeyAndOrderFront(nil)
         clipboardFloatingWindow = panel
     }
 
     func closeClipboardFloatingWindow() {
-        clipboardFloatingWindow?.close(); clipboardFloatingWindow = nil
+        clipboardFloatingWindow?.close()
+        clipboardFloatingWindow = nil
     }
 
     // MARK: - Actions
 
     @objc private func openSettings() {
-        // 通过回调通知 SwiftUI App 打开设置
         onSettings?()
     }
 
@@ -92,5 +103,43 @@ final class MenuBarManager: NSObject {
             ?? NSImage(size: NSSize(width: 18, height: 18))
         icon.isTemplate = true
         return icon
+    }
+}
+
+/// 带鼠标追踪的 NSHostingView —— 光标离开时触发回调
+private final class ClipboardTrackingHostingView<Content: View>: NSHostingView<Content> {
+    private var trackingArea: NSTrackingArea?
+    private var onMouseExit: (() -> Void)?
+
+    @MainActor required init(rootView: Content) {
+        super.init(rootView: rootView)
+    }
+
+    convenience init(rootView: Content, onMouseExit: @escaping () -> Void) {
+        self.init(rootView: rootView)
+        self.onMouseExit = onMouseExit
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let old = trackingArea {
+            removeTrackingArea(old)
+        }
+        let ta = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(ta)
+        trackingArea = ta
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onMouseExit?()
     }
 }

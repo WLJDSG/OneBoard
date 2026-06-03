@@ -14,97 +14,187 @@ final class ScreenshotViewModel: ObservableObject {
     @Published var pinnedWindows: [NSWindow] = []
 
     private let captureService = ScreenshotCaptureService()
+
+    /// 截图窗口（含图片和标注）
+    private var annotationWindow: NSPanel?
+    /// 工具栏独立悬浮窗
+    private var toolbarPanel: NSPanel?
+    /// 工具栏跟随用的 frame 观察
+    private var windowFrameObserver: NSKeyValueObservation?
+
     private init() {}
 
     // MARK: - 截图流程
 
-    /// 截图前记录的鼠标位置（用于窗口定位）
-    private var captureStartMouseLocation: CGPoint = .zero
-
     /// 开始截图（快捷键触发）
     func startCapture() async {
-        // 录制截图开始时的鼠标位置，用于窗口定位
-        captureStartMouseLocation = NSEvent.mouseLocation
-
-        guard let image = await captureService.captureRegion() else {
+        guard let result = await captureService.captureRegion() else {
             print("[ScreenshotViewModel] 截图取消或失败")
             return
         }
-        capturedImage = image
-        showAnnotationWindow(image: image)
+        capturedImage = result.image
+        showAnnotationWindow(result: result)
     }
 
-    /// 显示标注窗口
-    private func showAnnotationWindow(image: NSImage) {
+    /// 显示标注窗口（图片窗口 + 独立工具栏）
+    private func showAnnotationWindow(result: ScreenshotResult) {
+        let image = result.image
+        let selectionRect = result.selectionRect
+
         let annotationService = AnnotationService(baseImage: image)
+        // 默认选中红色
+        annotationService.selectedColor = .systemRed
         let viewModel = AnnotationViewModel(annotationService: annotationService)
 
+        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        let maxWidth = screenFrame.width * 0.9
+        let maxHeight = screenFrame.height * 0.82
+
+        // 图片窗口：只包含图片和标注，不含工具栏
+        let scale = min(maxWidth / image.size.width, maxHeight / image.size.height, 1.0)
+        let imageWinWidth = image.size.width * scale
+        let imageWinHeight = image.size.height * scale
+
+        // 工具栏作为独立悬浮窗，0.5cm 间距
+        let toolbarGap: CGFloat = 19 // ~0.5cm
+        let toolbarHeight: CGFloat = 44
+
+        // 图片窗口
         let hostingView = NSHostingView(
             rootView: AnnotationCanvasView(
                 baseImage: image,
                 annotationService: annotationService,
                 viewModel: viewModel,
-                onCopy: { [weak self] img in
-                    self?.copyToClipboard(img)
-                },
-                onSave: { [weak self] img in
-                    self?.saveToFile(img)
-                },
-                onPin: { [weak self] img in
-                    self?.pinToScreen(img)
-                },
+                onCopy: { [weak self] img in self?.copyToClipboard(img) },
+                onSave: { [weak self] img in self?.saveToFile(img) },
+                onPin: { [weak self] img in self?.pinToScreen(img) },
                 onOCR: { [weak self] img in
                     Task { await self?.performOCR(on: img) }
                 },
                 onTranslate: { [weak self] img in
                     Task { await self?.performTranslation(on: img) }
                 },
-                onClose: { [weak viewModel] in
-                    viewModel?.closeWindow()
+                onClose: { [weak self] in
+                    self?.closeAnnotationWindows()
                 }
             )
         )
 
-        // 限制窗口最大尺寸，不超过屏幕的 90%，下方预留悬浮工具栏。
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let maxWidth = screenFrame.width * 0.9
-        let maxHeight = screenFrame.height * 0.82
-
-        // 工具栏最小宽度（保证工具栏按钮完整显示）
-        let toolbarMinWidth: CGFloat = 460
-
-        let scale = min(maxWidth / image.size.width, (maxHeight - 44) / image.size.height, 1.0)
-        let windowWidth = max(image.size.width * scale, toolbarMinWidth)
-        let windowHeight = image.size.height * scale + 44
-
-        let window = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: windowWidth, height: windowHeight),
+        let imageWindow = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: imageWinWidth, height: imageWinHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        window.level = .floating
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.isFloatingPanel = true
-        window.hidesOnDeactivate = false
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.hasShadow = false
-        window.contentView = hostingView
-        window.isMovableByWindowBackground = false
+        imageWindow.level = .floating
+        imageWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        imageWindow.isFloatingPanel = true
+        imageWindow.hidesOnDeactivate = false
+        imageWindow.backgroundColor = .clear
+        imageWindow.isOpaque = false
+        imageWindow.hasShadow = true
+        imageWindow.contentView = hostingView
+        imageWindow.isMovableByWindowBackground = false
+        viewModel.setWindow(imageWindow)
 
-        // 窗口定位：使用截图开始时的鼠标位置，保证窗口出现在勾选区域附近
-        let mouseLoc = captureStartMouseLocation
-        var winX = mouseLoc.x - windowWidth / 2
-        var winY = mouseLoc.y - windowHeight - 40
+        // 定位图片窗口在框选区域
+        let winX = min(max(selectionRect.midX - imageWinWidth / 2, screenFrame.minX),
+                       screenFrame.maxX - imageWinWidth)
+        let winY = min(max(selectionRect.midY - imageWinHeight / 2, screenFrame.minY),
+                       screenFrame.maxY - imageWinHeight)
+        imageWindow.setFrameOrigin(NSPoint(x: winX, y: winY))
+        imageWindow.makeKeyAndOrderFront(nil)
 
-        // 边界检查：确保窗口和工具栏不超出屏幕
-        winX = min(max(winX, screenFrame.minX), screenFrame.maxX - windowWidth)
-        winY = min(max(winY, screenFrame.minY), screenFrame.maxY - windowHeight)
+        self.annotationWindow = imageWindow
 
-        window.setFrameOrigin(NSPoint(x: winX, y: winY))
-        window.makeKeyAndOrderFront(nil)
-        viewModel.setWindow(window)
+        // 工具栏独立悬浮窗
+        let toolbarHosting = NSHostingView(
+            rootView: AnnotationToolbarView(
+                annotationService: annotationService,
+                viewModel: viewModel,
+                onCopy: { [weak self] img in self?.copyToClipboard(img) },
+                onSave: { [weak self] img in self?.saveToFile(img) },
+                onPin: { [weak self] img in self?.pinToScreen(img) },
+                onOCR: { [weak self] img in
+                    Task { await self?.performOCR(on: img) }
+                },
+                onTranslate: { [weak self] img in
+                    Task { await self?.performTranslation(on: img) }
+                },
+                onClose: { [weak self] in
+                    self?.closeAnnotationWindows()
+                },
+                baseImage: image
+            )
+        )
+
+        // 工具栏自适应宽度
+        let toolbarNaturalWidth = toolbarHosting.fittingSize.width
+        let toolbarWidth = max(toolbarNaturalWidth, imageWinWidth)
+
+        let toolbarPanel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: toolbarWidth, height: toolbarHeight),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        toolbarPanel.level = .floating
+        toolbarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        toolbarPanel.isFloatingPanel = true
+        toolbarPanel.hidesOnDeactivate = false
+        toolbarPanel.backgroundColor = .clear
+        toolbarPanel.isOpaque = false
+        toolbarPanel.hasShadow = false
+        toolbarPanel.contentView = toolbarHosting
+
+        // 定位工具栏在图片窗口下方 0.5cm
+        positionToolbar(toolbarPanel, below: imageWindow, gap: toolbarGap, screenFrame: screenFrame)
+
+        toolbarPanel.makeKeyAndOrderFront(nil)
+        self.toolbarPanel = toolbarPanel
+
+        // 监听图片窗口移动 → 工具栏跟随
+        windowFrameObserver = imageWindow.observe(\.frame, options: [.new]) { [weak self] window, _ in
+            Task { @MainActor [weak self] in
+                guard let self, let toolbar = self.toolbarPanel else { return }
+                self.positionToolbar(toolbar, below: window, gap: toolbarGap, screenFrame: screenFrame)
+            }
+        }
+    }
+
+    /// 将工具栏定位在图片窗口下方，超出屏幕时自动偏移
+    private func positionToolbar(_ toolbar: NSPanel, below imageWindow: NSWindow, gap: CGFloat, screenFrame: CGRect) {
+        let imageFrame = imageWindow.frame
+        let toolbarWidth = toolbar.frame.width
+        let toolbarHeight = toolbar.frame.height
+
+        // 默认：居中对齐图片窗口，下方 gap 处
+        var toolbarX = imageFrame.midX - toolbarWidth / 2
+        var toolbarY = imageFrame.minY - toolbarHeight - gap
+
+        // 如果工具栏右侧超出屏幕，向左偏移
+        if toolbarX + toolbarWidth > screenFrame.maxX {
+            toolbarX = screenFrame.maxX - toolbarWidth - 8
+        }
+        // 如果左侧超出
+        if toolbarX < screenFrame.minX {
+            toolbarX = screenFrame.minX + 8
+        }
+        // 如果下方超出屏幕，放到图片上方
+        if toolbarY < screenFrame.minY {
+            toolbarY = imageFrame.maxY + gap
+        }
+
+        toolbar.setFrameOrigin(NSPoint(x: toolbarX, y: toolbarY))
+    }
+
+    private func closeAnnotationWindows() {
+        windowFrameObserver?.invalidate()
+        windowFrameObserver = nil
+        annotationWindow?.close()
+        annotationWindow = nil
+        toolbarPanel?.close()
+        toolbarPanel = nil
     }
 
     // MARK: - 操作
@@ -183,7 +273,6 @@ final class ScreenshotViewModel: ObservableObject {
     // MARK: - 翻译
 
     func performTranslation(on image: NSImage) async {
-        // 先 OCR 再翻译
         if ocrResult.isEmpty {
             await performOCR(on: image)
         }

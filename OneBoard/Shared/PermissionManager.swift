@@ -13,7 +13,7 @@ final class PermissionManager {
         AXIsProcessTrusted()
     }
 
-    /// 请求辅助功能权限（仅打开设置页，不弹 App 内对话框）
+    /// 请求辅助功能权限
     func requestAccessibilityPermission() {
         openAccessibilitySettings()
     }
@@ -33,11 +33,10 @@ final class PermissionManager {
         if !hasAccessibilityPermission {
             missing.append("辅助功能")
         }
-        // 屏幕录制权限在截图触发时再检查
         return missing
     }
 
-    /// 打开辅助功能权限页并显示拖拽引导
+    /// 打开权限引导
     @MainActor
     func promptAccessibilityPermission() {
         openAccessibilitySettings()
@@ -61,6 +60,11 @@ final class PermissionManager {
         openScreenRecordingSettings()
         PermissionGuideWindowManager.shared.show(for: .screenRecording)
     }
+}
+
+/// 权限流程完成通知
+extension Notification.Name {
+    static let permissionFlowCompleted = Notification.Name("OneBoardPermissionFlowCompleted")
 }
 
 enum OneBoardPermissionKind {
@@ -174,16 +178,40 @@ final class PermissionGuideWindowManager {
                 }
 
                 if completed {
-                    self.finishFlow()
+                    // revoke 模式：等用户手动关闭系统设置后再结束
+                    if self.revokeMode {
+                        if !self.isSystemSettingsRunning() {
+                            self.finishFlow()
+                        }
+                    } else {
+                        self.finishFlow()
+                    }
                 }
             }
         }
     }
 
     private func finishFlow() {
-        closeSystemSettings()
+        // 关闭系统设置（仅非 revoke 模式强制关闭，revoke 模式下用户自己关）
+        if !revokeMode {
+            closeSystemSettings()
+        }
+
         hide()
-        SettingsWindowManager.shared.show()
+
+        // 延迟显示确保窗口焦点正确
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            SettingsWindowManager.shared.show()
+            // 通知设置页强制刷新权限开关
+            NotificationCenter.default.post(name: .permissionFlowCompleted, object: nil)
+        }
+    }
+
+    private func isSystemSettingsRunning() -> Bool {
+        let ids = ["com.apple.SystemSettings", "com.apple.systempreferences"]
+        return NSWorkspace.shared.runningApplications.contains { app in
+            ids.contains(app.bundleIdentifier ?? "")
+        }
     }
 
     private func closeSystemSettings() {

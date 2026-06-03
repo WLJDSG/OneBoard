@@ -13,7 +13,7 @@ struct OneBoardApp: App {
     }
 }
 
-/// 设置窗口管理器，避免菜单栏应用依赖私有 showSettingsWindow: selector。
+/// 设置窗口管理器
 @MainActor
 final class SettingsWindowManager: NSObject, NSWindowDelegate {
     static let shared = SettingsWindowManager()
@@ -34,7 +34,7 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
 
         let hostingView = NSHostingView(rootView: SettingsView())
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 480),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -53,11 +53,11 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        window = nil
+        // 不置空 window，以便后续复用
     }
 }
 
-/// 设置窗口（后续阶段会拆分为多个 Tab）
+/// 设置窗口
 struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.maxClipboardItems) private var maxItems = Constants.defaultMaxClipboardItems
     @AppStorage(Constants.UserDefaultsKeys.retentionDays) private var retentionDays = Constants.defaultRetentionDays
@@ -71,36 +71,32 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.accessibilityPermissionEnabled) private var accessibilityEnabled = false
     @AppStorage(Constants.UserDefaultsKeys.screenRecordingPermissionEnabled) private var screenRecordingEnabled = false
 
+    @State private var forceRefresh = UUID()
+
     var body: some View {
         TabView {
-            // 通用设置
             generalSettings
-                .tabItem {
-                    Label("通用", systemImage: "gear")
-                }
+                .tabItem { Label("通用", systemImage: "gear") }
 
-            // 快捷键设置
             hotkeySettings
-                .tabItem {
-                    Label("快捷键", systemImage: "keyboard")
-                }
+                .tabItem { Label("快捷键", systemImage: "keyboard") }
 
-            // OCR / 翻译
             ocrTranslationSettings
-                .tabItem {
-                    Label("识别·翻译", systemImage: "text.viewfinder")
-                }
+                .tabItem { Label("识别·翻译", systemImage: "text.viewfinder") }
 
-            // 关于
             aboutView
-                .tabItem {
-                    Label("关于", systemImage: "info.circle")
-                }
+                .tabItem { Label("关于", systemImage: "info.circle") }
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 520, height: 480)
+        .id(forceRefresh)
         .onAppear(perform: syncPermissionSwitches)
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
             syncPermissionSwitches()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in
+            // 权限流程完成后强制刷新
+            syncPermissionSwitches()
+            forceRefresh = UUID()
         }
     }
 
@@ -139,9 +135,10 @@ struct SettingsView: View {
             }
 
             Section {
+                // 辅助功能权限
                 permissionToggle(
                     title: "辅助功能",
-                    description: "用于拖拽摇晃唤出暂存区、模拟粘贴等全局交互",
+                    description: "用于拖拽摇晃唤出暂存区、全局快捷键等交互",
                     isOn: $accessibilityEnabled,
                     isGranted: PermissionManager.shared.hasAccessibilityPermission,
                     enable: {
@@ -153,6 +150,7 @@ struct SettingsView: View {
                     }
                 )
 
+                // 屏幕录制权限
                 permissionToggle(
                     title: "屏幕录制",
                     description: "用于截图、OCR 和截图翻译",

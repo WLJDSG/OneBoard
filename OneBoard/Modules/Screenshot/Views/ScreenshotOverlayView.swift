@@ -3,7 +3,7 @@ import SwiftUI
 /// 全屏遮罩 - 使用 AppKit NSView 实现可靠的鼠标拖拽框选
 struct ScreenshotOverlayView: View {
     let screenshot: NSImage
-    let onConfirm: (NSImage) -> Void
+    let onConfirm: (NSImage, CGRect) -> Void   // (裁剪图, 屏幕坐标选区)
     let onCancel: () -> Void
 
     var body: some View {
@@ -20,7 +20,7 @@ struct ScreenshotOverlayView: View {
 
 private struct ScreenshotOverlayNSView: NSViewRepresentable {
     let screenshot: NSImage
-    let onConfirm: (NSImage) -> Void
+    let onConfirm: (NSImage, CGRect) -> Void
     let onCancel: () -> Void
 
     func makeNSView(context: Context) -> OverlayView {
@@ -35,7 +35,7 @@ private struct ScreenshotOverlayNSView: NSViewRepresentable {
 
 private class OverlayView: NSView {
     let screenshot: NSImage
-    var onConfirm: ((NSImage) -> Void)?
+    var onConfirm: ((NSImage, CGRect) -> Void)?
     var onCancel: (() -> Void)?
 
     private var startPoint: NSPoint = .zero
@@ -63,7 +63,6 @@ private class OverlayView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         frame = window?.contentView?.bounds ?? frame
-        // 键盘监听
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
             if event.keyCode == 53 { // Esc
@@ -115,6 +114,14 @@ private class OverlayView: NSView {
         guard rect.width > 10, rect.height > 10 else { return }
         guard let screen = window?.screen ?? NSScreen.main else { return }
 
+        // 屏幕坐标选区（用于窗口定位）
+        let screenSelectionRect = CGRect(
+            x: screen.frame.minX + rect.minX,
+            y: screen.frame.minY + (screen.frame.height - rect.maxY),
+            width: rect.width,
+            height: rect.height
+        )
+
         let scaleX = screenshot.size.width / screen.frame.width
         let scaleY = screenshot.size.height / screen.frame.height
         let cropRect = CGRect(
@@ -129,7 +136,7 @@ private class OverlayView: NSView {
               let cropped = cgImage.cropping(to: cropRect) else { return }
 
         let result = NSImage(cgImage: cropped, size: cropRect.size)
-        onConfirm?(result)
+        onConfirm?(result, screenSelectionRect)
     }
 
     // MARK: - Drawing
@@ -186,13 +193,11 @@ private class OverlayView: NSView {
                 width: size.width,
                 height: size.height
             )
-            // 半透明背景
             ctx.setFillColor(NSColor.black.withAlphaComponent(0.5).cgColor)
             let bgRect = textRect.insetBy(dx: -16, dy: -10)
             let bgPath = CGPath(roundedRect: bgRect, cornerWidth: 8, cornerHeight: 8, transform: nil)
             ctx.addPath(bgPath)
             ctx.fillPath()
-            // 文字
             (text as NSString).draw(in: textRect, withAttributes: attrs)
         }
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 标注工具栏
+/// 标注工具栏（独立悬浮窗）
 struct AnnotationToolbarView: View {
     @ObservedObject var annotationService: AnnotationService
     @ObservedObject var viewModel: AnnotationViewModel
@@ -13,46 +13,29 @@ struct AnnotationToolbarView: View {
     let onClose: () -> Void
     let baseImage: NSImage
 
+    @State private var showColorPicker: Bool = false
+
+    private let presetColors: [NSColor] = [
+        .systemRed, .systemOrange, .systemYellow,
+        .systemGreen, .systemBlue, .systemPurple,
+        .white, .black
+    ]
+
     var body: some View {
-        VStack(spacing: 0) {
-            // 工具按钮行（可横向滚动，适应窄窗口）
-            ScrollView(.horizontal, showsIndicators: false) {
-                toolButtonsRow
-                    .padding(.horizontal, 4)
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
-        .frame(minWidth: 200, maxWidth: .infinity)
-    }
-
-    // MARK: - 工具按钮行
-
-    private var toolButtonsRow: some View {
         HStack(spacing: 6) {
+            // 工具按钮
             ForEach(AnnotationTool.allCases, id: \.self) { tool in
                 toolButton(tool)
             }
 
-            Divider()
-                .frame(height: 24)
-                .overlay(Color.black.opacity(0.12))
+            Divider().frame(height: 24).overlay(Color.black.opacity(0.12))
 
-            colorPickerRow
+            // 颜色选择按钮
+            colorPickerButton
 
-            Divider()
-                .frame(height: 24)
-                .overlay(Color.black.opacity(0.12))
+            Divider().frame(height: 24).overlay(Color.black.opacity(0.12))
 
+            // 操作按钮
             actionButtonsRow
 
             // 撤销
@@ -63,8 +46,32 @@ struct AnnotationToolbarView: View {
             .buttonStyle(.plain)
             .help("撤销")
             .disabled(annotationService.layers.isEmpty)
+
+            // 关闭
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color.black.opacity(0.58))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+        .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
+            colorPickerPopover
         }
     }
+
+    // MARK: - 工具按钮
 
     private func toolButton(_ tool: AnnotationTool) -> some View {
         Button(action: {
@@ -87,36 +94,89 @@ struct AnnotationToolbarView: View {
         .help(tool.displayName)
     }
 
-    // MARK: - 颜色选择行
+    // MARK: - 颜色选择按钮
 
-    private var colorPickerRow: some View {
-        HStack(spacing: 5) {
-            ForEach(annotationColors, id: \.self) { color in
-                Button(action: {
-                    annotationService.selectedColor = color
-                }) {
-                    Circle()
-                        .fill(Color(nsColor: color))
-                        .frame(width: 16, height: 16)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .opacity(annotationService.selectedColor == color ? 1 : 0)
-                        )
-                        .shadow(color: .black.opacity(0.15), radius: 1)
+    private var colorPickerButton: some View {
+        Button(action: { showColorPicker.toggle() }) {
+            Circle()
+                .fill(Color(nsColor: annotationService.selectedColor))
+                .frame(width: 20, height: 20)
+                .overlay(
+                    Circle().stroke(Color.white, lineWidth: 1.5)
+                )
+                .shadow(color: .black.opacity(0.15), radius: 1)
+        }
+        .buttonStyle(.plain)
+        .help("选择颜色")
+    }
+
+    // MARK: - 颜色选择弹窗
+
+    private var colorPickerPopover: some View {
+        VStack(spacing: 10) {
+            // 预设颜色
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 6), count: 4), spacing: 6) {
+                ForEach(presetColors, id: \.self) { color in
+                    Button(action: {
+                        annotationService.selectedColor = color
+                    }) {
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color(nsColor: color))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color.white, lineWidth: annotationService.selectedColor == color ? 2 : 0)
+                            )
+                            .shadow(color: .black.opacity(0.12), radius: 1)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+
+            Divider()
+
+            // 系统颜色选择器按钮
+            Button(action: {
+                showColorPicker = false
+                showSystemColorPanel()
+            }) {
+                Label("更多颜色…", systemImage: "paintpalette")
+                    .font(.system(size: 12))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 2)
+        }
+        .padding(12)
+        .frame(width: 160)
+    }
+
+    private func showSystemColorPanel() {
+        let panel = NSColorPanel.shared
+        panel.setTarget(self)
+        panel.setAction(#selector(Coordinator.colorPanelDidChange(_:)))
+        panel.color = annotationService.selectedColor
+        panel.isContinuous = true
+        panel.orderFront(nil)
+
+        // 存储 coordinator 防止被释放
+        let coordinator = Coordinator(annotationService: annotationService)
+        objc_setAssociatedObject(panel, "colorCoordinator", coordinator, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        panel.setTarget(coordinator)
+        panel.setAction(#selector(Coordinator.colorPanelDidChange(_:)))
+    }
+
+    private class Coordinator: NSObject {
+        weak var annotationService: AnnotationService?
+        init(annotationService: AnnotationService) {
+            self.annotationService = annotationService
+        }
+        @MainActor @objc func colorPanelDidChange(_ sender: NSColorPanel) {
+            annotationService?.selectedColor = sender.color
         }
     }
 
-    private let annotationColors: [NSColor] = [
-        .systemRed, .systemOrange, .systemYellow,
-        .systemGreen, .systemBlue, .systemPurple,
-        .white, .black
-    ]
-
-    // MARK: - 操作按钮行
+    // MARK: - 操作按钮
 
     private var actionButtonsRow: some View {
         HStack(spacing: 6) {
@@ -153,13 +213,6 @@ struct AnnotationToolbarView: View {
                     await AnnotationResultWindowManager.shared.show(title: "翻译", text: vm.translationResult)
                 }
             }
-
-            Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(Color.black.opacity(0.58))
-            }
-            .buttonStyle(.plain)
         }
     }
 
@@ -168,17 +221,18 @@ struct AnnotationToolbarView: View {
             Image(systemName: icon)
                 .font(.system(size: 12))
                 .frame(width: 26, height: 26)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.black.opacity(0.05))
-            )
-            .foregroundColor(Color.black.opacity(0.78))
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.black.opacity(0.05))
+                )
+                .foregroundColor(Color.black.opacity(0.78))
         }
         .buttonStyle(.plain)
         .help(label)
     }
-
 }
+
+// MARK: - OCR/翻译结果浮窗
 
 @MainActor
 final class AnnotationResultWindowManager {
@@ -187,11 +241,13 @@ final class AnnotationResultWindowManager {
 
     private init() {}
 
-    func show(title: String, text: String) {
+    /// 在截图窗口右侧（或左侧）显示结果
+    func show(title: String, text: String, relativeTo sourceFrame: NSRect? = nil) {
         let hostingView = NSHostingView(rootView: AnnotationResultView(title: title, text: text) { [weak self] in
             self?.panel?.close()
             self?.panel = nil
         })
+
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 260),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -206,7 +262,32 @@ final class AnnotationResultWindowManager {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.contentView = hostingView
-        FloatingWindowManager.positionAtTopRight(panel, offset: 28)
+
+        // 定位在截图窗口右侧 1cm 处
+        if let sourceFrame {
+            let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+            let panelFrame = panel.frame
+            let gap: CGFloat = 38 // ~1cm
+
+            // 优先放在右侧
+            var x = sourceFrame.maxX + gap
+            let y = sourceFrame.midY - panelFrame.height / 2
+
+            // 如果右侧超出屏幕，放到左侧
+            if x + panelFrame.width > screenFrame.maxX {
+                x = sourceFrame.minX - panelFrame.width - gap
+            }
+            // 如果左侧也超出，贴着屏幕右边缘
+            if x < screenFrame.minX {
+                x = screenFrame.maxX - panelFrame.width - 8
+            }
+
+            let clampedY = min(max(y, screenFrame.minY), screenFrame.maxY - panelFrame.height)
+            panel.setFrameOrigin(NSPoint(x: x, y: clampedY))
+        } else {
+            FloatingWindowManager.positionAtTopRight(panel, offset: 28)
+        }
+
         panel.makeKeyAndOrderFront(nil)
         self.panel?.close()
         self.panel = panel

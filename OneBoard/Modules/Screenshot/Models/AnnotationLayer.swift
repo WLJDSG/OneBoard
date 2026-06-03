@@ -7,7 +7,7 @@ enum AnnotationTool: String, CaseIterable {
     case ellipse
     case arrow
     case line
-    case highlight
+    case text        // 文字标注，替换原来的高亮笔
     case mosaic
 
     var displayName: String {
@@ -17,7 +17,7 @@ enum AnnotationTool: String, CaseIterable {
         case .ellipse: return "圆形"
         case .arrow: return "箭头"
         case .line: return "直线"
-        case .highlight: return "高亮"
+        case .text: return "文字"
         case .mosaic: return "打码"
         }
     }
@@ -29,7 +29,7 @@ enum AnnotationTool: String, CaseIterable {
         case .ellipse: return "circle"
         case .arrow: return "arrow.up.right"
         case .line: return "line.diagonal"
-        case .highlight: return "highlighter"
+        case .text: return "character.textbox"
         case .mosaic: return "checkerboard.rectangle"
         }
     }
@@ -42,6 +42,7 @@ struct AnnotationLayer: Identifiable {
     var rect: CGRect
     var color: NSColor
     var text: String?
+    var fontSize: CGFloat
     var lineWidth: CGFloat
     var startPoint: CGPoint?
     var endPoint: CGPoint?
@@ -51,6 +52,7 @@ struct AnnotationLayer: Identifiable {
         rect: CGRect,
         color: NSColor = .systemRed,
         text: String? = nil,
+        fontSize: CGFloat = 18,
         lineWidth: CGFloat = 2.0,
         startPoint: CGPoint? = nil,
         endPoint: CGPoint? = nil
@@ -59,8 +61,16 @@ struct AnnotationLayer: Identifiable {
         self.rect = rect
         self.color = color
         self.text = text
+        self.fontSize = fontSize
         self.lineWidth = lineWidth
         self.startPoint = startPoint
         self.endPoint = endPoint
     }
+}
+
+/// 截图结果（含选区位置）
+struct ScreenshotResult {
+    let image: NSImage
+    /// 框选区域（屏幕坐标系）
+    let selectionRect: CGRect
 }
