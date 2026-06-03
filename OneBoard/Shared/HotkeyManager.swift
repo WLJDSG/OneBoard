@@ -16,7 +16,8 @@ final class HotkeyManager {
     /// 注册所有快捷键
     static func registerAll() {
         KeyboardShortcuts.onKeyDown(for: .showClipboard) {
-            MenuBarManager.shared.togglePopover()
+            // 快捷键呼出 → 独立浮动窗口（不依赖图标）
+            MenuBarManager.shared.showClipboardAsFloatingWindow()
         }
 
         KeyboardShortcuts.onKeyDown(for: .captureScreenshot) {

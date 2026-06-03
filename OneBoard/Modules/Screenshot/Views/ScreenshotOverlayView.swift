@@ -1,130 +1,199 @@
 import SwiftUI
 
-/// 全屏遮罩 - 区域选择
+/// 全屏遮罩 - 使用 AppKit NSView 实现可靠的鼠标拖拽框选
 struct ScreenshotOverlayView: View {
     let screenshot: NSImage
     let onConfirm: (NSImage) -> Void
     let onCancel: () -> Void
 
-    @State private var selectionRect: CGRect = .zero
-    @State private var isDragging: Bool = false
-    @State private var dragStart: CGPoint = .zero
-
     var body: some View {
-        ZStack {
-            // 半透明背景 + 截图
-            Image(nsImage: screenshot)
-                .resizable()
-                .ignoresSafeArea()
-                .opacity(0.5)
-
-            // 选择区域高亮
-            if isDragging || selectionRect != .zero {
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(
-                        width: abs(selectionRect.width),
-                        height: abs(selectionRect.height)
-                    )
-                    .overlay(
-                        Rectangle()
-                            .stroke(Color.blue, lineWidth: 1.5)
-                    )
-                    .position(
-                        x: selectionRect.midX,
-                        y: selectionRect.midY
-                    )
-            }
-
-            // 提示文字
-            if !isDragging && selectionRect == .zero {
-                VStack(spacing: 12) {
-                    Text("拖拽选择截图区域")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.white)
-                    Text("按 Enter 确认 · Esc 取消")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.black.opacity(0.6))
-                )
-            }
-
-            // 确认/取消按钮
-            if selectionRect != .zero {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 16) {
-                        Button("取消 (Esc)") {
-                            onCancel()
-                        }
-                        .keyboardShortcut(.escape, modifiers: [])
-
-                        Button("确认 (Enter)") {
-                            confirmSelection()
-                        }
-                        .keyboardShortcut(.return, modifiers: [])
-                        .primaryButtonStyle()
-                    }
-                    .padding(.bottom, 40)
-                }
-            }
-        }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 2)
-                .onChanged { value in
-                    if !isDragging {
-                        isDragging = true
-                        dragStart = value.startLocation
-                    }
-                    let current = value.location
-                    selectionRect = CGRect(
-                        x: min(dragStart.x, current.x),
-                        y: min(dragStart.y, current.y),
-                        width: abs(current.x - dragStart.x),
-                        height: abs(current.y - dragStart.y)
-                    )
-                }
-                .onEnded { _ in
-                    isDragging = false
-                }
+        ScreenshotOverlayNSView(
+            screenshot: screenshot,
+            onConfirm: onConfirm,
+            onCancel: onCancel
         )
-        .onKeyPress(.escape) {
-            onCancel()
-            return .handled
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - AppKit NSView 实现（可靠的全屏鼠标跟踪）
+
+private struct ScreenshotOverlayNSView: NSViewRepresentable {
+    let screenshot: NSImage
+    let onConfirm: (NSImage) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> OverlayView {
+        let view = OverlayView(screenshot: screenshot)
+        view.onConfirm = onConfirm
+        view.onCancel = onCancel
+        return view
+    }
+
+    func updateNSView(_ nsView: OverlayView, context: Context) {}
+}
+
+private class OverlayView: NSView {
+    let screenshot: NSImage
+    var onConfirm: ((NSImage) -> Void)?
+    var onCancel: (() -> Void)?
+
+    private var startPoint: NSPoint = .zero
+    private var currentPoint: NSPoint = .zero
+    private var isDragging: Bool = false
+    private var localMonitor: Any?
+
+    private var selectionRect: NSRect {
+        NSRect(
+            x: min(startPoint.x, currentPoint.x),
+            y: min(startPoint.y, currentPoint.y),
+            width: abs(currentPoint.x - startPoint.x),
+            height: abs(currentPoint.y - startPoint.y)
+        )
+    }
+
+    init(screenshot: NSImage) {
+        self.screenshot = screenshot
+        super.init(frame: .zero)
+        self.wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        frame = window?.contentView?.bounds ?? frame
+        // 键盘监听
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return event }
+            if event.keyCode == 53 { // Esc
+                self.onCancel?()
+                return nil
+            }
+            if event.keyCode == 36, self.isDragging { // Enter
+                self.confirmSelection()
+                return nil
+            }
+            return event
         }
-        .onKeyPress(.return) {
+        window?.makeFirstResponder(self)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func removeFromSuperview() {
+        if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
+        super.removeFromSuperview()
+    }
+
+    // MARK: - Mouse Events
+
+    override func mouseDown(with event: NSEvent) {
+        startPoint = convert(event.locationInWindow, from: nil)
+        isDragging = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isDragging else { return }
+        currentPoint = convert(event.locationInWindow, from: nil)
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard isDragging else { return }
+        currentPoint = convert(event.locationInWindow, from: nil)
+        isDragging = false
+        if selectionRect.width > 10, selectionRect.height > 10 {
             confirmSelection()
-            return .handled
+        } else {
+            needsDisplay = true
         }
     }
 
     private func confirmSelection() {
-        guard selectionRect.width > 10, selectionRect.height > 10 else { return }
+        let rect = selectionRect
+        guard rect.width > 10, rect.height > 10 else { return }
+        guard let screen = window?.screen ?? NSScreen.main else { return }
 
-        // 裁剪图片
-        let scale = screenshot.size.width / NSScreen.main!.frame.width
+        let scaleX = screenshot.size.width / screen.frame.width
+        let scaleY = screenshot.size.height / screen.frame.height
         let cropRect = CGRect(
-            x: selectionRect.origin.x * scale,
-            y: (NSScreen.main!.frame.height - selectionRect.maxY) * scale,
-            width: selectionRect.width * scale,
-            height: selectionRect.height * scale
-        )
+            x: rect.origin.x * scaleX,
+            y: (screen.frame.height - rect.maxY) * scaleY,
+            width: rect.width * scaleX,
+            height: rect.height * scaleY
+        ).integral
 
-        if let cropped = cropImage(screenshot, to: cropRect) {
-            onConfirm(cropped)
-        }
+        guard cropRect.width > 0, cropRect.height > 0,
+              let cgImage = screenshot.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let cropped = cgImage.cropping(to: cropRect) else { return }
+
+        let result = NSImage(cgImage: cropped, size: cropRect.size)
+        onConfirm?(result)
     }
 
-    private func cropImage(_ image: NSImage, to rect: CGRect) -> NSImage? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let cropped = cgImage.cropping(to: rect) else {
-            return nil
+    // MARK: - Drawing
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+
+        // 半透明背景
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.4).cgColor)
+        ctx.fill(bounds)
+
+        // 选中区域挖空（显示原图）
+        if isDragging || (selectionRect.width > 5 && selectionRect.height > 5) {
+            let rect = isDragging ? selectionRect : selectionRect
+
+            // 挖空选中区域
+            ctx.setBlendMode(.clear)
+            ctx.fill(rect)
+            ctx.setBlendMode(.normal)
+
+            // 在挖空区域绘制原图
+            guard let screen = window?.screen ?? NSScreen.main else { return }
+            let scaleX = screenshot.size.width / screen.frame.width
+            let scaleY = screenshot.size.height / screen.frame.height
+            let srcRect = CGRect(
+                x: rect.origin.x * scaleX,
+                y: (screen.frame.height - rect.maxY) * scaleY,
+                width: rect.width * scaleX,
+                height: rect.height * scaleY
+            )
+            if let cgImage = screenshot.cgImage(forProposedRect: nil, context: nil, hints: nil),
+               let cropped = cgImage.cropping(to: srcRect.integral) {
+                let nsImage = NSImage(cgImage: cropped, size: rect.size)
+                nsImage.draw(in: rect)
+            }
+
+            // 蓝色边框
+            ctx.setStrokeColor(NSColor.systemBlue.cgColor)
+            ctx.setLineWidth(2)
+            ctx.stroke(rect)
+        } else {
+            // 提示文字
+            let text = "拖拽选择截图区域  |  Enter 确认  |  Esc 取消"
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 18, weight: .medium),
+                .foregroundColor: NSColor.white
+            ]
+            let size = (text as NSString).size(withAttributes: attrs)
+            let textRect = NSRect(
+                x: (bounds.width - size.width) / 2,
+                y: (bounds.height - size.height) / 2,
+                width: size.width,
+                height: size.height
+            )
+            // 半透明背景
+            ctx.setFillColor(NSColor.black.withAlphaComponent(0.5).cgColor)
+            let bgRect = textRect.insetBy(dx: -16, dy: -10)
+            let bgPath = CGPath(roundedRect: bgRect, cornerWidth: 8, cornerHeight: 8, transform: nil)
+            ctx.addPath(bgPath)
+            ctx.fillPath()
+            // 文字
+            (text as NSString).draw(in: textRect, withAttributes: attrs)
         }
-        return NSImage(cgImage: cropped, size: rect.size)
     }
 }

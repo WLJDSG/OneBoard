@@ -1,8 +1,11 @@
 # Swift Package Manager
 .build/
+**/.build/
 Packages/
 *.xcodeproj
 xcuserdata/
+.swiftpm/
+**/.swiftpm/
 
 # Xcode
 DerivedData/
@@ -27,6 +30,11 @@ Thumbs.db
 *.app
 *.dmg
 *.pkg
+build/
+dist/
+
+# CodeGraph
+.codegraph/
 
 # IDE
 .vscode/

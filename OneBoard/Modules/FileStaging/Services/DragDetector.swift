@@ -1,79 +1,63 @@
 import AppKit
 
-/// 全局鼠标拖拽 + 摇动手势检测器
+/// 文件拖拽检测器 - 检测拖拽文件时的摇晃手势
 final class DragDetector {
     static let shared = DragDetector()
-
-    /// 摇动手势检测通知
-    static let shakeGestureDetected = Notification.Name(Constants.NotificationNames.shakeGestureDetected)
+    static let fileDragDetected = Notification.Name(Constants.NotificationNames.shakeGestureDetected)
 
     private var monitor: Any?
     private var localMonitor: Any?
-    private var isDragging: Bool = false
-
-    /// 最近鼠标位置记录（用于摇动检测）
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
+    private var lastTriggerTime: TimeInterval = 0
 
     private init() {}
 
-    // MARK: - Start / Stop
-
     func start() {
-        // 全局鼠标拖拽监控
-        monitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDragged, .leftMouseUp]
-        ) { [weak self] event in
+        monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.handleMouseEvent(event)
         }
-
-        // 本地事件监控（用于检测从 Finder 拖出的文件）
-        localMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDragged, .leftMouseUp]
-        ) { [weak self] event in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.handleMouseEvent(event)
-            return event  // 本地监控必须返回 event
+            return event
         }
+        print("[DragDetector] 拖拽摇晃检测已启动")
     }
 
     func stop() {
-        if let monitor = monitor {
+        if let monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
-        if let localMonitor = localMonitor {
+        if let localMonitor {
             NSEvent.removeMonitor(localMonitor)
             self.localMonitor = nil
         }
+        recentPositions.removeAll()
     }
-
-    // MARK: - Event Handling
 
     private func handleMouseEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDragged:
-            isDragging = true
-            let position = NSEvent.mouseLocation
-            let now = Date().timeIntervalSinceReferenceDate
-
-            recentPositions.append((position, now))
-
-            // 只保留最近 500ms 的数据
-            recentPositions = recentPositions.filter {
-                now - $0.timestamp < Constants.shakeWindowDuration
+            guard isDraggingFile else {
+                recentPositions.removeAll()
+                return
             }
 
-            // 检测摇动手势
-            if detectShake() {
-                print("[DragDetector] 检测到摇动手势")
-                NotificationCenter.default.post(
-                    name: Self.shakeGestureDetected,
-                    object: self
-                )
+            let position = NSEvent.mouseLocation
+            let now = Date().timeIntervalSinceReferenceDate
+            recentPositions.append((position, now))
+            recentPositions = recentPositions.filter { now - $0.timestamp < Constants.shakeWindowDuration }
+
+            if detectShake(), now - lastTriggerTime > 1.2 {
+                lastTriggerTime = now
                 recentPositions.removeAll()
+                print("[DragDetector] 检测到文件拖拽摇晃手势")
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
+                }
             }
 
         case .leftMouseUp:
-            isDragging = false
             recentPositions.removeAll()
 
         default:
@@ -81,33 +65,35 @@ final class DragDetector {
         }
     }
 
-    // MARK: - Shake Detection
+    private var isDraggingFile: Bool {
+        let pasteboard = NSPasteboard(name: .drag)
+        let types = pasteboard.types ?? []
+        return types.contains(.fileURL)
+            || types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType"))
+            || types.contains { $0.rawValue.localizedCaseInsensitiveContains("file-url") }
+    }
 
     private func detectShake() -> Bool {
         guard recentPositions.count >= Constants.shakeMinPositions else { return false }
 
         var directionChanges = 0
-        var lastDx: CGFloat = 0
-        var initialized = false
+        var previousDirection: CGFloat = 0
 
-        for i in 1..<recentPositions.count {
-            let prev = recentPositions[i - 1]
-            let curr = recentPositions[i]
+        for index in 1..<recentPositions.count {
+            let previous = recentPositions[index - 1]
+            let current = recentPositions[index]
+            let dx = current.point.x - previous.point.x
+            let dy = current.point.y - previous.point.y
+            let dt = current.timestamp - previous.timestamp
+            let speed = hypot(dx, dy) / max(CGFloat(dt), 0.001)
 
-            let dx = curr.point.x - prev.point.x
-            let dy = curr.point.y - prev.point.y
-            let dt = curr.timestamp - prev.timestamp
+            guard speed > 300, abs(dx) > 8 else { continue }
 
-            // 移动速度需足够快（> 300 点/秒）
-            let speed = sqrt(dx * dx + dy * dy) / max(CGFloat(dt), 0.001)
-            guard speed > 300 else { continue }
-
-            if initialized && ((lastDx > 0 && dx < 0) || (lastDx < 0 && dx > 0)) {
+            let direction: CGFloat = dx > 0 ? 1 : -1
+            if previousDirection != 0, direction != previousDirection {
                 directionChanges += 1
             }
-
-            lastDx = dx
-            initialized = true
+            previousDirection = direction
         }
 
         return directionChanges >= Constants.shakeMinDirectionChanges

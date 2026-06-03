@@ -62,13 +62,27 @@ final class ScreenshotViewModel: ObservableObject {
             )
         )
 
+        // 限制窗口最大尺寸，不超过屏幕的 90%
+        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        let maxWidth = screenFrame.width * 0.9
+        let maxHeight = screenFrame.height * 0.8
+
+        let scale = min(maxWidth / image.size.width, maxHeight / image.size.height, 1.0)
+        let windowWidth = max(image.size.width * scale + 60, 300)
+        let windowHeight = max(image.size.height * scale + 100, 200)
+
         let window = FloatingWindowManager.createFloatingPanel(
             contentView: hostingView,
-            width: image.size.width + 60,
-            height: image.size.height + 100,
+            width: windowWidth,
+            height: windowHeight,
             title: "截图标注"
         )
-        FloatingWindowManager.centerWindow(window)
+
+        // 窗口定位在鼠标附近，避免遮挡
+        let mouseLoc = NSEvent.mouseLocation
+        let winX = min(max(mouseLoc.x - windowWidth / 2, screenFrame.minX), screenFrame.maxX - windowWidth)
+        let winY = min(max(mouseLoc.y - windowHeight - 40, screenFrame.minY), screenFrame.maxY - windowHeight)
+        window.setFrameOrigin(NSPoint(x: winX, y: winY))
         window.makeKeyAndOrderFront(nil)
         viewModel.setWindow(window)
     }

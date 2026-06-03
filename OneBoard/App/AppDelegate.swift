@@ -16,8 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             print("[AppDelegate] 数据库初始化失败: \(error)")
         }
 
-        // 3. 设置菜单栏 + Popover
+        // 3. 设置菜单栏
         MenuBarManager.shared.setup()
+        MenuBarManager.shared.onSettings = {
+            Task { @MainActor in
+                SettingsWindowManager.shared.show()
+            }
+        }
 
         // 4. 注册全局快捷键
         HotkeyManager.registerAll()

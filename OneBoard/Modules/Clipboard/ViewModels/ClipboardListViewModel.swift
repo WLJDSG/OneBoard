@@ -117,20 +117,19 @@ final class ClipboardListViewModel: ObservableObject {
     /// 点击条目 - 复制回剪贴板并粘贴
     func selectAndPaste(_ entry: ClipboardEntry) {
         selectedEntry = entry
-
-        // 暂停剪贴板监控，避免重复记录自己的粘贴操作
         PasteboardMonitor.shared.isPasting = true
 
-        // 1. 先写入剪贴板内容
+        // 1. 写入剪贴板
         writeToPasteboard(entry)
 
-        // 2. 关闭 Popover，让目标应用重新获得焦点
-        MenuBarManager.shared.togglePopover()
+        // 2. 保存当前前台应用，关闭浮动窗口
+        let previousApp = NSWorkspace.shared.frontmostApplication
+        MenuBarManager.shared.closeClipboardFloatingWindow()
 
-        // 3. 等待 Popover 关闭 + 目标应用获得焦点后，再模拟 Cmd+V
+        // 3. 恢复前台应用 + 粘贴
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            previousApp?.activate()
             self?.simulatePaste()
-            // 恢复剪贴板监控
             PasteboardMonitor.shared.isPasting = false
         }
     }
@@ -186,12 +185,17 @@ final class ClipboardListViewModel: ObservableObject {
             pasteboard.setData(entry.data, forType: NSPasteboard.PasteboardType.png)
             print("[ViewModel] ✅ 已写入剪贴板(图片): \(entry.data.count) bytes")
         case .fileURL:
-            if let urlString = String(data: entry.data, encoding: .utf8),
-               let url = URL(string: urlString) {
-                pasteboard.setString(url.path, forType: NSPasteboard.PasteboardType.fileURL)
+            if let path = String(data: entry.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !path.isEmpty {
+                let url = URL(fileURLWithPath: path)
+                // 写入多种格式以确保兼容性
+                pasteboard.setString(url.path, forType: NSPasteboard.PasteboardType.string)  // 文件路径文本
+                pasteboard.setString(url.absoluteString, forType: NSPasteboard.PasteboardType.fileURL)  // file:// URL
+                // 同时写入实际文件引用
+                pasteboard.writeObjects([url as NSURL])
                 print("[ViewModel] ✅ 已写入剪贴板(文件): \(url.path)")
             } else {
-                print("[ViewModel] ⚠️ 文件URL解析失败")
+                print("[ViewModel] ⚠️ 文件路径解析失败")
             }
         }
     }

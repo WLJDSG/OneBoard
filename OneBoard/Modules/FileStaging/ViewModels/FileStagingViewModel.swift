@@ -16,11 +16,13 @@ final class FileStagingViewModel: ObservableObject {
 
     private init() {
         shakeObserver = NotificationCenter.default.addObserver(
-            forName: DragDetector.shakeGestureDetected,
+            forName: DragDetector.fileDragDetected,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.showFloatingShelf()
+            Task { @MainActor in
+                self?.showFloatingShelf()
+            }
         }
     }
 
@@ -44,9 +46,13 @@ final class FileStagingViewModel: ObservableObject {
         do {
             let stagedFile = try StagedFile(url: url)
             Task {
-                try? await repository.insert(stagedFile)
-                await reloadFiles()
-                print("[FileStaging] 文件已暂存: \(url.lastPathComponent)")
+                do {
+                    _ = try await repository.insert(stagedFile)
+                    await reloadFiles()
+                    print("[FileStaging] 文件已暂存: \(url.lastPathComponent)")
+                } catch {
+                    print("[FileStaging] 暂存失败: \(error)")
+                }
             }
         } catch {
             print("[FileStaging] 暂存失败: \(error)")
@@ -125,7 +131,8 @@ final class FileStagingViewModel: ObservableObject {
             panel.titlebarAppearsTransparent = true
             panel.title = "暂存"
             panel.contentView = hostingView
-            panel.isMovableByWindowBackground = true
+            // 不使用 isMovableByWindowBackground，避免与拖拽文件手势冲突
+            // 用户通过标题栏移动窗口
             FloatingWindowManager.positionAtTopRight(panel)
             panel.makeKeyAndOrderFront(nil)
             floatingWindow = panel

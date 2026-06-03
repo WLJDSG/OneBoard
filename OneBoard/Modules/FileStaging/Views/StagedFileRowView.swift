@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 暂存文件行视图
 struct StagedFileRowView: View {
@@ -9,15 +10,12 @@ struct StagedFileRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // 缩略图/文件图标
             fileIcon
 
-            // 文件信息
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.fileName)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
-
                 Text(FileIconProvider.formatFileSize(file.fileSize))
                     .font(.system(size: 10))
                     .foregroundColor(OneBoardColors.textSecondary)
@@ -25,7 +23,6 @@ struct StagedFileRowView: View {
 
             Spacer()
 
-            // 删除按钮
             if isHovered {
                 Button(action: onDelete) {
                     Image(systemName: "xmark.circle.fill")
@@ -33,7 +30,6 @@ struct StagedFileRowView: View {
                         .foregroundColor(OneBoardColors.destructive.opacity(0.7))
                 }
                 .buttonStyle(.plain)
-                .help("移除")
             }
         }
         .padding(.horizontal, 8)
@@ -43,16 +39,13 @@ struct StagedFileRowView: View {
                 .fill(isHovered ? OneBoardColors.primary.opacity(0.08) : Color.clear)
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
+            withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
         }
         .onDrag {
-            NSItemProvider(contentsOf: URL(fileURLWithPath: file.fileURL)) ?? NSItemProvider()
+            let url = URL(fileURLWithPath: file.fileURL)
+            return NSItemProvider(contentsOf: url) ?? NSItemProvider(object: file.fileName as NSString)
         }
     }
-
-    // MARK: - File Icon
 
     private var fileIcon: some View {
         Group {

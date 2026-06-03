@@ -20,12 +20,9 @@ final class PermissionManager {
 
     // MARK: - 屏幕录制权限
 
-    /// 检查屏幕录制权限（通过尝试截取 1x1 像素来验证）
+    /// 检查屏幕录制权限
     var hasScreenRecordingPermission: Bool {
-        guard let image = CGDisplayCreateImage(CGMainDisplayID(), rect: CGRect(x: 0, y: 0, width: 1, height: 1)) else {
-            return false
-        }
-        return image.width > 0
+        CGPreflightScreenCaptureAccess()
     }
 
     // MARK: - 权限引导
@@ -74,6 +71,10 @@ final class PermissionManager {
 
     /// 弹出屏幕录制权限引导对话框
     func promptScreenRecordingPermission() {
+        if !hasScreenRecordingPermission {
+            CGRequestScreenCaptureAccess()
+        }
+
         let alert = NSAlert()
         alert.messageText = "需要屏幕录制权限"
         alert.informativeText = """
