@@ -20,17 +20,19 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 8. 实现置顶、删除、搜索、点击粘贴（CGEventPost 模拟 Cmd+V）
 9. 实现保留策略（按条数 / 按天数）
 
-### 第二阶段：截图模块 🚧
+### 第二阶段：截图模块 ✅
 
-**状态：代码已完成，待测试**
+**状态：已完成（v1.0.15 迭代修复中）**
 
-1. ✅ 实现 ScreenshotCaptureService（全屏截图 + 区域选择遮罩窗口）
+1. ✅ 实现 ScreenshotCaptureService（screencapture 全屏冻结 + 自定义区域选择遮罩）
 2. ✅ 实现 AnnotationService + AnnotationCanvasView（标注画布）
-3. ✅ 构建 AnnotationToolbarView（文字/直线/矩形/高亮 + 颜色选择）
+3. ✅ 构建 AnnotationToolbarView（矩形/椭圆/箭头/直线/文字/马赛克 + 颜色选择）
 4. ✅ 实现 PinnedScreenshotWindow（置顶贴图浮动窗口）
 5. ✅ 实现 AppleVisionOCRService + OCR 设置界面
-6. ✅ 实现 TranslationService + 翻译设置界面（Translation 框架需要后续集成）
+6. ✅ 实现 TranslationService + DeepSeek AI 翻译
 7. ✅ 添加第三方 API 配置入口（工厂模式）
+8. ✅ 工具栏独立悬浮窗（与截图窗口联动定位）
+9. ✅ 截图架构多次迭代（dlsym → CGWindowList → screencapture 主方案）
 
 ### 第三阶段：文件暂存模块 ✅
 

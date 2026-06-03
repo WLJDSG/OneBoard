@@ -31,8 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PasteboardMonitor.shared.start()
         setupPasteboardObserver()
 
-        // 6. 启动拖拽检测（文件暂存模块）
+        // 6. 启动拖拽检测 + 强制初始化暂存区 ViewModel（注册摇动通知监听）
         DragDetector.shared.start()
+        _ = FileStagingViewModel.shared  // 触发 lazy init，注册 DragDetector 通知 observer
 
         // 7. 设置默认 UserDefaults
         setupDefaultSettings()

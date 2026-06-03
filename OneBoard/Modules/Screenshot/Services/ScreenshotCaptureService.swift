@@ -37,22 +37,28 @@ final class ScreenshotCaptureService: NSObject {
 
     // MARK: - 全屏截图
 
-    /// 主方案：使用 screencapture 命令行（最可靠，正确处理权限和所有显示器）
+    /// 主方案：screencapture 命令行 + stderr 诊断
     private func captureFullScreenViaSC() -> NSImage? {
         let tmpPath = NSTemporaryDirectory() + "oneboard_screenshot_\(UUID().uuidString).png"
         let displayID = CGMainDisplayID()
         let task = Process()
         task.launchPath = "/usr/sbin/screencapture"
-        task.arguments = ["-t", "png", "-x", "-D", "\(displayID)", tmpPath]
+        // 不指定 -D，让 screencapture 自动选择主显示器，避免 displayID 兼容问题
+        task.arguments = ["-t", "png", "-x", tmpPath]
+        // 捕获 stderr 用于诊断
+        let errorPipe = Pipe()
+        task.standardError = errorPipe
         task.launch()
         task.waitUntilExit()
-        guard task.terminationStatus == 0 else {
-            print("[Screenshot] screencapture 失败, exit=\(task.terminationStatus), displayID=\(displayID)")
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        if task.terminationStatus != 0 {
+            let stderr = String(data: errorData, encoding: .utf8) ?? ""
+            print("[Screenshot] screencapture 失败, exit=\(task.terminationStatus), displayID=\(displayID), stderr=\(stderr)")
             try? FileManager.default.removeItem(atPath: tmpPath)
             return nil
         }
         guard let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
-            print("[Screenshot] 无法读取 screencapture 输出文件: \(tmpPath)")
+            print("[Screenshot] 无法读取 screencapture 输出: \(tmpPath)")
             try? FileManager.default.removeItem(atPath: tmpPath)
             return nil
         }
@@ -61,9 +67,8 @@ final class ScreenshotCaptureService: NSObject {
         return image
     }
 
-    /// 备选方案：CGWindowListCreateImage
+    /// 备选：CGWindowListCreateImage
     private func captureFullScreenViaCGWindowList() -> NSImage? {
-        // 优先使用鼠标所在屏幕，回退主屏幕
         let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
             ?? NSScreen.main
             ?? NSScreen.screens.first
@@ -86,13 +91,18 @@ final class ScreenshotCaptureService: NSObject {
         return image
     }
 
-    /// 尝试全屏截图：优先 screencapture（最可靠），失败则回退 CGWindowList
+    /// 尝试全屏截图：screencapture → CGWindowList → 最终失败
     private func captureFullScreenWithFallback() -> NSImage? {
+        print("[Screenshot] 开始全屏截图...")
         if let image = captureFullScreenViaSC() {
             return image
         }
         print("[Screenshot] screencapture 失败，回退到 CGWindowListCreateImage")
-        return captureFullScreenViaCGWindowList()
+        if let image = captureFullScreenViaCGWindowList() {
+            return image
+        }
+        print("[Screenshot] 所有截图方案均失败")
+        return nil
     }
 
     // MARK: - 区域选择遮罩

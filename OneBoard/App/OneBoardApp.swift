@@ -71,7 +71,9 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.accessibilityPermissionEnabled) private var accessibilityEnabled = false
     @AppStorage(Constants.UserDefaultsKeys.screenRecordingPermissionEnabled) private var screenRecordingEnabled = false
 
-    @State private var forceRefresh = UUID()
+    // 用 @State 跟踪实际权限状态，避免 forceRefresh UUID 重建视图树导致窗口关闭
+    @State private var accessibilityGranted = PermissionManager.shared.hasAccessibilityPermission
+    @State private var screenRecordingGranted = PermissionManager.shared.hasScreenRecordingPermission
 
     var body: some View {
         TabView {
@@ -88,22 +90,24 @@ struct SettingsView: View {
                 .tabItem { Label("关于", systemImage: "info.circle") }
         }
         .frame(width: 520, height: 480)
-        .id(forceRefresh)
         .onAppear(perform: syncPermissionSwitches)
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
             syncPermissionSwitches()
         }
         .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in
-            // 权限流程完成后强制刷新
             syncPermissionSwitches()
-            forceRefresh = UUID()
         }
     }
 
     private func syncPermissionSwitches() {
         guard !PermissionGuideWindowManager.shared.hasActiveFlow else { return }
-        accessibilityEnabled = PermissionManager.shared.hasAccessibilityPermission
-        screenRecordingEnabled = PermissionManager.shared.hasScreenRecordingPermission
+        let acc = PermissionManager.shared.hasAccessibilityPermission
+        let scr = PermissionManager.shared.hasScreenRecordingPermission
+        accessibilityEnabled = acc
+        screenRecordingEnabled = scr
+        // 更新 @State 以触发 UI 刷新（不依赖 forceRefresh UUID 重建视图）
+        if accessibilityGranted != acc { accessibilityGranted = acc }
+        if screenRecordingGranted != scr { screenRecordingGranted = scr }
     }
 
     // MARK: - 通用设置
@@ -140,7 +144,7 @@ struct SettingsView: View {
                     title: "辅助功能",
                     description: "用于拖拽摇晃唤出暂存区、全局快捷键等交互",
                     isOn: $accessibilityEnabled,
-                    isGranted: PermissionManager.shared.hasAccessibilityPermission,
+                    isGranted: accessibilityGranted,
                     enable: {
                         PermissionGuideWindowManager.shared.show(for: .accessibility)
                     },
@@ -155,7 +159,7 @@ struct SettingsView: View {
                     title: "屏幕录制",
                     description: "用于截图、OCR 和截图翻译",
                     isOn: $screenRecordingEnabled,
-                    isGranted: PermissionManager.shared.hasScreenRecordingPermission,
+                    isGranted: screenRecordingGranted,
                     enable: {
                         PermissionGuideWindowManager.shared.show(for: .screenRecording)
                     },

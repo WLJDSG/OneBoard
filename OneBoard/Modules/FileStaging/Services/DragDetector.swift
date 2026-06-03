@@ -109,6 +109,9 @@ final class DragDetector {
     private func handleCGEvent(type: CGEventType, event: CGEvent) {
         switch type {
         case .leftMouseDragged:
+            // 忽略拖动窗口（非文件拖拽）的事件：拖拽粘贴板无内容时跳过
+            // 避免用户拖动任意窗口时触发暂存区检测
+            guard isDraggingSupportedContent else { break }
             handleDrag(at: event.location)
         case .leftMouseUp:
             recentPositions.removeAll()
@@ -124,6 +127,8 @@ final class DragDetector {
     private func handleMouseEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDragged:
+            // 仅当拖拽内容为文件类型时才处理，过滤窗口拖动
+            guard isDraggingSupportedContent else { break }
             handleDrag(at: NSEvent.mouseLocation)
         case .leftMouseUp:
             recentPositions.removeAll()
