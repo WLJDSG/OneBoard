@@ -49,9 +49,14 @@ final class DragDetector {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
             guard let self else { return }
             let position = NSEvent.mouseLocation
-            // 只要左键按住或拖拽轨迹存在就检查，不依赖 pasteboard 类型检测
-            if self.isLeftMouseButtonDown || !self.recentPositions.isEmpty || self.isDraggingSupportedContent {
+            // 仅当左键按住 + 拖拽内容为文件类型时检测，避免空拖拽或纯文本拖拽误触发
+            if self.isLeftMouseButtonDown, self.isDraggingSupportedContent {
                 self.handleDrag(at: position)
+            } else if !self.recentPositions.isEmpty {
+                // 如果之前有轨迹但左键已松开，清理轨迹
+                if !self.isLeftMouseButtonDown {
+                    self.recentPositions.removeAll()
+                }
             }
         }
         RunLoop.main.add(pollTimer!, forMode: .common)
@@ -114,14 +119,14 @@ final class DragDetector {
     }
 
     private func handleDrag(at position: CGPoint) {
-        let inTopZone = isInTopTriggerZone(position)
-        let isDragging = isDraggingSupportedContent
-        let hasTrajectory = !recentPositions.isEmpty
-
-        guard isDragging || inTopZone || isLeftMouseButtonDown || hasTrajectory else {
+        // 必须是左键按住 + 拖拽文件类型内容，否则不处理
+        guard isLeftMouseButtonDown, isDraggingSupportedContent else {
             recentPositions.removeAll()
             return
         }
+
+        let inTopZone = isInTopTriggerZone(position)
+        let isDragging = isDraggingSupportedContent
 
         let now = Date().timeIntervalSinceReferenceDate
         recentPositions.append((position, now))
@@ -147,20 +152,30 @@ final class DragDetector {
         let types = pasteboard.types ?? []
         if types.isEmpty { return false }
 
+        // 仅检测文件/图片/URL 类型的拖拽，排除纯文本等非文件内容
+        // public.file-url 和 NSFilenamesPboardType 表示拖拽的是文件
+        // public.url 可能是网页链接或文件引用
+        // public.tiff / public.png 可能是从 Finder 拖拽的图片
         let supportedNames = [
             "public.file-url",
             "NSFilenamesPboardType",
-            "public.url",
-            "public.utf8-plain-text",
             "public.tiff",
             "public.png"
         ]
 
-        return types.contains { type in
+        let isSupported = types.contains { type in
             supportedNames.contains(type.rawValue)
                 || type.rawValue.localizedCaseInsensitiveContains("file")
-                || type.rawValue.localizedCaseInsensitiveContains("url")
         }
+
+        // 额外检查：如果拖拽粘贴板中包含文件 URL，肯定是文件拖拽
+        if !isSupported {
+            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+                return true
+            }
+        }
+
+        return isSupported
     }
 
     private var isLeftMouseButtonDown: Bool {

@@ -7,6 +7,8 @@ final class MenuBarManager: NSObject {
 
     private var statusItem: NSStatusItem!
     private var clipboardFloatingWindow: NSPanel?
+    private var clipboardGlobalMouseMonitor: Any?  // 全局鼠标点击监听
+    private var clipboardAppDeactivateObserver: NSObjectProtocol?  // 应用失活监听
     var onSettings: (() -> Void)?
 
     private override init() { super.init() }
@@ -51,7 +53,7 @@ final class MenuBarManager: NSObject {
 
     func showClipboardAsFloatingWindow() {
         if let existing = clipboardFloatingWindow, existing.isVisible {
-            existing.close(); clipboardFloatingWindow = nil; return
+            closeClipboardFloatingWindow(); return
         }
 
         let hostingView = ClipboardTrackingHostingView(
@@ -79,11 +81,38 @@ final class MenuBarManager: NSObject {
         FloatingWindowManager.positionAtTopRight(panel)
         panel.makeKeyAndOrderFront(nil)
         clipboardFloatingWindow = panel
+
+        // 监听应用失活（用户点击其他 App、Cmd+Tab 切换等）→ 关闭剪贴板
+        clipboardAppDeactivateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.closeClipboardFloatingWindow()
+        }
+
+        // 全局鼠标按下监听：点击剪贴板窗口外部时关闭
+        clipboardGlobalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            guard let self, let panel = self.clipboardFloatingWindow, panel.isVisible else { return }
+            // 使用屏幕坐标判断点击是否在剪贴板窗口外
+            let clickLocation = NSEvent.mouseLocation  // 屏幕坐标系
+            if !NSPointInRect(clickLocation, panel.frame) {
+                self.closeClipboardFloatingWindow()
+            }
+        }
     }
 
     func closeClipboardFloatingWindow() {
         clipboardFloatingWindow?.close()
         clipboardFloatingWindow = nil
+        if let monitor = clipboardGlobalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            clipboardGlobalMouseMonitor = nil
+        }
+        if let observer = clipboardAppDeactivateObserver {
+            NotificationCenter.default.removeObserver(observer)
+            clipboardAppDeactivateObserver = nil
+        }
     }
 
     // MARK: - Actions

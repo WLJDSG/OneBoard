@@ -181,8 +181,10 @@ struct SettingsView: View {
         disable: @escaping () -> Void
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            // 开关显示用户意图（isOn），而非 OR 实际权限状态。
+            // 这样用户切换开关时能立即看到变化，不会因为实际权限未变而被“弹回”。
             Toggle("", isOn: Binding(
-                get: { isOn.wrappedValue || isGranted },
+                get: { isOn.wrappedValue },
                 set: { enabled in
                     isOn.wrappedValue = enabled
                     enabled ? enable() : disable()
@@ -194,6 +196,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(title)
+                    // 文案始终显示实际权限状态
                     Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundColor(isGranted ? .green : .orange)

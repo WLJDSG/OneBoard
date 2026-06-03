@@ -192,16 +192,21 @@ final class PermissionGuideWindowManager {
     }
 
     private func finishFlow() {
-        // 关闭系统设置（仅非 revoke 模式强制关闭，revoke 模式下用户自己关）
+        // 关闭系统设置（仅授权模式强制关闭，revoke 模式下用户自己关）
         if !revokeMode {
             closeSystemSettings()
         }
 
+        let wasRevokeMode = revokeMode
         hide()
 
-        // 延迟显示确保窗口焦点正确
+        // 延迟确保窗口焦点正确
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            SettingsWindowManager.shared.show()
+            // revoke 模式下设置窗口本来就开着，不需要强制 show()
+            // 只需通知刷新即可，避免 show() 导致的窗口闪烁/关闭
+            if !wasRevokeMode {
+                SettingsWindowManager.shared.show()
+            }
             // 通知设置页强制刷新权限开关
             NotificationCenter.default.post(name: .permissionFlowCompleted, object: nil)
         }
