@@ -11,9 +11,11 @@ final class ScreenshotCaptureService: NSObject {
     /// 先冻结全屏 → 用户框选 → 返回截图和选区位置
     func captureRegion() async -> ScreenshotResult? {
         guard PermissionManager.shared.hasScreenRecordingPermission else {
+            print("[Screenshot] 无屏幕录制权限，弹出权限引导")
             PermissionManager.shared.promptScreenRecordingPermission()
             return nil
         }
+        print("[Screenshot] 权限检查通过，开始全屏截图...")
         return await captureWithCustomOverlay()
     }
 
@@ -38,17 +40,19 @@ final class ScreenshotCaptureService: NSObject {
     /// 主方案：使用 screencapture 命令行（最可靠，正确处理权限和所有显示器）
     private func captureFullScreenViaSC() -> NSImage? {
         let tmpPath = NSTemporaryDirectory() + "oneboard_screenshot_\(UUID().uuidString).png"
+        let displayID = CGMainDisplayID()
         let task = Process()
         task.launchPath = "/usr/sbin/screencapture"
-        // -t png: PNG 格式
-        // -x: 静默模式（无提示音）
-        // -D <displayID>: 指定显示器（使用系统主显示器 ID，而非硬编码 1）
-        let displayID = CGMainDisplayID()
         task.arguments = ["-t", "png", "-x", "-D", "\(displayID)", tmpPath]
         task.launch()
         task.waitUntilExit()
-        guard task.terminationStatus == 0,
-              let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
+        guard task.terminationStatus == 0 else {
+            print("[Screenshot] screencapture 失败, exit=\(task.terminationStatus), displayID=\(displayID)")
+            try? FileManager.default.removeItem(atPath: tmpPath)
+            return nil
+        }
+        guard let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
+            print("[Screenshot] 无法读取 screencapture 输出文件: \(tmpPath)")
             try? FileManager.default.removeItem(atPath: tmpPath)
             return nil
         }
@@ -57,13 +61,16 @@ final class ScreenshotCaptureService: NSObject {
         return image
     }
 
-    /// 备选方案：CGWindowListCreateImage（公开 API，快速但可能因权限返回纯黑图）
+    /// 备选方案：CGWindowListCreateImage
     private func captureFullScreenViaCGWindowList() -> NSImage? {
-        guard let screen = NSScreen.main else {
-            print("[Screenshot] NSScreen.main 为 nil")
+        // 优先使用鼠标所在屏幕，回退主屏幕
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else {
+            print("[Screenshot] 无法获取任何 NSScreen")
             return nil
         }
-        // 使用屏幕 frame（非 CGRect.infinite），确保捕获正确的显示区域
         let screenRect = screen.frame
         guard let cgImage = CGWindowListCreateImage(
             screenRect,
@@ -71,7 +78,7 @@ final class ScreenshotCaptureService: NSObject {
             kCGNullWindowID,
             .bestResolution
         ) else {
-            print("[Screenshot] CGWindowListCreateImage 返回 nil")
+            print("[Screenshot] CGWindowListCreateImage 返回 nil, screen=\(screenRect)")
             return nil
         }
         let image = NSImage(cgImage: cgImage, size: screenRect.size)
@@ -81,7 +88,6 @@ final class ScreenshotCaptureService: NSObject {
 
     /// 尝试全屏截图：优先 screencapture（最可靠），失败则回退 CGWindowList
     private func captureFullScreenWithFallback() -> NSImage? {
-        // screencapture 最可靠，优先使用
         if let image = captureFullScreenViaSC() {
             return image
         }
@@ -92,8 +98,18 @@ final class ScreenshotCaptureService: NSObject {
     // MARK: - 区域选择遮罩
 
     private func showOverlay(screenshot: NSImage) {
-        guard let screen = NSScreen.main else { return }
+        // 优先鼠标所在屏幕，兼容菜单栏 app 无 key window 场景
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else {
+            print("[Screenshot] 无法获取屏幕，无法显示遮罩")
+            dismissOverlay(with: nil)
+            return
+        }
         let screenFrame = screen.frame
+        print("[Screenshot] 显示遮罩窗口, screen=\(screenFrame)")
 
         let overlayVC = NSHostingController(
             rootView: ScreenshotOverlayView(

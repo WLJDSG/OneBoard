@@ -43,15 +43,34 @@ final class PermissionManager {
         PermissionGuideWindowManager.shared.show(for: .accessibility)
     }
 
-    /// 打开系统设置中对应权限页面
+    /// 打开系统设置的对应权限页面（macOS 14+ 适配）
     func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        openPrivacySettings(anchor: "Privacy_Accessibility")
     }
 
     func openScreenRecordingSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
-        NSWorkspace.shared.open(url)
+        openPrivacySettings(anchor: "Privacy_ScreenCapture")
+    }
+
+    /// 使用 Process 打开系统设置，兼容 macOS 14+ URL 格式变化
+    private func openPrivacySettings(anchor: String) {
+        // macOS 14+ 的 URL scheme 发生了变化，使用 Process 调 open 命令更可靠
+        let urlStr = "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = [urlStr]
+        task.launch()
+        // 不等待退出，fire-and-forget
+    }
+
+    /// 根据权限类型打开系统设置
+    func openPrivacySetting(for kind: OneBoardPermissionKind) {
+        switch kind {
+        case .accessibility:
+            openAccessibilitySettings()
+        case .screenRecording:
+            openScreenRecordingSettings()
+        }
     }
 
     /// 打开屏幕录制权限页并显示拖拽引导
@@ -105,6 +124,8 @@ final class PermissionGuideWindowManager {
     private var timer: Timer?
     private var currentKind: OneBoardPermissionKind?
     private var revokeMode: Bool = false
+    private var generation: Int = 0          // 每次 show() 递增，防止过期 finishFlow 执行
+    private var flowStartTime: Date = Date()  // 最短轮询延迟，避免权限状态缓存导致的误判
 
     var hasActiveFlow: Bool {
         currentKind != nil
@@ -113,19 +134,23 @@ final class PermissionGuideWindowManager {
     private init() {}
 
     func show(for kind: OneBoardPermissionKind, revokeMode: Bool = false) {
-        NSWorkspace.shared.open(kind.settingsURL)
+        // 取消上一个流程的延迟回调
+        generation += 1
+        let currentGen = generation
 
         self.currentKind = kind
         self.revokeMode = revokeMode
+        self.flowStartTime = Date()
 
-        // revoke 模式不显示悬浮引导窗口，只打开系统设置并轮询
+        // revoke 模式：只打开系统设置，不显示悬浮引导窗口
         if revokeMode {
             panel?.close()
             panel = nil
-            startPermissionPolling()
+            openSettingsAndPoll(currentGen: currentGen, kind: kind)
             return
         }
 
+        // 授权模式：先显示引导悬浮窗，再打开系统设置
         let view = NSHostingView(rootView: PermissionGuideView(kind: kind, revokeMode: revokeMode) { [weak self] in
             self?.hide()
         })
@@ -148,7 +173,16 @@ final class PermissionGuideWindowManager {
 
         self.panel?.close()
         self.panel = panel
-        startPermissionPolling()
+
+        openSettingsAndPoll(currentGen: currentGen, kind: kind)
+    }
+
+    /// 打开系统设置 + 启动轮询
+    private func openSettingsAndPoll(currentGen: Int, kind: OneBoardPermissionKind) {
+        // 先显示引导窗口（确保用户能看到），再打开系统设置
+        // 系统设置打开可能失败（URL 格式问题），但引导窗口已经在屏幕上
+        PermissionManager.shared.openPrivacySetting(for: kind)
+        startPermissionPolling(currentGen: currentGen)
     }
 
     func hide() {
@@ -160,13 +194,20 @@ final class PermissionGuideWindowManager {
         revokeMode = false
     }
 
-    private func startPermissionPolling() {
+    private func startPermissionPolling(currentGen: Int) {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, let currentKind = self.currentKind else { return }
+                guard let self,
+                      let kind = self.currentKind,
+                      self.generation == currentGen  // 过期流程忽略
+                else { return }
+
+                // 最短延迟：防止权限状态 API 返回缓存值导致误判
+                guard Date().timeIntervalSince(self.flowStartTime) > 1.5 else { return }
+
                 let completed: Bool
-                switch currentKind {
+                switch kind {
                 case .accessibility:
                     completed = self.revokeMode
                         ? !PermissionManager.shared.hasAccessibilityPermission
@@ -178,21 +219,22 @@ final class PermissionGuideWindowManager {
                 }
 
                 if completed {
-                    // revoke 模式：等用户手动关闭系统设置后再结束
                     if self.revokeMode {
                         if !self.isSystemSettingsRunning() {
-                            self.finishFlow()
+                            self.finishFlow(currentGen: currentGen)
                         }
                     } else {
-                        self.finishFlow()
+                        self.finishFlow(currentGen: currentGen)
                     }
                 }
             }
         }
     }
 
-    private func finishFlow() {
-        // 关闭系统设置（仅授权模式强制关闭，revoke 模式下用户自己关）
+    private func finishFlow(currentGen: Int) {
+        // 再次检查 generation，防止过期调用
+        guard generation == currentGen else { return }
+
         if !revokeMode {
             closeSystemSettings()
         }
@@ -200,14 +242,11 @@ final class PermissionGuideWindowManager {
         let wasRevokeMode = revokeMode
         hide()
 
-        // 延迟确保窗口焦点正确
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             // revoke 模式下设置窗口本来就开着，不需要强制 show()
-            // 只需通知刷新即可，避免 show() 导致的窗口闪烁/关闭
             if !wasRevokeMode {
                 SettingsWindowManager.shared.show()
             }
-            // 通知设置页强制刷新权限开关
             NotificationCenter.default.post(name: .permissionFlowCompleted, object: nil)
         }
     }

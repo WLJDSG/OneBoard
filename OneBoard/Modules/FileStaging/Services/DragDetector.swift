@@ -12,6 +12,11 @@ final class DragDetector {
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
     private var lastTriggerTime: TimeInterval = 0
 
+    /// CGEventTap 是否可用（需要辅助功能权限）
+    private var eventTapAvailable: Bool = false
+    /// 是否已向用户提示过需要辅助功能权限
+    private var hasPromptedForAccessibility: Bool = false
+
     private init() {}
 
     func start() {
@@ -79,12 +84,21 @@ final class DragDetector {
             },
             userInfo: userInfo
         ) else {
-            print("[DragDetector] CGEventTap 创建失败，可能缺少辅助功能权限。使用轮询模式兜底。")
-            print("[DragDetector] 请在设置中开启辅助功能权限以获得更可靠的检测。")
+            print("[DragDetector] CGEventTap 创建失败（可能缺少辅助功能权限），使用轮询模式兜底")
+            eventTapAvailable = false
+            // 延迟 2 秒后提示用户开启辅助功能（避免 App 启动时立即弹窗）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                guard let self, !self.eventTapAvailable, !self.hasPromptedForAccessibility,
+                      !PermissionManager.shared.hasAccessibilityPermission else { return }
+                self.hasPromptedForAccessibility = true
+                print("[DragDetector] 提示用户开启辅助功能权限")
+                PermissionManager.shared.promptAccessibilityPermission()
+            }
             return
         }
 
         eventTap = tap
+        eventTapAvailable = true
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
