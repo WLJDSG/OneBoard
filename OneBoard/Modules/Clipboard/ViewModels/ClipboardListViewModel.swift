@@ -1,0 +1,222 @@
+import Foundation
+import AppKit
+import CoreGraphics
+import Combine
+
+/// 剪贴板列表 ViewModel
+@MainActor
+final class ClipboardListViewModel: ObservableObject {
+    @Published var entries: [ClipboardEntry] = []
+    @Published var searchText: String = ""
+    @Published var isSearching: Bool = false
+    @Published var selectedEntry: ClipboardEntry?
+
+    private let repository: ClipboardRepository
+    private var maxItems: Int {
+        UserDefaults.standard.integer(forKey: Constants.UserDefaultsKeys.maxClipboardItems)
+    }
+
+    private var pasteboardObserver: NSObjectProtocol?
+
+    init(repository: ClipboardRepository = ClipboardRepository()) {
+        self.repository = repository
+
+        // 监听剪贴板变化，自动刷新列表
+        pasteboardObserver = NotificationCenter.default.addObserver(
+            forName: PasteboardMonitor.didDetectNewContent,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.loadEntries()
+            }
+        }
+    }
+
+    deinit {
+        if let observer = pasteboardObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    // MARK: - 数据加载
+
+    func loadEntries() async {
+        let effectiveMax = maxItems > 0 ? maxItems : Constants.defaultMaxClipboardItems
+
+        do {
+            if searchText.isEmpty {
+                entries = try await repository.fetchAll(limit: effectiveMax)
+            } else {
+                entries = try await repository.search(query: searchText, limit: effectiveMax)
+            }
+        } catch {
+            print("[ClipboardListViewModel] 加载失败: \(error)")
+        }
+    }
+
+    func loadMore() async {
+        // 分页加载（暂不实现，后续扩展）
+    }
+
+    // MARK: - 搜索
+
+    func performSearch() async {
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
+            await loadEntries()
+            return
+        }
+
+        isSearching = true
+        defer { isSearching = false }
+
+        do {
+            entries = try await repository.search(query: searchText)
+        } catch {
+            print("[ClipboardListViewModel] 搜索失败: \(error)")
+        }
+    }
+
+    func clearSearch() {
+        searchText = ""
+        Task { await loadEntries() }
+    }
+
+    // MARK: - 操作
+
+    func togglePin(_ entry: ClipboardEntry) async {
+        guard let id = entry.id else { return }
+        do {
+            try await repository.togglePin(id: id)
+            await loadEntries()
+        } catch {
+            print("[ClipboardListViewModel] 置顶切换失败: \(error)")
+        }
+    }
+
+    func delete(_ entry: ClipboardEntry) async {
+        guard let id = entry.id else { return }
+        do {
+            try await repository.delete(id: id)
+            await loadEntries()
+        } catch {
+            print("[ClipboardListViewModel] 删除失败: \(error)")
+        }
+    }
+
+    func clearAll() async {
+        do {
+            let count = try await repository.clearAll()
+            print("[ClipboardListViewModel] 已清空 \(count) 条记录")
+            await loadEntries()
+        } catch {
+            print("[ClipboardListViewModel] 清空失败: \(error)")
+        }
+    }
+
+    /// 点击条目 - 复制回剪贴板并粘贴
+    func selectAndPaste(_ entry: ClipboardEntry) {
+        selectedEntry = entry
+
+        // 暂停剪贴板监控，避免重复记录自己的粘贴操作
+        PasteboardMonitor.shared.isPasting = true
+
+        // 1. 先写入剪贴板内容
+        writeToPasteboard(entry)
+
+        // 2. 关闭 Popover，让目标应用重新获得焦点
+        MenuBarManager.shared.togglePopover()
+
+        // 3. 等待 Popover 关闭 + 目标应用获得焦点后，再模拟 Cmd+V
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.simulatePaste()
+            // 恢复剪贴板监控
+            PasteboardMonitor.shared.isPasting = false
+        }
+    }
+
+    // MARK: - 粘贴
+
+    /// 将条目内容写入剪贴板（不执行粘贴操作）
+    private func writeToPasteboard(_ entry: ClipboardEntry) {
+        print("[ViewModel] writeToPasteboard: contentType=\(entry.contentType), plainText=\(entry.plainText?.prefix(50) ?? "nil")..., dataSize=\(entry.data.count)")
+
+        guard let contentType = entry.contentTypeEnum else {
+            print("[ViewModel] ⚠️ 无法解析 contentType: \(entry.contentType)")
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+
+        switch contentType {
+        case .text:
+            let writeText: String
+            if let text = entry.plainText, !text.isEmpty {
+                writeText = text
+            } else if let decoded = String(data: entry.data, encoding: .utf8), !decoded.isEmpty {
+                print("[ViewModel] plainText 为空，从 data 解码: \(decoded.prefix(50))...")
+                writeText = decoded
+            } else {
+                print("[ViewModel] ⚠️ 文本条目无内容可写入 (plainText为空, data无法解码)")
+                return
+            }
+            pasteboard.setString(writeText, forType: NSPasteboard.PasteboardType.string)
+            // 验证写入成功
+            if let written = pasteboard.string(forType: .string) {
+                print("[ViewModel] ✅ 已写入剪贴板(\(written.count)字符): \(written.prefix(80))")
+            } else {
+                print("[ViewModel] ⚠️ 写入剪贴板后读回失败!")
+            }
+        case .rtf:
+            pasteboard.setData(entry.data, forType: NSPasteboard.PasteboardType.rtf)
+            // 同时写入纯文本，确保文本编辑器也能粘贴
+            if let plainText = entry.plainText, !plainText.isEmpty {
+                pasteboard.setString(plainText, forType: NSPasteboard.PasteboardType.string)
+            }
+            print("[ViewModel] ✅ 已写入剪贴板(RTF+text): \(entry.data.count) bytes")
+        case .html:
+            pasteboard.setData(entry.data, forType: NSPasteboard.PasteboardType.html)
+            // 同时写入纯文本，确保文本编辑器也能粘贴
+            if let plainText = entry.plainText, !plainText.isEmpty {
+                pasteboard.setString(plainText, forType: NSPasteboard.PasteboardType.string)
+            }
+            print("[ViewModel] ✅ 已写入剪贴板(HTML+text): \(entry.data.count) bytes")
+        case .image:
+            pasteboard.setData(entry.data, forType: NSPasteboard.PasteboardType.png)
+            print("[ViewModel] ✅ 已写入剪贴板(图片): \(entry.data.count) bytes")
+        case .fileURL:
+            if let urlString = String(data: entry.data, encoding: .utf8),
+               let url = URL(string: urlString) {
+                pasteboard.setString(url.path, forType: NSPasteboard.PasteboardType.fileURL)
+                print("[ViewModel] ✅ 已写入剪贴板(文件): \(url.path)")
+            } else {
+                print("[ViewModel] ⚠️ 文件URL解析失败")
+            }
+        }
+    }
+
+    /// 模拟 Cmd+V 按键（需要辅助功能权限）
+    private func simulatePaste() {
+        // 检查辅助功能权限
+        guard PermissionManager.shared.hasAccessibilityPermission else {
+            print("[ViewModel] ⚠️ 缺少辅助功能权限，无法自动粘贴")
+            PermissionManager.shared.promptAccessibilityPermission()
+            return
+        }
+
+        let source = CGEventSource(stateID: CGEventSourceStateID.combinedSessionState)
+
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)  // V key
+        keyDown?.flags = CGEventFlags.maskCommand
+        keyDown?.post(tap: CGEventTapLocation.cghidEventTap)
+
+        // 短暂延迟后发送 keyUp
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
+            keyUp?.flags = CGEventFlags.maskCommand
+            keyUp?.post(tap: CGEventTapLocation.cghidEventTap)
+        }
+    }
+
+    }

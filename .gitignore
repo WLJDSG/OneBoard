@@ -1,0 +1,36 @@
+# Swift Package Manager
+.build/
+Packages/
+*.xcodeproj
+xcuserdata/
+
+# Xcode
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+Pods/
+
+# Carthage
+Carthage/Build/
+
+# macOS
+.DS_Store
+*.swp
+*.lock
+Thumbs.db
+
+# App bundle
+*.app
+*.dmg
+*.pkg
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary
+/tmp/
