@@ -1,6 +1,6 @@
 import AppKit
 
-/// 文件拖拽检测器 - 检测拖拽内容时的摇晃手势
+/// 文件拖拽检测器 - 检测拖拽内容时的摇晃手势 / 顶部区域悬停
 final class DragDetector {
     static let shared = DragDetector()
     static let fileDragDetected = Notification.Name(Constants.NotificationNames.shakeGestureDetected)
@@ -11,11 +11,7 @@ final class DragDetector {
     private var pollTimer: Timer?
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
     private var lastTriggerTime: TimeInterval = 0
-
-    /// CGEventTap 是否可用（需要辅助功能权限）
-    private var eventTapAvailable: Bool = false
-    /// 是否已向用户提示过需要辅助功能权限
-    private var hasPromptedForAccessibility: Bool = false
+    private var lastPasteboardChangeCount: Int = -1  // 粘贴板变更计数，防止过期数据
 
     private init() {}
 
@@ -26,7 +22,7 @@ final class DragDetector {
             self?.handleMouseEvent(event)
             return event
         }
-        print("[DragDetector] 拖拽摇晃检测已启动")
+        print("[DragDetector] 已启动")
     }
 
     func stop() {
@@ -47,25 +43,23 @@ final class DragDetector {
         recentPositions.removeAll()
     }
 
-    // MARK: - 高频轮询（30ms 间隔，作为 CGEventTap 的补充和兜底）
+    // MARK: - 轮询
 
     private func startPolling() {
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
             guard let self else { return }
-            let position = NSEvent.mouseLocation
-            // 仅当左键按住 + 拖拽内容为文件类型时检测，避免空拖拽或纯文本拖拽误触发
-            if self.isLeftMouseButtonDown, self.isDraggingSupportedContent {
-                self.handleDrag(at: position)
-            } else if !self.recentPositions.isEmpty {
-                // 如果之前有轨迹但左键已松开，清理轨迹
-                if !self.isLeftMouseButtonDown {
-                    self.recentPositions.removeAll()
-                }
+            guard self.isLeftMouseButtonDown else {
+                if !self.recentPositions.isEmpty { self.recentPositions.removeAll() }
+                return
             }
+            guard self.isDraggingSupportedContent else { return }
+            self.handleDrag(at: NSEvent.mouseLocation)
         }
         RunLoop.main.add(pollTimer!, forMode: .common)
     }
+
+    // MARK: - CGEventTap
 
     private func startEventTap() {
         let mask = (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
@@ -84,21 +78,11 @@ final class DragDetector {
             },
             userInfo: userInfo
         ) else {
-            print("[DragDetector] CGEventTap 创建失败（可能缺少辅助功能权限），使用轮询模式兜底")
-            eventTapAvailable = false
-            // 延迟 2 秒后提示用户开启辅助功能（避免 App 启动时立即弹窗）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-                guard let self, !self.eventTapAvailable, !self.hasPromptedForAccessibility,
-                      !PermissionManager.shared.hasAccessibilityPermission else { return }
-                self.hasPromptedForAccessibility = true
-                print("[DragDetector] 提示用户开启辅助功能权限")
-                PermissionManager.shared.promptAccessibilityPermission()
-            }
+            print("[DragDetector] CGEventTap 创建失败（可能缺少辅助功能权限）")
             return
         }
 
         eventTap = tap
-        eventTapAvailable = true
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
@@ -109,113 +93,97 @@ final class DragDetector {
     private func handleCGEvent(type: CGEventType, event: CGEvent) {
         switch type {
         case .leftMouseDragged:
-            // 忽略拖动窗口（非文件拖拽）的事件：拖拽粘贴板无内容时跳过
-            // 避免用户拖动任意窗口时触发暂存区检测
             guard isDraggingSupportedContent else { break }
             handleDrag(at: event.location)
         case .leftMouseUp:
             recentPositions.removeAll()
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            if let eventTap {
-                CGEvent.tapEnable(tap: eventTap, enable: true)
-            }
-        default:
-            break
+            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
+        default: break
         }
     }
 
     private func handleMouseEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDragged:
-            // 仅当拖拽内容为文件类型时才处理，过滤窗口拖动
             guard isDraggingSupportedContent else { break }
             handleDrag(at: NSEvent.mouseLocation)
         case .leftMouseUp:
             recentPositions.removeAll()
-        default:
-            break
+        default: break
         }
     }
 
     private func handleDrag(at position: CGPoint) {
-        // 必须是左键按住 + 拖拽文件类型内容，否则不处理
         guard isLeftMouseButtonDown, isDraggingSupportedContent else {
             recentPositions.removeAll()
             return
         }
 
-        let inTopZone = isInTopTriggerZone(position)
-        let isDragging = isDraggingSupportedContent
-
         let now = Date().timeIntervalSinceReferenceDate
         recentPositions.append((position, now))
-        // 保留最近 0.6s 的轨迹
         recentPositions = recentPositions.filter { now - $0.timestamp < 0.6 }
 
-        // 放宽触发条件：摇动检测 OR 顶部区域（拖拽内容时）
-        let shakeDetected = detectShake()
-        let shouldTrigger = (shakeDetected && isDragging) || (inTopZone && isDragging)
+        // 更新 pasteboard change count 防止过期数据重复触发
+        _ = isDraggingSupportedContent
 
-        if shouldTrigger, now - lastTriggerTime > 1.2 {
+        let shakeDetected = detectShake()
+        let inTopZone = isInTopTriggerZone(position)
+        let shouldTrigger = shakeDetected || inTopZone
+
+        if shouldTrigger, now - lastTriggerTime > 1.5 {  // 冷却 1.5s
             lastTriggerTime = now
             recentPositions.removeAll()
-            print("[DragDetector] 检测到拖拽手势 (shake: \(shakeDetected), topZone: \(inTopZone))")
+            print("[DragDetector] 触发 (shake:\(shakeDetected), topZone:\(inTopZone))")
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
             }
         }
     }
 
+    // MARK: - 拖拽内容检测
+
     private var isDraggingSupportedContent: Bool {
         let pasteboard = NSPasteboard(name: .drag)
+        let changeCount = pasteboard.changeCount
+
+        // 粘贴板没有新变化 → 无拖拽操作（过滤窗口拖动等非拖拽场景）
+        if changeCount == lastPasteboardChangeCount { return false }
+        lastPasteboardChangeCount = changeCount
+
         let types = pasteboard.types ?? []
         if types.isEmpty { return false }
 
-        // 严格只匹配明确的文件/图片拖拽类型，不使用 contains 模糊匹配
-        let fileTypes: Set<NSPasteboard.PasteboardType> = [
-            .fileURL,           // public.file-url
-            .fileContents,      // public.file-contents
-            NSPasteboard.PasteboardType("NSFilenamesPboardType"),
+        // 精确匹配文件/图片 UTI
+        let fileUTIs: Set<String> = [
+            "public.file-url", "public.file-contents", "NSFilenamesPboardType",
+            "public.png", "public.tiff",
         ]
-        let imageTypes: Set<NSPasteboard.PasteboardType> = [.png, .tiff]
+        if types.contains(where: { fileUTIs.contains($0.rawValue) }) { return true }
 
-        if types.contains(where: { fileTypes.contains($0) || imageTypes.contains($0) }) {
-            return true
-        }
-
-        // 最终校验：粘贴板是否确实包含 NSURL 文件对象
+        // 兜底：能读到 NSURL 就是文件拖拽
         return pasteboard.canReadObject(forClasses: [NSURL.self], options: [:])
     }
+
+    // MARK: - 工具方法
 
     private var isLeftMouseButtonDown: Bool {
         (NSEvent.pressedMouseButtons & 1) == 1
     }
 
-    /// 检测左右摇晃（放宽条件）
     private func detectShake() -> Bool {
         guard recentPositions.count >= 3 else { return false }
-
         var directionChanges = 0
-        var previousDirection: CGFloat = 0
-
-        for index in 1..<recentPositions.count {
-            let previous = recentPositions[index - 1]
-            let current = recentPositions[index]
-            let dx = current.point.x - previous.point.x
-            let dy = current.point.y - previous.point.y
-            let dt = current.timestamp - previous.timestamp
-            let speed = hypot(dx, dy) / max(CGFloat(dt), 0.001)
-
-            // 降低速度和位移阈值
-            guard speed > 100, abs(dx) > 3 else { continue }
-
-            let direction: CGFloat = dx > 0 ? 1 : -1
-            if previousDirection != 0, direction != previousDirection {
-                directionChanges += 1
-            }
-            previousDirection = direction
+        var prevDir: CGFloat = 0
+        for i in 1..<recentPositions.count {
+            let dx = recentPositions[i].point.x - recentPositions[i-1].point.x
+            let dy = recentPositions[i].point.y - recentPositions[i-1].point.y
+            let dt = recentPositions[i].timestamp - recentPositions[i-1].timestamp
+            guard hypot(dx, dy) / max(CGFloat(dt), 0.001) > 100, abs(dx) > 3 else { continue }
+            let dir: CGFloat = dx > 0 ? 1 : -1
+            if prevDir != 0, dir != prevDir { directionChanges += 1 }
+            prevDir = dir
         }
-
         return directionChanges >= 2
     }
 
@@ -224,14 +192,7 @@ final class DragDetector {
             return false
         }
         let frame = screen.frame
-        let zoneWidth: CGFloat = 200
-        let zoneHeight: CGFloat = 48
-        let zone = CGRect(
-            x: frame.midX - zoneWidth / 2,
-            y: frame.maxY - zoneHeight,
-            width: zoneWidth,
-            height: zoneHeight
-        )
+        let zone = CGRect(x: frame.midX - 100, y: frame.maxY - 48, width: 200, height: 48)
         return zone.contains(point)
     }
 }
