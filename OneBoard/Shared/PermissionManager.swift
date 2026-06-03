@@ -36,10 +36,9 @@ final class PermissionManager {
         return missing
     }
 
-    /// 打开权限引导
+    /// 打开权限引导（show() 内部会打开系统设置，无需重复调用）
     @MainActor
     func promptAccessibilityPermission() {
-        openAccessibilitySettings()
         PermissionGuideWindowManager.shared.show(for: .accessibility)
     }
 
@@ -73,10 +72,9 @@ final class PermissionManager {
         }
     }
 
-    /// 打开屏幕录制权限页并显示拖拽引导
+    /// 打开屏幕录制权限页并显示拖拽引导（show() 内部会打开系统设置，无需重复调用）
     @MainActor
     func promptScreenRecordingPermission() {
-        openScreenRecordingSettings()
         PermissionGuideWindowManager.shared.show(for: .screenRecording)
     }
 }
@@ -203,8 +201,8 @@ final class PermissionGuideWindowManager {
                       self.generation == currentGen  // 过期流程忽略
                 else { return }
 
-                // 最短延迟：防止权限状态 API 返回缓存值导致误判
-                guard Date().timeIntervalSince(self.flowStartTime) > 1.5 else { return }
+                // 最短延迟 2s：防止权限 API 缓存 + 避免 System Settings 刚打开就被关闭（闪退）
+                guard Date().timeIntervalSince(self.flowStartTime) > 2.0 else { return }
 
                 let completed: Bool
                 switch kind {
@@ -232,21 +230,16 @@ final class PermissionGuideWindowManager {
     }
 
     private func finishFlow(currentGen: Int) {
-        // 再次检查 generation，防止过期调用
         guard generation == currentGen else { return }
 
-        if !revokeMode {
-            closeSystemSettings()
-        }
+        // 不再强制关闭 System Settings（避免用户刚打开就被杀掉 → 闪退）
+        // 用户自行关闭 System Settings 即可
 
-        let wasRevokeMode = revokeMode
         hide()
 
+        // 恢复设置窗口到前台（无论 revoke 还是 grant 模式，系统设置关闭后设置窗口可能被隐藏）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            // revoke 模式下设置窗口本来就开着，不需要强制 show()
-            if !wasRevokeMode {
-                SettingsWindowManager.shared.show()
-            }
+            SettingsWindowManager.shared.bringToFront()
             NotificationCenter.default.post(name: .permissionFlowCompleted, object: nil)
         }
     }

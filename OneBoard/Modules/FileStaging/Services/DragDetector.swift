@@ -171,30 +171,20 @@ final class DragDetector {
         let types = pasteboard.types ?? []
         if types.isEmpty { return false }
 
-        // 仅检测文件/图片/URL 类型的拖拽，排除纯文本等非文件内容
-        // public.file-url 和 NSFilenamesPboardType 表示拖拽的是文件
-        // public.url 可能是网页链接或文件引用
-        // public.tiff / public.png 可能是从 Finder 拖拽的图片
-        let supportedNames = [
-            "public.file-url",
-            "NSFilenamesPboardType",
-            "public.tiff",
-            "public.png"
+        // 严格只匹配明确的文件/图片拖拽类型，不使用 contains 模糊匹配
+        let fileTypes: Set<NSPasteboard.PasteboardType> = [
+            .fileURL,           // public.file-url
+            .fileContents,      // public.file-contents
+            NSPasteboard.PasteboardType("NSFilenamesPboardType"),
         ]
+        let imageTypes: Set<NSPasteboard.PasteboardType> = [.png, .tiff]
 
-        let isSupported = types.contains { type in
-            supportedNames.contains(type.rawValue)
-                || type.rawValue.localizedCaseInsensitiveContains("file")
+        if types.contains(where: { fileTypes.contains($0) || imageTypes.contains($0) }) {
+            return true
         }
 
-        // 额外检查：如果拖拽粘贴板中包含文件 URL，肯定是文件拖拽
-        if !isSupported {
-            if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
-                return true
-            }
-        }
-
-        return isSupported
+        // 最终校验：粘贴板是否确实包含 NSURL 文件对象
+        return pasteboard.canReadObject(forClasses: [NSURL.self], options: [:])
     }
 
     private var isLeftMouseButtonDown: Bool {

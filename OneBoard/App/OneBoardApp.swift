@@ -47,6 +47,15 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
         self.window = window
     }
 
+    /// 将已存在的设置窗口恢复到前台（不居中，不改位置）
+    func bringToFront() {
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
         return false
@@ -149,7 +158,6 @@ struct SettingsView: View {
                         PermissionGuideWindowManager.shared.show(for: .accessibility)
                     },
                     disable: {
-                        PermissionManager.shared.openAccessibilitySettings()
                         PermissionGuideWindowManager.shared.show(for: .accessibility, revokeMode: true)
                     }
                 )
@@ -164,7 +172,6 @@ struct SettingsView: View {
                         PermissionGuideWindowManager.shared.show(for: .screenRecording)
                     },
                     disable: {
-                        PermissionManager.shared.openScreenRecordingSettings()
                         PermissionGuideWindowManager.shared.show(for: .screenRecording, revokeMode: true)
                     }
                 )

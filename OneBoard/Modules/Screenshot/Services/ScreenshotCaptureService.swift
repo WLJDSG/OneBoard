@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// 截图捕获服务
-/// 策略：优先全屏截图 + 自定义蒙版框选（冻结动态内容）
-///       全屏截图失败时回退到系统截图工具 screencapture -i
+/// 策略：优先全屏截图 + 自定义蒙版（冻结动态内容）
+///       失败时自动回退 screencapture -i 系统截图工具（最可靠）
 @MainActor
 final class ScreenshotCaptureService: NSObject {
     private var overlayWindow: NSWindow?
@@ -11,79 +11,80 @@ final class ScreenshotCaptureService: NSObject {
 
     /// 捕获屏幕截图（区域选择模式）
     func captureRegion() async -> ScreenshotResult? {
-        guard PermissionManager.shared.hasScreenRecordingPermission else {
-            print("[Screenshot] 无屏幕录制权限，弹出权限引导")
-            PermissionManager.shared.promptScreenRecordingPermission()
-            return nil
-        }
+        print("[Screenshot] 开始截图流程...")
 
-        print("[Screenshot] 权限检查通过")
-
-        // 优先：全屏截图 + 自定义蒙版
+        // 尝试全屏截图 + 自定义蒙版
         if let result = await captureWithCustomOverlay() {
+            print("[Screenshot] 自定义蒙版方案完成")
             return result
         }
 
-        // 回退：系统截图工具 screencapture -i
-        print("[Screenshot] 自定义蒙版方案失败，回退到系统截图工具")
+        // 回退到系统截图工具
+        print("[Screenshot] 回退到系统截图工具 screencapture -i")
         return await captureWithSystemTool()
     }
 
     // MARK: - 方案一：全屏截图 + 自定义蒙版
 
     private func captureWithCustomOverlay() async -> ScreenshotResult? {
-        guard let screenshot = captureFullScreen() else {
-            print("[Screenshot] 全屏截图失败")
+        guard let screenshot = await captureFullScreen() else {
+            print("[Screenshot] 全屏截图失败，跳过自定义蒙版")
             return nil
         }
 
-        print("[Screenshot] 全屏截图成功, size=\(screenshot.size), 显示蒙版...")
+        print("[Screenshot] 全屏截图成功, size=\(screenshot.size), 显示蒙版")
         return await withCheckedContinuation { continuation in
             self.continuation = continuation
             self.showOverlay(screenshot: screenshot)
         }
     }
 
-    /// 全屏截图：使用 screencapture 命令行
-    private func captureFullScreen() -> NSImage? {
+    /// 全屏截图：在后台线程执行 Process 避免阻塞主线程
+    private func captureFullScreen() async -> NSImage? {
         let tmpPath = NSTemporaryDirectory() + "oneboard_freeze_\(UUID().uuidString).png"
-        let task = Process()
-        task.launchPath = "/usr/sbin/screencapture"
-        task.arguments = ["-t", "png", "-x", tmpPath]
-        let errorPipe = Pipe()
-        task.standardError = errorPipe
-        task.launch()
-        task.waitUntilExit()
+        return await Task.detached(priority: .userInitiated) {
+            let task = Process()
+            task.launchPath = "/usr/sbin/screencapture"
+            task.arguments = ["-t", "png", "-x", tmpPath]
+            let errorPipe = Pipe()
+            task.standardError = errorPipe
+            task.launch()
+            task.waitUntilExit()
 
-        if task.terminationStatus != 0 {
-            let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            print("[Screenshot] screencapture 失败, exit=\(task.terminationStatus), stderr=\(stderr)")
+            if task.terminationStatus != 0 {
+                let stderr = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                print("[Screenshot] screencapture 全屏失败, exit=\(task.terminationStatus), stderr=\(stderr)")
+                try? FileManager.default.removeItem(atPath: tmpPath)
+                return nil
+            }
+            guard let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
+                print("[Screenshot] 无法读取全屏截图文件")
+                try? FileManager.default.removeItem(atPath: tmpPath)
+                return nil
+            }
             try? FileManager.default.removeItem(atPath: tmpPath)
-            return nil
-        }
-
-        guard let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
-            print("[Screenshot] 无法读取截图文件: \(tmpPath)")
-            try? FileManager.default.removeItem(atPath: tmpPath)
-            return nil
-        }
-        try? FileManager.default.removeItem(atPath: tmpPath)
-        return image
+            return image
+        }.value
     }
 
-    // MARK: - 方案二：系统截图工具（回退）
+    // MARK: - 方案二：系统截图工具（回退 / 最可靠）
 
     private func captureWithSystemTool() async -> ScreenshotResult? {
+        // 先激活 app 回到 accessory 模式，确保 screencapture -i 能正常弹出
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // 短暂延迟让窗口层级稳定
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+
         let tmpPath = NSTemporaryDirectory() + "oneboard_sys_\(UUID().uuidString).png"
         let task = Process()
         task.launchPath = "/usr/sbin/screencapture"
-        // -i: 交互式框选（系统原生 UI，类似 Cmd+Shift+4）
-        task.arguments = ["-i", "-t", "png", tmpPath]
+        task.arguments = ["-i", "-x", "-t", "png", tmpPath]
         task.launch()
         task.waitUntilExit()
 
         if task.terminationStatus != 0 {
-            // 退出码 1 通常表示用户按 Esc 取消
             print("[Screenshot] screencapture -i 取消或失败, exit=\(task.terminationStatus)")
             try? FileManager.default.removeItem(atPath: tmpPath)
             return nil
@@ -97,7 +98,6 @@ final class ScreenshotCaptureService: NSObject {
         try? FileManager.default.removeItem(atPath: tmpPath)
         print("[Screenshot] 系统截图成功, size=\(image.size)")
 
-        // 系统截图不返回选区坐标，以图像尺寸居中定位标注窗口
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
         let rect = CGRect(
             x: screenFrame.midX - image.size.width / 2,
@@ -116,7 +116,7 @@ final class ScreenshotCaptureService: NSObject {
             ?? NSScreen.main
             ?? NSScreen.screens.first
         guard let screen else {
-            print("[Screenshot] 无法获取屏幕")
+            print("[Screenshot] 无法获取屏幕，取消蒙版")
             dismissOverlay(with: nil)
             return
         }
