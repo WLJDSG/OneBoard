@@ -27,6 +27,7 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         if let window {
+            window.center()
             window.makeKeyAndOrderFront(nil)
             return
         }
@@ -46,6 +47,11 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
         self.window = window
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil)
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) {
         window = nil
     }
@@ -62,6 +68,8 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.translationServiceType) private var translationServiceType = "apple"
     @AppStorage(Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) private var ocrAPIKey = ""
     @AppStorage(Constants.UserDefaultsKeys.translationTargetLanguage) private var targetLanguage = "en"
+    @AppStorage(Constants.UserDefaultsKeys.accessibilityPermissionEnabled) private var accessibilityEnabled = false
+    @AppStorage(Constants.UserDefaultsKeys.screenRecordingPermissionEnabled) private var screenRecordingEnabled = false
 
     var body: some View {
         TabView {
@@ -90,6 +98,16 @@ struct SettingsView: View {
                 }
         }
         .frame(width: 480, height: 420)
+        .onAppear(perform: syncPermissionSwitches)
+        .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
+            syncPermissionSwitches()
+        }
+    }
+
+    private func syncPermissionSwitches() {
+        guard !PermissionGuideWindowManager.shared.hasActiveFlow else { return }
+        accessibilityEnabled = PermissionManager.shared.hasAccessibilityPermission
+        screenRecordingEnabled = PermissionManager.shared.hasScreenRecordingPermission
     }
 
     // MARK: - 通用设置
@@ -121,24 +139,73 @@ struct SettingsView: View {
             }
 
             Section {
-                Link("打开辅助功能设置...", destination: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                Text("OneBoard 需要辅助功能权限以监听全局快捷键和粘贴内容")
+                permissionToggle(
+                    title: "辅助功能",
+                    description: "用于拖拽摇晃唤出暂存区、模拟粘贴等全局交互",
+                    isOn: $accessibilityEnabled,
+                    isGranted: PermissionManager.shared.hasAccessibilityPermission,
+                    enable: {
+                        PermissionGuideWindowManager.shared.show(for: .accessibility)
+                    },
+                    disable: {
+                        PermissionManager.shared.openAccessibilitySettings()
+                        PermissionGuideWindowManager.shared.show(for: .accessibility, revokeMode: true)
+                    }
+                )
 
-                if !PermissionManager.shared.hasAccessibilityPermission {
-                    Label("未授权", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .font(.caption)
-                } else {
-                    Label("已授权", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
-                }
+                permissionToggle(
+                    title: "屏幕录制",
+                    description: "用于截图、OCR 和截图翻译",
+                    isOn: $screenRecordingEnabled,
+                    isGranted: PermissionManager.shared.hasScreenRecordingPermission,
+                    enable: {
+                        PermissionGuideWindowManager.shared.show(for: .screenRecording)
+                    },
+                    disable: {
+                        PermissionManager.shared.openScreenRecordingSettings()
+                        PermissionGuideWindowManager.shared.show(for: .screenRecording, revokeMode: true)
+                    }
+                )
             } header: {
-                Text("权限")
+                Text("必要权限")
             }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func permissionToggle(
+        title: String,
+        description: String,
+        isOn: Binding<Bool>,
+        isGranted: Bool,
+        enable: @escaping () -> Void,
+        disable: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Toggle("", isOn: Binding(
+                get: { isOn.wrappedValue || isGranted },
+                set: { enabled in
+                    isOn.wrappedValue = enabled
+                    enabled ? enable() : disable()
+                }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(title)
+                    Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(isGranted ? .green : .orange)
+                }
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: - 快捷键设置
@@ -210,8 +277,8 @@ struct SettingsView: View {
 
             Section {
                 Picker("翻译服务", selection: $translationServiceType) {
-                    Text("Apple Translation（系统内置）").tag("apple")
-                    Text("第三方 API").tag("third_party")
+                    Text("DeepSeek AI 翻译").tag("third_party")
+                    Text("Apple Translation（macOS 15+）").tag("apple")
                 }
 
                 if translationServiceType == "third_party" {

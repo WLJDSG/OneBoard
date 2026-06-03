@@ -51,6 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         print("[AppDelegate] OneBoard 已退出")
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     // MARK: - 剪贴板变化监听
 
     private func setupPasteboardObserver() {
@@ -80,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defaults.set("apple", forKey: keys.ocrServiceType)
         }
         if defaults.object(forKey: keys.translationServiceType) == nil {
-            defaults.set("apple", forKey: keys.translationServiceType)
+            defaults.set("third_party", forKey: keys.translationServiceType)
         }
         if defaults.object(forKey: keys.ocrLanguage) == nil {
             defaults.set("zh-Hans", forKey: keys.ocrLanguage)
@@ -88,5 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if defaults.object(forKey: keys.translationTargetLanguage) == nil {
             defaults.set("en", forKey: keys.translationTargetLanguage)
         }
+        defaults.set(PermissionManager.shared.hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
+        defaults.set(PermissionManager.shared.hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
     }
 }

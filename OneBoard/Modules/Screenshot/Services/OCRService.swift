@@ -9,14 +9,15 @@ protocol OCRServiceProtocol {
 /// Apple Vision OCR 实现（默认，离线免费）
 final class AppleVisionOCRService: OCRServiceProtocol {
     func recognizeText(in image: NSImage, language: String) async throws -> String {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        guard let cgImage = Self.makeCGImage(from: image) else {
             throw OCRServiceError.invalidImage
         }
 
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
-        request.recognitionLanguages = [language]
+        request.recognitionLanguages = Self.preferredLanguages(primary: language, request: request)
         request.usesLanguageCorrection = true
+        request.minimumTextHeight = 0.01
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         try handler.perform([request])
@@ -25,6 +26,24 @@ final class AppleVisionOCRService: OCRServiceProtocol {
         return observations
             .compactMap { $0.topCandidates(1).first?.string }
             .joined(separator: "\n")
+    }
+
+    private static func makeCGImage(from image: NSImage) -> CGImage? {
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            return cgImage
+        }
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+        return bitmap.cgImage
+    }
+
+    private static func preferredLanguages(primary: String, request: VNRecognizeTextRequest) -> [String] {
+        let fallbacks = [primary, "zh-Hans", "zh-Hant", "en-US", "en"]
+        let supported = (try? request.supportedRecognitionLanguages()) ?? []
+        let usable = fallbacks.filter { supported.contains($0) }
+        return usable.isEmpty ? [primary] : Array(NSOrderedSet(array: usable)) as? [String] ?? [primary]
     }
 }
 
@@ -36,10 +55,21 @@ final class ThirdPartyOCRService: OCRServiceProtocol {
     }
 }
 
-enum OCRServiceError: Error {
+enum OCRServiceError: LocalizedError {
     case invalidImage
     case notImplemented
     case recognitionFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidImage:
+            return "图片格式无效，无法识别"
+        case .notImplemented:
+            return "第三方 OCR 暂未配置"
+        case .recognitionFailed(let message):
+            return message
+        }
+    }
 }
 
 /// OCR 服务工厂

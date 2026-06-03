@@ -55,6 +55,12 @@ cd OneBoard && rm -rf .build && swift build
 cd OneBoard && swift run
 ```
 
+## 打包规范
+
+- 用户要求打包时，只需要生成 DMG 安装包：`build/OneBoard.dmg`
+- 不需要额外交付 `.app`、`.pkg`、压缩包或其他安装产物
+- DMG 内应包含 `OneBoard.app` 和 `Applications` 软链接，方便直接拖拽安装
+
 ## 编码规范
 
 1. 遵循 Swift 命名惯例

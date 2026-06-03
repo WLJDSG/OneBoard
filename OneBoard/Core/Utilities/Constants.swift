@@ -47,6 +47,8 @@ enum Constants {
         static let ocrLanguage = "ocr_language"                  // 默认 "zh-Hans"
         static let translationTargetLanguage = "translation_target_language" // 默认 "en"
         static let hasCompletedOnboarding = "has_completed_onboarding"
+        static let accessibilityPermissionEnabled = "accessibility_permission_enabled"
+        static let screenRecordingPermissionEnabled = "screen_recording_permission_enabled"
     }
 
     // MARK: - Notification Names

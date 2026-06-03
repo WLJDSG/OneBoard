@@ -4,15 +4,12 @@ import AppKit
 @MainActor
 final class AnnotationService: ObservableObject {
     @Published var layers: [AnnotationLayer] = []
-    @Published var selectedTool: AnnotationTool = .rectangle
+    @Published var selectedTool: AnnotationTool = .cursor
     @Published var selectedColor: NSColor = .systemRed
     @Published var lineWidth: CGFloat = 2.0
 
     /// 当前正在绘制的图层（拖拽中）
     @Published var currentDrawingLayer: AnnotationLayer?
-
-    /// 当前正在输入的文字
-    @Published var currentTextInput: String = ""
 
     private var baseImage: NSImage?
 
@@ -36,6 +33,16 @@ final class AnnotationService: ObservableObject {
         layers.append(layer)
     }
 
+    func addEllipse(_ rect: CGRect) {
+        let layer = AnnotationLayer(
+            tool: .ellipse,
+            rect: rect,
+            color: selectedColor,
+            lineWidth: lineWidth
+        )
+        layers.append(layer)
+    }
+
     func addLine(from: CGPoint, to: CGPoint) {
         let rect = CGRect(
             x: min(from.x, to.x),
@@ -47,7 +54,27 @@ final class AnnotationService: ObservableObject {
             tool: .line,
             rect: rect,
             color: selectedColor,
-            lineWidth: lineWidth
+            lineWidth: lineWidth,
+            startPoint: from,
+            endPoint: to
+        )
+        layers.append(layer)
+    }
+
+    func addArrow(from: CGPoint, to: CGPoint) {
+        let rect = CGRect(
+            x: min(from.x, to.x),
+            y: min(from.y, to.y),
+            width: abs(to.x - from.x),
+            height: abs(to.y - from.y)
+        )
+        let layer = AnnotationLayer(
+            tool: .arrow,
+            rect: rect,
+            color: selectedColor,
+            lineWidth: lineWidth,
+            startPoint: from,
+            endPoint: to
         )
         layers.append(layer)
     }
@@ -62,21 +89,11 @@ final class AnnotationService: ObservableObject {
         layers.append(layer)
     }
 
-    func addText(_ text: String, at point: CGPoint) {
-        let estimatedSize = (text as NSString).size(withAttributes: [
-            .font: NSFont.systemFont(ofSize: 18)
-        ])
-        let rect = CGRect(
-            x: point.x,
-            y: point.y - estimatedSize.height,
-            width: max(estimatedSize.width + 20, 100),
-            height: estimatedSize.height + 10
-        )
+    func addMosaic(_ rect: CGRect) {
         let layer = AnnotationLayer(
-            tool: .text,
+            tool: .mosaic,
             rect: rect,
-            color: selectedColor,
-            text: text,
+            color: .clear,
             lineWidth: 0
         )
         layers.append(layer)
@@ -140,34 +157,71 @@ final class AnnotationService: ObservableObject {
         ctx.saveGState()
 
         switch layer.tool {
+        case .cursor:
+            break
+
         case .rectangle:
             ctx.setStrokeColor(layer.color.cgColor)
             ctx.setLineWidth(layer.lineWidth)
             ctx.stroke(layer.rect)
 
-        case .line:
+        case .ellipse:
             ctx.setStrokeColor(layer.color.cgColor)
             ctx.setLineWidth(layer.lineWidth)
-            ctx.move(to: CGPoint(x: layer.rect.minX, y: layer.rect.minY))
-            ctx.addLine(to: CGPoint(x: layer.rect.maxX, y: layer.rect.maxY))
+            ctx.strokeEllipse(in: layer.rect)
+
+        case .line, .arrow:
+            let start = layer.startPoint ?? CGPoint(x: layer.rect.minX, y: layer.rect.minY)
+            let end = layer.endPoint ?? CGPoint(x: layer.rect.maxX, y: layer.rect.maxY)
+            ctx.setStrokeColor(layer.color.cgColor)
+            ctx.setLineWidth(layer.lineWidth)
+            ctx.move(to: start)
+            ctx.addLine(to: end)
             ctx.strokePath()
+            if layer.tool == .arrow {
+                drawArrowHead(for: layer, in: ctx)
+            }
 
         case .highlight:
             ctx.setFillColor(layer.color.cgColor)
             ctx.fill(layer.rect)
 
-        case .text:
-            if let text = layer.text {
-                let nsColor = layer.color
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: 18),
-                    .foregroundColor: nsColor,
-                    .backgroundColor: NSColor.white.withAlphaComponent(0.7)
-                ]
-                (text as NSString).draw(in: layer.rect, withAttributes: attributes)
-            }
+        case .mosaic:
+            drawMosaic(in: layer.rect, context: ctx)
+
         }
 
         ctx.restoreGState()
+    }
+
+    private func drawArrowHead(for layer: AnnotationLayer, in ctx: CGContext) {
+        let start = layer.startPoint ?? CGPoint(x: layer.rect.minX, y: layer.rect.minY)
+        let end = layer.endPoint ?? CGPoint(x: layer.rect.maxX, y: layer.rect.maxY)
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let length: CGFloat = 12
+        let spread: CGFloat = .pi / 7
+        let p1 = CGPoint(x: end.x - length * cos(angle - spread), y: end.y - length * sin(angle - spread))
+        let p2 = CGPoint(x: end.x - length * cos(angle + spread), y: end.y - length * sin(angle + spread))
+        ctx.move(to: end)
+        ctx.addLine(to: p1)
+        ctx.move(to: end)
+        ctx.addLine(to: p2)
+        ctx.strokePath()
+    }
+
+    private func drawMosaic(in rect: CGRect, context ctx: CGContext) {
+        let cell: CGFloat = 6
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.68).cgColor)
+        ctx.fill(rect)
+        for x in stride(from: rect.minX, to: rect.maxX, by: cell) {
+            for y in stride(from: rect.minY, to: rect.maxY, by: cell) {
+                let seed = sin((x + 17) * 12.9898 + (y + 23) * 78.233) * 43758.5453
+                let random = seed - floor(seed)
+                let alpha = 0.38 + random * 0.48
+                let inset: CGFloat = random > 0.55 ? 0 : 1
+                ctx.setFillColor(NSColor.white.withAlphaComponent(alpha).cgColor)
+                ctx.fill(CGRect(x: x + inset, y: y + inset, width: cell + 1 - inset, height: cell + 1 - inset))
+            }
+        }
     }
 }

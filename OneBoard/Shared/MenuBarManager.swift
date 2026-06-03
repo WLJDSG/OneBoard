@@ -16,11 +16,7 @@ final class MenuBarManager: NSObject {
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            if let appIcon = NSImage(named: "AppIcon") {
-                button.image = appIcon
-            } else {
-                button.image = createMenuBarIcon()
-            }
+            button.image = createMenuBarIcon()
             button.target = self
             button.action = #selector(handleClick)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -92,10 +88,9 @@ final class MenuBarManager: NSObject {
     // MARK: - Icon
 
     private func createMenuBarIcon() -> NSImage {
-        let icon = NSImage(size: NSSize(width: 18, height: 18))
-        icon.isTemplate = true; icon.lockFocus()
-        let path = NSBezierPath(roundedRect: NSRect(x: 2, y: 2, width: 14, height: 14), xRadius: 3.5, yRadius: 3.5)
-        NSColor(red: 0.35, green: 0.65, blue: 0.95, alpha: 1.0).setFill(); path.fill()
-        icon.unlockFocus(); return icon
+        let icon = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: Constants.appName)
+            ?? NSImage(size: NSSize(width: 18, height: 18))
+        icon.isTemplate = true
+        return icon
     }
 }

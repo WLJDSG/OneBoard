@@ -13,6 +13,7 @@ final class FileStagingViewModel: ObservableObject {
     private let repository = FileStagingRepository()
     private var floatingWindow: NSPanel?
     private var shakeObserver: NSObjectProtocol?
+    private var pendingFilePaths: Set<String> = []  // 正在处理的文件路径，防止重复添加
 
     private init() {
         shakeObserver = NotificationCenter.default.addObserver(
@@ -43,18 +44,34 @@ final class FileStagingViewModel: ObservableObject {
     }
 
     func addFile(url: URL) {
+        let normalizedURL = url.standardizedFileURL
+        let path = normalizedURL.path
+
+        // 检查是否已在暂存列表中或正在处理中
+        guard !stagedFiles.contains(where: { $0.fileURL == path }),
+              !pendingFilePaths.contains(path) else {
+            print("[FileStaging] 文件已存在或正在处理，跳过: \(url.lastPathComponent)")
+            return
+        }
+
+        // 标记为正在处理
+        pendingFilePaths.insert(path)
+
         do {
-            let stagedFile = try StagedFile(url: url)
-            Task {
+            let stagedFile = try StagedFile(url: normalizedURL)
+            Task { [weak self] in
+                guard let self else { return }
+                defer { self.pendingFilePaths.remove(path) }
                 do {
-                    _ = try await repository.insert(stagedFile)
-                    await reloadFiles()
+                    _ = try await self.repository.insert(stagedFile)
+                    await self.reloadFiles()
                     print("[FileStaging] 文件已暂存: \(url.lastPathComponent)")
                 } catch {
                     print("[FileStaging] 暂存失败: \(error)")
                 }
             }
         } catch {
+            pendingFilePaths.remove(path)
             print("[FileStaging] 暂存失败: \(error)")
         }
     }
@@ -109,19 +126,25 @@ final class FileStagingViewModel: ObservableObject {
                 }
             )
         )
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.cornerRadius = 24
+        hostingView.layer?.masksToBounds = true
 
-        // 计算窗口高度：空状态小，有文件时根据文件数
-        let height: CGFloat = stagedFiles.isEmpty ? 120 : CGFloat(min(stagedFiles.count * 44 + 40, 300))
+        let width: CGFloat = 304
+        let rows = max(1, Int(ceil(Double(max(stagedFiles.count, 1)) / 3.0)))
+        let height = stagedFiles.isEmpty ? CGFloat(168) : min(CGFloat(rows) * 104 + 58, 374)
 
         if let existingWindow = floatingWindow {
             existingWindow.contentView = hostingView
             var frame = existingWindow.frame
+            frame.size.width = width
             frame.size.height = height
-            existingWindow.setFrame(frame, display: true, animate: true)
+            existingWindow.setFrame(frame, display: true, animate: false)
         } else {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 240, height: height),
-                styleMask: [.nonactivatingPanel, .titled, .closable, .resizable],
+                contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered,
                 defer: false
             )
@@ -129,10 +152,11 @@ final class FileStagingViewModel: ObservableObject {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isFloatingPanel = true
             panel.titlebarAppearsTransparent = true
-            panel.title = "暂存"
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.hasShadow = false  // shadow 由 SwiftUI 层控制
             panel.contentView = hostingView
-            // 不使用 isMovableByWindowBackground，避免与拖拽文件手势冲突
-            // 用户通过标题栏移动窗口
+            panel.isMovableByWindowBackground = false
             FloatingWindowManager.positionAtTopRight(panel)
             panel.makeKeyAndOrderFront(nil)
             floatingWindow = panel

@@ -10,6 +10,53 @@ final class ScreenshotCaptureService: NSObject {
     /// 捕获屏幕截图（区域选择模式）
     func captureRegion() async -> NSImage? {
         guard PermissionManager.shared.hasScreenRecordingPermission else {
+            PermissionManager.shared.promptScreenRecordingPermission()
+            return nil
+        }
+        return await captureWithSystemSelection()
+    }
+
+    /// 使用 macOS 系统交互式截图入口，保证快捷键触发后进入原生框选蒙版。
+    private func captureWithSystemSelection() async -> NSImage? {
+        await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            process.arguments = ["-i", "-c", "-x"]
+            process.terminationHandler = { process in
+                DispatchQueue.main.async {
+                    guard process.terminationStatus == 0 else {
+                        print("[Screenshot] 系统截图已取消或失败: \(process.terminationStatus)")
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(returning: Self.imageFromPasteboard())
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                print("[Screenshot] 启动系统截图失败: \(error)")
+                continuation.resume(returning: nil)
+            }
+        }
+    }
+
+    private static func imageFromPasteboard() -> NSImage? {
+        let pasteboard = NSPasteboard.general
+        if let image = NSImage(pasteboard: pasteboard) {
+            return image
+        }
+        if let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
+            return NSImage(data: data)
+        }
+        print("[Screenshot] 系统截图完成，但剪贴板中没有图片")
+        return nil
+    }
+
+    /// 保留自定义遮罩实现，后续需要 Snipaste 风格增强时可继续迭代。
+    private func captureWithCustomOverlay() async -> NSImage? {
+        guard PermissionManager.shared.hasScreenRecordingPermission else {
             print("[Screenshot] 缺少屏幕录制权限")
             await MainActor.run {
                 PermissionManager.shared.promptScreenRecordingPermission()

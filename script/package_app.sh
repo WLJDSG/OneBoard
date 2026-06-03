@@ -7,9 +7,7 @@ APP_DIR="$BUILD_DIR/OneBoard.app"
 DMG_ROOT="$BUILD_DIR/dmg-root"
 DMG_PATH="$BUILD_DIR/OneBoard.dmg"
 
-if [ ! -d "$APP_DIR" ]; then
-    "$ROOT_DIR/script/build_app_bundle.sh"
-fi
+"$ROOT_DIR/script/build_app_bundle.sh"
 
 rm -rf "$DMG_ROOT" "$DMG_PATH"
 mkdir -p "$DMG_ROOT"
@@ -22,5 +20,7 @@ hdiutil create \
     -ov \
     -format UDZO \
     "$DMG_PATH"
+
+rm -rf "$DMG_ROOT" "$APP_DIR"
 
 echo "Packaged $DMG_PATH"

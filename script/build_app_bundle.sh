@@ -22,10 +22,10 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp ".build/release/OneBoard" "$MACOS_DIR/OneBoard"
 sed 's/$(EXECUTABLE_NAME)/OneBoard/g' "Resources/Info.plist" > "$CONTENTS_DIR/Info.plist"
 
-if [ -f "$BUILD_DIR/AppIcon.icns" ]; then
-    cp "$BUILD_DIR/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
-elif [ -f "Resources/AppIcon.icns" ]; then
+if [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+elif [ -f "$BUILD_DIR/AppIcon.icns" ]; then
+    cp "$BUILD_DIR/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
 chmod +x "$MACOS_DIR/OneBoard"

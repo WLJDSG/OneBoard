@@ -13,53 +13,47 @@ struct AnnotationToolbarView: View {
     let onClose: () -> Void
     let baseImage: NSImage
 
-    @State private var showOCRResult: Bool = false
-    @State private var showTranslationResult: Bool = false
-    @State private var ocrText: String = ""
-    @State private var translatedText: String = ""
-
     var body: some View {
         VStack(spacing: 0) {
-            // 工具按钮行
-            toolButtonsRow
-
-            Divider()
-
-            // 颜色选择行
-            colorPickerRow
-
-            Divider()
-
-            // 操作按钮行
-            actionButtonsRow
+            // 工具按钮行（可横向滚动，适应窄窗口）
+            ScrollView(.horizontal, showsIndicators: false) {
+                toolButtonsRow
+                    .padding(.horizontal, 4)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 7)
                 .fill(.ultraThinMaterial)
         )
-
-        // OCR 结果弹窗
-        .sheet(isPresented: $showOCRResult) {
-            resultSheet(title: "OCR 识别结果", text: ocrText)
-        }
-
-        // 翻译结果弹窗
-        .sheet(isPresented: $showTranslationResult) {
-            resultSheet(title: "翻译结果", text: translatedText)
-        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+        .frame(minWidth: 200, maxWidth: .infinity)
     }
 
     // MARK: - 工具按钮行
 
     private var toolButtonsRow: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             ForEach(AnnotationTool.allCases, id: \.self) { tool in
                 toolButton(tool)
             }
 
-            Spacer()
+            Divider()
+                .frame(height: 24)
+                .overlay(Color.black.opacity(0.12))
+
+            colorPickerRow
+
+            Divider()
+                .frame(height: 24)
+                .overlay(Color.black.opacity(0.12))
+
+            actionButtonsRow
 
             // 撤销
             Button(action: { viewModel.undo() }) {
@@ -82,12 +76,12 @@ struct AnnotationToolbarView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 5)
                         .fill(annotationService.selectedTool == tool
-                              ? OneBoardColors.primary.opacity(0.2)
+                              ? Color.black.opacity(0.1)
                               : Color.clear)
                 )
                 .foregroundColor(annotationService.selectedTool == tool
-                                 ? OneBoardColors.primary
-                                 : OneBoardColors.textPrimary)
+                                 ? Color.black
+                                 : Color.black.opacity(0.76))
         }
         .buttonStyle(.plain)
         .help(tool.displayName)
@@ -96,11 +90,7 @@ struct AnnotationToolbarView: View {
     // MARK: - 颜色选择行
 
     private var colorPickerRow: some View {
-        HStack(spacing: 6) {
-            Text("颜色:")
-                .font(.system(size: 11))
-                .foregroundColor(OneBoardColors.textSecondary)
-
+        HStack(spacing: 5) {
             ForEach(annotationColors, id: \.self) { color in
                 Button(action: {
                     annotationService.selectedColor = color
@@ -130,95 +120,131 @@ struct AnnotationToolbarView: View {
 
     private var actionButtonsRow: some View {
         HStack(spacing: 6) {
-            actionButton("复制", icon: "doc.on.doc") {
+            iconActionButton("复制", icon: "doc.on.doc") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage)
                 onCopy(rendered)
             }
 
-            actionButton("保存", icon: "square.and.arrow.down") {
+            iconActionButton("保存", icon: "square.and.arrow.down") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage)
                 onSave(rendered)
             }
 
-            actionButton("贴图", icon: "pin") {
+            iconActionButton("贴图", icon: "pin") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage)
                 onPin(rendered)
+                onClose()
             }
 
-            actionButton("OCR", icon: "text.viewfinder") {
+            iconActionButton("OCR", icon: "text.viewfinder") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage)
                 Task {
                     let vm = ScreenshotViewModel.shared
                     await vm.performOCR(on: rendered)
-                    ocrText = vm.ocrResult
-                    showOCRResult = true
+                    await AnnotationResultWindowManager.shared.show(title: "文字识别", text: vm.ocrResult)
                 }
             }
 
-            actionButton("翻译", icon: "character.bubble") {
+            iconActionButton("翻译", icon: "character.bubble") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage)
                 Task {
                     let vm = ScreenshotViewModel.shared
                     await vm.performTranslation(on: rendered)
-                    translatedText = vm.translationResult
-                    showTranslationResult = true
+                    await AnnotationResultWindowManager.shared.show(title: "翻译", text: vm.translationResult)
                 }
             }
 
-            Spacer()
-
             Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color.black.opacity(0.58))
             }
             .buttonStyle(.plain)
         }
     }
 
-    private func actionButton(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func iconActionButton(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 10))
-                Text(label)
-                    .font(.system(size: 10))
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .frame(width: 26, height: 26)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(OneBoardColors.primary.opacity(0.1))
+                    .fill(Color.black.opacity(0.05))
             )
+            .foregroundColor(Color.black.opacity(0.78))
         }
         .buttonStyle(.plain)
+        .help(label)
     }
 
-    // MARK: - 结果弹窗
+}
 
-    private func resultSheet(title: String, text: String) -> some View {
-        VStack(spacing: 0) {
+@MainActor
+final class AnnotationResultWindowManager {
+    static let shared = AnnotationResultWindowManager()
+    private var panel: NSPanel?
+
+    private init() {}
+
+    func show(title: String, text: String) {
+        let hostingView = NSHostingView(rootView: AnnotationResultView(title: title, text: text) { [weak self] in
+            self?.panel?.close()
+            self?.panel = nil
+        })
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 260),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.contentView = hostingView
+        FloatingWindowManager.positionAtTopRight(panel, offset: 28)
+        panel.makeKeyAndOrderFront(nil)
+        self.panel?.close()
+        self.panel = panel
+    }
+}
+
+private struct AnnotationResultView: View {
+    let title: String
+    let text: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(size: 13, weight: .semibold))
                 Spacer()
-                Button("关闭") {
-                    showOCRResult = false
-                    showTranslationResult = false
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.black.opacity(0.55))
                 }
+                .buttonStyle(.plain)
             }
-            .padding()
-
-            Divider()
 
             ScrollView {
                 Text(text)
-                    .font(.system(size: 14))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+                    .font(.system(size: 13))
                     .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .frame(width: 400, height: 300)
+        .padding(14)
+        .frame(width: 320, height: 260)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
     }
 }
