@@ -20,6 +20,9 @@ final class AnnotationViewModel: ObservableObject {
     private var lastDragPoint: CGPoint = .zero
     private var isDraggingWindow: Bool = false
     private var isDraggingTextLayer: Bool = false
+    private var frameCounter: Int = 0           // 节流计数器
+    private var pendingDx: CGFloat = 0          // 累积位移
+    private var pendingDy: CGFloat = 0
 
     init(annotationService: AnnotationService) {
         self.annotationService = annotationService
@@ -107,27 +110,32 @@ final class AnnotationViewModel: ObservableObject {
             return
         }
 
-        // 拖拽窗口
+        // 拖拽窗口 — 每 3 帧更新一次，减少 KVO/重绘频率
         if isDraggingWindow {
-            let dx = point.x - lastDragPoint.x
-            let dy = point.y - lastDragPoint.y
-            if let window {
+            pendingDx += point.x - lastDragPoint.x
+            pendingDy += point.y - lastDragPoint.y
+            lastDragPoint = point
+            frameCounter += 1
+            if frameCounter % 3 == 0, let window {
                 var frame = window.frame
-                frame.origin.x += dx
-                frame.origin.y -= dy
-                // 禁用隐式动画，避免 KVO 频繁触发工具栏重定位造成卡顿
+                frame.origin.x += pendingDx
+                frame.origin.y -= pendingDy
                 NSAnimationContext.runAnimationGroup { ctx in
                     ctx.duration = 0
                     window.setFrameOrigin(frame.origin)
                 }
+                pendingDx = 0; pendingDy = 0
             }
-            lastDragPoint = point
             return
         }
 
+        // 绘制 — 每 2 帧更新一次
         guard isDrawing else { return }
-        currentPoint = point
-        updateCurrentDrawing()
+        frameCounter += 1
+        if frameCounter % 2 == 0 {
+            currentPoint = point
+            updateCurrentDrawing()
+        }
     }
 
     private func onMouseUp(at point: CGPoint) {

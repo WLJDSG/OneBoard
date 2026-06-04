@@ -123,6 +123,13 @@ struct AnnotationCanvasView: View {
                     textFieldValue = ""
                     isTextFieldFocused = true
                 }
+                // 焦点丢失时自动提交文字（光标在截图外激活 → 文字保留在图片上）
+                .onChange(of: isTextFieldFocused) { focused in
+                    if !focused, !textFieldValue.isEmpty {
+                        viewModel.commitText(textFieldValue)
+                        textFieldValue = ""
+                    }
+                }
 
             HStack(spacing: 8) {
                 Button("取消") {

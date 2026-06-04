@@ -56,6 +56,7 @@ final class PermissionGuideWindowManager {
     private var timer: Timer?
     private var currentKind: OneBoardPermissionKind?
     private var isRevoke: Bool = false
+    private var flowStartTime: Date = Date()  // 最短保护期，防权限 API 缓存误判
 
     var hasActiveFlow: Bool { currentKind != nil }
 
@@ -67,6 +68,7 @@ final class PermissionGuideWindowManager {
 
         currentKind = kind
         isRevoke = revokeMode
+        flowStartTime = Date()  // 重置保护期
 
         // 打开系统设置
         PermissionManager.shared.openPrivacySetting(for: kind)
@@ -128,6 +130,10 @@ final class PermissionGuideWindowManager {
 
     private func checkPermission() {
         guard let kind = currentKind else { return }
+
+        // 最短保护期 1.5s：防止 AXIsProcessTrusted / CGPreflightScreenCaptureAccess 返回缓存值
+        // 导致流程刚启动就被误判为「已完成」而关闭悬浮框
+        guard Date().timeIntervalSince(flowStartTime) > 1.5 else { return }
 
         let granted: Bool
         switch kind {

@@ -5,7 +5,15 @@ import AppKit
 final class AnnotationService: ObservableObject {
     @Published var layers: [AnnotationLayer] = []
     @Published var selectedTool: AnnotationTool = .cursor
-    @Published var selectedColor: NSColor = .systemRed
+    @Published var selectedColor: NSColor = .systemRed {
+        didSet {
+            // 颜色切换时立即更新正在绘制的图层，使变化即时可见
+            if var layer = currentDrawingLayer, layer.color != selectedColor {
+                layer.color = selectedColor
+                currentDrawingLayer = layer
+            }
+        }
+    }
     @Published var lineWidth: CGFloat = 2.0
 
     /// 当前正在绘制的图层（拖拽中）

@@ -11,7 +11,7 @@ final class DragDetector {
     private var pollTimer: Timer?
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
     private var lastTriggerTime: TimeInterval = 0
-    private var lastPasteboardChangeCount: Int = -1  // 粘贴板变更计数，防止过期数据
+    private var isDragConfirmed: Bool = false  // 当前拖拽已确认是文件拖拽
 
     private init() {}
 
@@ -51,6 +51,7 @@ final class DragDetector {
             guard let self else { return }
             guard self.isLeftMouseButtonDown else {
                 if !self.recentPositions.isEmpty { self.recentPositions.removeAll() }
+                self.isDragConfirmed = false
                 return
             }
             guard self.isDraggingSupportedContent else { return }
@@ -97,6 +98,7 @@ final class DragDetector {
             handleDrag(at: event.location)
         case .leftMouseUp:
             recentPositions.removeAll()
+            isDragConfirmed = false
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
         default: break
@@ -110,6 +112,7 @@ final class DragDetector {
             handleDrag(at: NSEvent.mouseLocation)
         case .leftMouseUp:
             recentPositions.removeAll()
+            isDragConfirmed = false
         default: break
         }
     }
@@ -144,25 +147,26 @@ final class DragDetector {
     // MARK: - 拖拽内容检测
 
     private var isDraggingSupportedContent: Bool {
+        // 已确认的拖拽直接返回 true（同一拖拽操作中 changeCount 不变，避免后续帧误判）
+        if isDragConfirmed { return true }
+
         let pasteboard = NSPasteboard(name: .drag)
-        let changeCount = pasteboard.changeCount
-
-        // 粘贴板没有新变化 → 无拖拽操作（过滤窗口拖动等非拖拽场景）
-        if changeCount == lastPasteboardChangeCount { return false }
-        lastPasteboardChangeCount = changeCount
-
         let types = pasteboard.types ?? []
         if types.isEmpty { return false }
 
-        // 精确匹配文件/图片 UTI
         let fileUTIs: Set<String> = [
             "public.file-url", "public.file-contents", "NSFilenamesPboardType",
             "public.png", "public.tiff",
         ]
-        if types.contains(where: { fileUTIs.contains($0.rawValue) }) { return true }
-
-        // 兜底：能读到 NSURL 就是文件拖拽
-        return pasteboard.canReadObject(forClasses: [NSURL.self], options: [:])
+        if types.contains(where: { fileUTIs.contains($0.rawValue) }) {
+            isDragConfirmed = true
+            return true
+        }
+        if pasteboard.canReadObject(forClasses: [NSURL.self], options: [:]) {
+            isDragConfirmed = true
+            return true
+        }
+        return false
     }
 
     // MARK: - 工具方法
