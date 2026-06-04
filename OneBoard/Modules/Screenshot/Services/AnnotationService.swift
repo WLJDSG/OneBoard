@@ -108,6 +108,17 @@ final class AnnotationService: ObservableObject {
         layers.append(layer)
     }
 
+    func addText(in rect: CGRect, text: String, fontSize: CGFloat = 18) {
+        let layer = AnnotationLayer(
+            tool: .text,
+            rect: rect,
+            color: selectedColor,
+            text: text,
+            fontSize: fontSize
+        )
+        layers.append(layer)
+    }
+
     func addMosaic(_ rect: CGRect) {
         let layer = AnnotationLayer(
             tool: .mosaic,

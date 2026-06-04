@@ -82,7 +82,7 @@ final class ScreenshotViewModel: ObservableObject {
 
         let imageWindow = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: imageWinWidth, height: imageWinHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )

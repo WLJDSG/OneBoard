@@ -103,6 +103,7 @@ final class PermissionGuideWindowManager {
         panel.contentView = view
         FloatingWindowManager.positionAtTopRight(panel, offset: 28)
         panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
 
         self.panel?.close()
         self.panel = panel
@@ -121,11 +122,13 @@ final class PermissionGuideWindowManager {
 
     private func startPolling() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.checkPermission()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     private func checkPermission() {

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 标注工具栏（独立悬浮窗）
@@ -153,17 +154,17 @@ struct AnnotationToolbarView: View {
 
     private func showSystemColorPanel() {
         let panel = NSColorPanel.shared
-        panel.setTarget(self)
-        panel.setAction(#selector(Coordinator.colorPanelDidChange(_:)))
+        let coordinator = Coordinator(annotationService: annotationService)
+
         panel.color = annotationService.selectedColor
         panel.isContinuous = true
-        panel.orderFront(nil)
+        panel.mode = .RGB
 
         // 存储 coordinator 防止被释放
-        let coordinator = Coordinator(annotationService: annotationService)
         objc_setAssociatedObject(panel, "colorCoordinator", coordinator, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         panel.setTarget(coordinator)
         panel.setAction(#selector(Coordinator.colorPanelDidChange(_:)))
+        panel.orderFrontRegardless()
     }
 
     private class Coordinator: NSObject {

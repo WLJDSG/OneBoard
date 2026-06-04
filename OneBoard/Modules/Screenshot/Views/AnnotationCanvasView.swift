@@ -15,6 +15,8 @@ struct AnnotationCanvasView: View {
 
     @State private var keyMonitor: Any?
     @State private var textFieldValue: String = ""
+    @State private var textInputResizeStartRect: CGRect?
+    @State private var isResizingTextInput: Bool = false
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
@@ -56,6 +58,11 @@ struct AnnotationCanvasView: View {
                 NSEvent.removeMonitor(keyMonitor)
                 self.keyMonitor = nil
             }
+        }
+        .onChange(of: annotationService.selectedTool) { _, tool in
+            guard viewModel.isTextInput, tool != .text else { return }
+            viewModel.commitText(textFieldValue)
+            textFieldValue = ""
         }
     }
 
@@ -106,14 +113,17 @@ struct AnnotationCanvasView: View {
     // MARK: - 文字输入浮层
 
     private var textInputOverlay: some View {
-        VStack(spacing: 6) {
+        let rect = viewModel.textInputRect
+
+        return ZStack(alignment: .bottomTrailing) {
             TextField("输入文字…", text: $textFieldValue)
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .foregroundColor(Color(nsColor: annotationService.selectedColor))
-                .frame(minWidth: 120, minHeight: 28)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
+                .frame(width: rect.width, height: rect.height, alignment: .topLeading)
+                .background(Color.white.opacity(0.001))
                 .focused($isTextFieldFocused)
                 .onSubmit {
                     viewModel.commitText(textFieldValue)
@@ -124,33 +134,47 @@ struct AnnotationCanvasView: View {
                     isTextFieldFocused = true
                 }
                 // 焦点丢失时自动提交文字（光标在截图外激活 → 文字保留在图片上）
-                .onChange(of: isTextFieldFocused) { focused in
-                    if !focused, !textFieldValue.isEmpty {
+                .onChange(of: isTextFieldFocused) { _, focused in
+                    if !focused, !isResizingTextInput {
                         viewModel.commitText(textFieldValue)
                         textFieldValue = ""
                     }
                 }
 
-            HStack(spacing: 8) {
-                Button("取消") {
-                    viewModel.cancelTextInput()
-                    textFieldValue = ""
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 11))
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color(nsColor: annotationService.selectedColor).opacity(0.55), lineWidth: 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.08))
+                )
+                .allowsHitTesting(false)
 
-                Button("确定") {
-                    viewModel.commitText(textFieldValue)
-                    textFieldValue = ""
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .semibold))
-            }
+            Circle()
+                .fill(Color(nsColor: annotationService.selectedColor))
+                .frame(width: 8, height: 8)
+                .padding(3)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isResizingTextInput = true
+                            if textInputResizeStartRect == nil {
+                                textInputResizeStartRect = viewModel.textInputRect
+                            }
+                            let startRect = textInputResizeStartRect ?? rect
+                            viewModel.textInputRect.size = CGSize(
+                                width: max(40, startRect.width + value.translation.width),
+                                height: max(24, startRect.height + value.translation.height)
+                            )
+                        }
+                        .onEnded { _ in
+                            textInputResizeStartRect = nil
+                            isResizingTextInput = false
+                            isTextFieldFocused = true
+                        }
+                )
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.1), lineWidth: 1))
-        .position(x: viewModel.textInputPoint.x, y: viewModel.textInputPoint.y - 40)
+        .frame(width: rect.width, height: rect.height)
+        .position(x: rect.midX, y: rect.midY)
     }
 
     // MARK: - 文字编辑浮层
@@ -218,6 +242,7 @@ struct AnnotationLayerView: View {
     let layer: AnnotationLayer
     let isSelected: Bool
     let onDoubleTap: () -> Void
+    @State private var isHoveringText: Bool = false
 
     var body: some View {
         ZStack {
@@ -274,26 +299,40 @@ struct AnnotationLayerView: View {
     }
 
     private var textLayerView: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottomTrailing) {
             Text(layer.text ?? "")
                 .font(.system(size: layer.fontSize))
                 .foregroundColor(Color(nsColor: layer.color))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 4)
-                .frame(minWidth: 40, minHeight: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-                )
+                .frame(width: layer.rect.width, height: layer.rect.height, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: false)
+
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isSelected ? Color.blue.opacity(0.08) : Color.clear)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(isSelected ? Color.blue.opacity(0.4) : Color.clear, lineWidth: 1)
+                        .stroke(
+                            (isSelected || isHoveringText) ? Color.blue.opacity(0.45) : Color.clear,
+                            lineWidth: 1
+                        )
                 )
-                .position(x: layer.rect.midX, y: layer.rect.midY)
+                .allowsHitTesting(false)
+
+            if isSelected || isHoveringText {
+                Circle()
+                    .fill(Color.blue.opacity(0.75))
+                    .frame(width: 7, height: 7)
+                    .padding(3)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: layer.rect.width, height: layer.rect.height)
         .position(x: layer.rect.midX, y: layer.rect.midY)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHoveringText = hovering
+        }
     }
 }
 

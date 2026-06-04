@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 /// NSPasteboard 类型映射工具
 enum PasteboardTypeMapper {
@@ -99,11 +100,15 @@ enum PasteboardTypeMapper {
         case .fileURL:
             // 优先从 pasteboard 读取 NSURL 对象，可正确解析 file:///.file/id=... 等文件引用 URL
             if let pb = pasteboard,
-               let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-               let firstURL = urls.first {
-                // 使用 standardizedFileURL 解析符号链接和文件引用，得到实际路径
-                let resolved = firstURL.standardizedFileURL
-                return resolved.path.data(using: .utf8)
+               let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+                for url in urls {
+                    // 使用 standardizedFileURL 解析符号链接和文件引用，得到实际路径
+                    let resolved = url.standardizedFileURL
+                    if isSupportedFileURL(resolved) {
+                        return resolved.path.data(using: .utf8)
+                    }
+                }
+                return nil
             }
             // 回退：从 item 读取 fileURL 字符串
             if let urlString = item.string(forType: .fileURL) {
@@ -113,14 +118,39 @@ enum PasteboardTypeMapper {
                     if let url = URL(string: urlString) {
                         let resolved = url.standardizedFileURL
                         // 如果解析成功且是实际路径（非 /.file/id=...），使用解析后的路径
-                        if !resolved.path.hasPrefix("/.file/") {
+                        if !resolved.path.hasPrefix("/.file/"), isSupportedFileURL(resolved) {
                             return resolved.path.data(using: .utf8)
                         }
                     }
                 }
-                return urlString.data(using: .utf8)
+                let fallbackURL = URL(fileURLWithPath: urlString)
+                return isSupportedFileURL(fallbackURL) ? urlString.data(using: .utf8) : nil
             }
             return nil
         }
+    }
+
+    /// 只记录普通文件、普通文件夹和压缩包等常见文件；过滤 .app 等应用包。
+    static func isSupportedFileURL(_ url: URL) -> Bool {
+        let standardized = url.standardizedFileURL
+        let path = standardized.path
+        guard path != Bundle.main.bundleURL.standardizedFileURL.path else { return false }
+
+        let ext = standardized.pathExtension.lowercased()
+        if ext == "app" { return false }
+
+        let values = try? standardized.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey, .contentTypeKey])
+        if values?.contentType?.conforms(to: .applicationBundle) == true {
+            return false
+        }
+        if values?.contentType?.conforms(to: .application) == true, ext == "app" {
+            return false
+        }
+
+        if values?.isDirectory == true {
+            return values?.isPackage != true
+        }
+
+        return true
     }
 }

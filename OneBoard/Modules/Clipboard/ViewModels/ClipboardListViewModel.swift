@@ -46,9 +46,9 @@ final class ClipboardListViewModel: ObservableObject {
 
         do {
             if searchText.isEmpty {
-                entries = try await repository.fetchAll(limit: effectiveMax)
+                entries = try await repository.fetchAll(limit: effectiveMax).filter(isSupportedEntry)
             } else {
-                entries = try await repository.search(query: searchText, limit: effectiveMax)
+                entries = try await repository.search(query: searchText, limit: effectiveMax).filter(isSupportedEntry)
             }
         } catch {
             print("[ClipboardListViewModel] 加载失败: \(error)")
@@ -71,7 +71,7 @@ final class ClipboardListViewModel: ObservableObject {
         defer { isSearching = false }
 
         do {
-            entries = try await repository.search(query: searchText)
+            entries = try await repository.search(query: searchText).filter(isSupportedEntry)
         } catch {
             print("[ClipboardListViewModel] 搜索失败: \(error)")
         }
@@ -116,6 +116,8 @@ final class ClipboardListViewModel: ObservableObject {
 
     /// 点击条目 - 复制回剪贴板并粘贴
     func selectAndPaste(_ entry: ClipboardEntry) {
+        guard isSupportedEntry(entry) else { return }
+
         selectedEntry = entry
         PasteboardMonitor.shared.isPasting = true
 
@@ -212,6 +214,21 @@ final class ClipboardListViewModel: ObservableObject {
                 print("[ViewModel] ⚠️ 文件路径解析失败")
             }
         }
+    }
+
+    private func isSupportedEntry(_ entry: ClipboardEntry) -> Bool {
+        guard entry.contentTypeEnum == .fileURL else { return true }
+        guard let rawString = String(data: entry.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawString.isEmpty else {
+            return false
+        }
+        let url: URL
+        if rawString.hasPrefix("file://"), let parsed = URL(string: rawString) {
+            url = parsed.standardizedFileURL
+        } else {
+            url = URL(fileURLWithPath: rawString)
+        }
+        return PasteboardTypeMapper.isSupportedFileURL(url)
     }
 
     /// 模拟 Cmd+V 按键（需要辅助功能权限）
