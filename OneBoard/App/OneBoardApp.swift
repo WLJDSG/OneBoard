@@ -109,12 +109,13 @@ struct SettingsView: View {
     }
 
     private func syncPermissionSwitches() {
+        // 有活跃流程时不同步（避免覆盖用户的开关意图）
         guard !PermissionGuideWindowManager.shared.hasActiveFlow else { return }
         let acc = PermissionManager.shared.hasAccessibilityPermission
         let scr = PermissionManager.shared.hasScreenRecordingPermission
-        accessibilityEnabled = acc
-        screenRecordingEnabled = scr
-        // 更新 @State 以触发 UI 刷新（不依赖 forceRefresh UUID 重建视图）
+        // 仅在权限状态与 UI 不一致时更新
+        if accessibilityEnabled != acc { accessibilityEnabled = acc }
+        if screenRecordingEnabled != scr { screenRecordingEnabled = scr }
         if accessibilityGranted != acc { accessibilityGranted = acc }
         if screenRecordingGranted != scr { screenRecordingGranted = scr }
     }
@@ -192,13 +193,13 @@ struct SettingsView: View {
         disable: @escaping () -> Void
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            // 开关显示用户意图（isOn），而非 OR 实际权限状态。
-            // 这样用户切换开关时能立即看到变化，不会因为实际权限未变而被“弹回”。
             Toggle("", isOn: Binding(
                 get: { isOn.wrappedValue },
-                set: { enabled in
-                    isOn.wrappedValue = enabled
-                    enabled ? enable() : disable()
+                set: { newValue in
+                    // 先启动/停止权限流程（设置 hasActiveFlow），再更新 @AppStorage
+                    // 防止 syncPermissionSwitches() 定时器在间隙中覆盖用户意图
+                    if newValue { enable() } else { disable() }
+                    isOn.wrappedValue = newValue
                 }
             ))
             .toggleStyle(.switch)
@@ -207,7 +208,6 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(title)
-                    // 文案始终显示实际权限状态
                     Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundColor(isGranted ? .green : .orange)

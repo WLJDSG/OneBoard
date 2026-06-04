@@ -115,7 +115,11 @@ final class AnnotationViewModel: ObservableObject {
                 var frame = window.frame
                 frame.origin.x += dx
                 frame.origin.y -= dy
-                window.setFrameOrigin(frame.origin)
+                // 禁用隐式动画，避免 KVO 频繁触发工具栏重定位造成卡顿
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = 0
+                    window.setFrameOrigin(frame.origin)
+                }
             }
             lastDragPoint = point
             return

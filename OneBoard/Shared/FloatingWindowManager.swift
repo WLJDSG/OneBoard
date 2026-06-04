@@ -59,7 +59,8 @@ final class FloatingWindowManager {
 
     /// 居中窗口在屏幕上
     static func centerWindow(_ window: NSWindow) {
-        guard let screen = NSScreen.main else { return }
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        guard let screen else { return }
         let screenFrame = screen.visibleFrame
         let windowFrame = window.frame
         let x = screenFrame.midX - windowFrame.width / 2
@@ -67,9 +68,14 @@ final class FloatingWindowManager {
         window.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
-    /// 将窗口放在屏幕右上角
+    /// 将窗口放在屏幕右上角（兼容菜单栏 app 无 key window 场景）
     static func positionAtTopRight(_ window: NSWindow, offset: CGFloat = 20) {
-        guard let screen = NSScreen.main else { return }
+        // 优先鼠标所在屏幕，回退主屏幕，再回退第一个屏幕
+        let mouseLocation = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else { return }
         let screenFrame = screen.visibleFrame
         let windowFrame = window.frame
         let x = screenFrame.maxX - windowFrame.width - offset

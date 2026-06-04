@@ -87,7 +87,7 @@ final class ScreenshotViewModel: ObservableObject {
             defer: false
         )
         imageWindow.level = .floating
-        imageWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        imageWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         imageWindow.isFloatingPanel = true
         imageWindow.hidesOnDeactivate = false
         imageWindow.backgroundColor = .clear
@@ -138,8 +138,9 @@ final class ScreenshotViewModel: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        toolbarPanel.level = .floating
-        toolbarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // 工具栏 level 略高于图片窗口，确保可点击
+        toolbarPanel.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+        toolbarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         toolbarPanel.isFloatingPanel = true
         toolbarPanel.hidesOnDeactivate = false
         toolbarPanel.backgroundColor = .clear
@@ -150,14 +151,18 @@ final class ScreenshotViewModel: ObservableObject {
         // 定位工具栏在图片窗口下方 0.5cm
         positionToolbar(toolbarPanel, below: imageWindow, gap: toolbarGap, screenFrame: screenFrame)
 
-        toolbarPanel.makeKeyAndOrderFront(nil)
+        toolbarPanel.orderFront(nil)
+        // 确保工具栏在图片窗口之上（nonactivatingPanel 无法 makeKey，用 orderFrontRegardless）
+        toolbarPanel.orderFrontRegardless()
         self.toolbarPanel = toolbarPanel
 
         // 监听图片窗口移动 → 工具栏跟随
+        // 使用 assumeIsolated 断言已在主线程（frame KVO 回调保证在主线程），避免 Task 开销
         windowFrameObserver = imageWindow.observe(\.frame, options: [.new]) { [weak self] window, _ in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 guard let self, let toolbar = self.toolbarPanel else { return }
-                self.positionToolbar(toolbar, below: window, gap: toolbarGap, screenFrame: screenFrame)
+                let sf = NSScreen.main?.visibleFrame ?? .zero
+                self.positionToolbar(toolbar, below: window, gap: toolbarGap, screenFrame: sf)
             }
         }
     }
