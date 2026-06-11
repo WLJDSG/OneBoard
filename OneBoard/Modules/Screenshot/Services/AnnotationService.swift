@@ -160,12 +160,13 @@ final class AnnotationService: ObservableObject {
     // MARK: - 渲染
 
     /// 将所有标注渲染到图片上
-    func renderToImage(baseImage: NSImage) -> NSImage {
-        let size = baseImage.size
+    func renderToImage(baseImage: NSImage, displaySize: CGSize? = nil) -> NSImage {
+        let outputPointSize = displaySize ?? baseImage.size
+        let pixelSize = Self.pixelSize(for: baseImage)
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: Int(size.width),
-            pixelsHigh: Int(size.height),
+            pixelsWide: Int(pixelSize.width),
+            pixelsHigh: Int(pixelSize.height),
             bitsPerSample: 8,
             samplesPerPixel: 4,
             hasAlpha: true,
@@ -180,24 +181,45 @@ final class AnnotationService: ObservableObject {
         guard let context = NSGraphicsContext(bitmapImageRep: rep) else {
             return baseImage
         }
+        rep.size = outputPointSize
 
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
+        context.imageInterpolation = .high
 
         // 绘制原图
-        baseImage.draw(in: CGRect(origin: .zero, size: size),
-                       from: .zero, operation: .copy, fraction: 1.0)
+        baseImage.draw(in: CGRect(origin: .zero, size: pixelSize),
+                       from: CGRect(origin: .zero, size: baseImage.size),
+                       operation: .copy,
+                       fraction: 1.0)
 
         // 绘制标注图层
+        let ctx = context.cgContext
+        ctx.saveGState()
+        ctx.scaleBy(x: pixelSize.width / max(outputPointSize.width, 1),
+                    y: pixelSize.height / max(outputPointSize.height, 1))
+        ctx.translateBy(x: 0, y: outputPointSize.height)
+        ctx.scaleBy(x: 1, y: -1)
         for layer in layers {
-            drawLayer(layer, in: context.cgContext)
+            drawLayer(layer, in: ctx)
         }
+        ctx.restoreGState()
 
         NSGraphicsContext.restoreGraphicsState()
 
-        let renderedImage = NSImage(size: size)
+        let renderedImage = NSImage(size: outputPointSize)
         renderedImage.addRepresentation(rep)
         return renderedImage
+    }
+
+    private static func pixelSize(for image: NSImage) -> CGSize {
+        if let bitmap = image.representations.compactMap({ $0 as? NSBitmapImageRep }).first {
+            return CGSize(width: bitmap.pixelsWide, height: bitmap.pixelsHigh)
+        }
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            return CGSize(width: cgImage.width, height: cgImage.height)
+        }
+        return image.size
     }
 
     private func drawLayer(_ layer: AnnotationLayer, in ctx: CGContext) {

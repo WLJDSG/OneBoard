@@ -13,6 +13,7 @@ struct AnnotationToolbarView: View {
     let onTranslate: (NSImage) -> Void
     let onClose: () -> Void
     let baseImage: NSImage
+    let displaySize: CGSize
 
     @State private var showColorPicker: Bool = false
 
@@ -182,23 +183,23 @@ struct AnnotationToolbarView: View {
     private var actionButtonsRow: some View {
         HStack(spacing: 6) {
             iconActionButton("复制", icon: "doc.on.doc") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage)
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onCopy(rendered)
             }
 
             iconActionButton("保存", icon: "square.and.arrow.down") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage)
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onSave(rendered)
             }
 
             iconActionButton("贴图", icon: "pin") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage)
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onPin(rendered)
                 onClose()
             }
 
             iconActionButton("OCR", icon: "text.viewfinder") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage)
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 Task {
                     let vm = ScreenshotViewModel.shared
                     await vm.performOCR(on: rendered)
@@ -207,7 +208,7 @@ struct AnnotationToolbarView: View {
             }
 
             iconActionButton("翻译", icon: "character.bubble") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage)
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 Task {
                     let vm = ScreenshotViewModel.shared
                     await vm.performTranslation(on: rendered)

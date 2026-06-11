@@ -3,6 +3,10 @@ import AppKit
 extension NSImage {
     /// 将 NSImage 转换为 PNG 数据
     var pngData: Data? {
+        if let bitmapRep = representations.compactMap({ $0 as? NSBitmapImageRep }).first {
+            return bitmapRep.representation(using: .png, properties: [:])
+        }
+
         guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
@@ -12,6 +16,10 @@ extension NSImage {
 
     /// 将 NSImage 转换为 JPEG 数据
     func jpegData(compressionFactor: Float = 0.85) -> Data? {
+        if let bitmapRep = representations.compactMap({ $0 as? NSBitmapImageRep }).first {
+            return bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: compressionFactor])
+        }
+
         guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }

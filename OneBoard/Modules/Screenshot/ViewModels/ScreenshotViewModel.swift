@@ -67,7 +67,7 @@ final class ScreenshotViewModel: ObservableObject {
                 viewModel: viewModel,
                 onCopy: { [weak self] img in self?.copyToClipboard(img) },
                 onSave: { [weak self] img in self?.saveToFile(img) },
-                onPin: { [weak self] img in self?.pinToScreen(img) },
+                onPin: { [weak self] img in self?.pinToScreen(img, preferredFrame: self?.annotationWindow?.frame) },
                 onOCR: { [weak self] img in
                     Task { await self?.performOCR(on: img) }
                 },
@@ -114,7 +114,7 @@ final class ScreenshotViewModel: ObservableObject {
                 viewModel: viewModel,
                 onCopy: { [weak self] img in self?.copyToClipboard(img) },
                 onSave: { [weak self] img in self?.saveToFile(img) },
-                onPin: { [weak self] img in self?.pinToScreen(img) },
+                onPin: { [weak self] img in self?.pinToScreen(img, preferredFrame: self?.annotationWindow?.frame) },
                 onOCR: { [weak self] img in
                     Task { await self?.performOCR(on: img) }
                 },
@@ -124,7 +124,8 @@ final class ScreenshotViewModel: ObservableObject {
                 onClose: { [weak self] in
                     self?.closeAnnotationWindows()
                 },
-                baseImage: image
+                baseImage: image,
+                displaySize: CGSize(width: imageWinWidth, height: imageWinHeight)
             )
         )
 
@@ -225,9 +226,10 @@ final class ScreenshotViewModel: ObservableObject {
         }
     }
 
-    func pinToScreen(_ image: NSImage) {
+    func pinToScreen(_ image: NSImage, preferredFrame: NSRect? = nil) {
+        let frame = preferredFrame ?? NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height),
+            contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -249,7 +251,9 @@ final class ScreenshotViewModel: ObservableObject {
         panel.hasShadow = true
         panel.contentView = hostingView
         panel.isMovableByWindowBackground = true
-        FloatingWindowManager.centerWindow(panel)
+        if preferredFrame == nil {
+            FloatingWindowManager.centerWindow(panel)
+        }
         panel.makeKeyAndOrderFront(nil)
         pinnedWindows.append(panel)
     }

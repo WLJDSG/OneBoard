@@ -22,6 +22,7 @@ let package = Package(
             path: ".",
             exclude: [
                 "Resources",
+                "Tests",
             ],
             sources: [
                 "App",
@@ -29,6 +30,11 @@ let package = Package(
                 "Modules",
                 "Shared",
             ]
+        ),
+        .testTarget(
+            name: "OneBoardTests",
+            dependencies: ["OneBoard"],
+            path: "Tests"
         )
     ]
 )

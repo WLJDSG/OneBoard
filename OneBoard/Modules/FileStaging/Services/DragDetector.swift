@@ -1,6 +1,6 @@
 import AppKit
 
-/// 文件拖拽检测器 - 检测拖拽内容时的摇晃手势 / 顶部区域悬停
+/// 文件拖拽检测器 - 检测文件拖拽时的摇晃手势
 final class DragDetector {
     static let shared = DragDetector()
     static let fileDragDetected = Notification.Name(Constants.NotificationNames.shakeGestureDetected)
@@ -130,14 +130,10 @@ final class DragDetector {
         // 更新 pasteboard change count 防止过期数据重复触发
         _ = isDraggingSupportedContent
 
-        let shakeDetected = detectShake()
-        let inTopZone = isInTopTriggerZone(position)
-        let shouldTrigger = shakeDetected || inTopZone
-
-        if shouldTrigger, now - lastTriggerTime > 1.5 {  // 冷却 1.5s
+        if detectShake(), now - lastTriggerTime > 1.5 {  // 冷却 1.5s
             lastTriggerTime = now
             recentPositions.removeAll()
-            print("[DragDetector] 触发 (shake:\(shakeDetected), topZone:\(inTopZone))")
+            print("[DragDetector] 文件拖拽摇晃触发")
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
             }
@@ -152,21 +148,27 @@ final class DragDetector {
 
         let pasteboard = NSPasteboard(name: .drag)
         let types = pasteboard.types ?? []
-        if types.isEmpty { return false }
-
-        let fileUTIs: Set<String> = [
-            "public.file-url", "public.file-contents", "NSFilenamesPboardType",
-            "public.png", "public.tiff",
-        ]
-        if types.contains(where: { fileUTIs.contains($0.rawValue) }) {
+        if Self.supportsDraggedFileTypes(types) {
             isDragConfirmed = true
             return true
         }
-        if pasteboard.canReadObject(forClasses: [NSURL.self], options: [:]) {
+        let fileURLReadOptions: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true
+        ]
+        if pasteboard.canReadObject(forClasses: [NSURL.self], options: fileURLReadOptions) {
             isDragConfirmed = true
             return true
         }
         return false
+    }
+
+    static func supportsDraggedFileTypes(_ types: [NSPasteboard.PasteboardType]) -> Bool {
+        let fileTypes: Set<String> = [
+            NSPasteboard.PasteboardType.fileURL.rawValue,
+            "public.file-url",
+            "NSFilenamesPboardType"
+        ]
+        return types.contains { fileTypes.contains($0.rawValue) }
     }
 
     // MARK: - 工具方法
@@ -191,12 +193,4 @@ final class DragDetector {
         return directionChanges >= 2
     }
 
-    private func isInTopTriggerZone(_ point: CGPoint) -> Bool {
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else {
-            return false
-        }
-        let frame = screen.frame
-        let zone = CGRect(x: frame.midX - 100, y: frame.maxY - 48, width: 200, height: 48)
-        return zone.contains(point)
-    }
 }
