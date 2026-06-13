@@ -39,6 +39,11 @@ final class MenuBarManager: NSObject {
         let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let clearPrivacyItem = NSMenuItem(title: "清除隐私授权...", action: #selector(clearPrivacyAuthorizations), keyEquivalent: "")
+        clearPrivacyItem.target = self
+        menu.addItem(clearPrivacyItem)
+
         menu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(title: "退出 OneBoard", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -119,6 +124,33 @@ final class MenuBarManager: NSObject {
 
     @objc private func openSettings() {
         onSettings?()
+    }
+
+    @objc private func clearPrivacyAuthorizations() {
+        let confirm = NSAlert()
+        confirm.messageText = "清除 OneBoard 的隐私授权？"
+        confirm.informativeText = "这会清除辅助功能和屏幕录制授权记录。下次使用相关功能时，macOS 会重新请求授权。"
+        confirm.alertStyle = .warning
+        confirm.addButton(withTitle: "清除授权")
+        confirm.addButton(withTitle: "取消")
+
+        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
+        do {
+            try PermissionManager.shared.resetPrivacyAuthorizations()
+            showPrivacyResetResult(title: "已清除隐私授权", message: "辅助功能和屏幕录制授权记录已清除。")
+        } catch {
+            showPrivacyResetResult(title: "清除授权失败", message: error.localizedDescription)
+        }
+    }
+
+    private func showPrivacyResetResult(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "好")
+        alert.runModal()
     }
 
     @objc private func quitApp() {

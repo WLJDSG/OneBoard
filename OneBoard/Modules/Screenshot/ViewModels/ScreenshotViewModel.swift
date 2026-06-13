@@ -1,6 +1,12 @@
 import SwiftUI
 import AppKit
 
+/// 截图标注面板需要真正成为 key window，否则 SwiftUI TextField 会出现“看起来聚焦但无法输入”的问题。
+private final class AnnotationPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 /// 截图模块 ViewModel
 @MainActor
 final class ScreenshotViewModel: ObservableObject {
@@ -80,7 +86,7 @@ final class ScreenshotViewModel: ObservableObject {
             )
         )
 
-        let imageWindow = NSPanel(
+        let imageWindow = AnnotationPanel(
             contentRect: NSRect(x: 0, y: 0, width: imageWinWidth, height: imageWinHeight),
             styleMask: [.borderless],
             backing: .buffered,
@@ -103,6 +109,7 @@ final class ScreenshotViewModel: ObservableObject {
         let winY = min(max(selectionRect.midY - imageWinHeight / 2, screenFrame.minY),
                        screenFrame.maxY - imageWinHeight)
         imageWindow.setFrameOrigin(NSPoint(x: winX, y: winY))
+        NSApp.activate(ignoringOtherApps: true)
         imageWindow.makeKeyAndOrderFront(nil)
 
         self.annotationWindow = imageWindow
@@ -197,6 +204,7 @@ final class ScreenshotViewModel: ObservableObject {
     private func closeAnnotationWindows() {
         windowFrameObserver?.invalidate()
         windowFrameObserver = nil
+        annotationWindow?.makeFirstResponder(nil)
         annotationWindow?.close()
         annotationWindow = nil
         toolbarPanel?.close()

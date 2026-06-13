@@ -11,4 +11,20 @@ final class DragDetectorTests: XCTestCase {
         XCTAssertFalse(DragDetector.supportsDraggedFileTypes([.tiff]))
         XCTAssertFalse(DragDetector.supportsDraggedFileTypes([.string]))
     }
+
+    func testDragConfirmationRequiresNewDragPasteboardChange() {
+        let lastSeenChangeCount = 12
+
+        XCTAssertFalse(DragDetector.canConfirmFileDrag(
+            types: [.fileURL],
+            changeCount: lastSeenChangeCount,
+            lastSeenChangeCount: lastSeenChangeCount
+        ))
+
+        XCTAssertTrue(DragDetector.canConfirmFileDrag(
+            types: [.fileURL],
+            changeCount: lastSeenChangeCount + 1,
+            lastSeenChangeCount: lastSeenChangeCount
+        ))
+    }
 }

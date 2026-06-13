@@ -25,9 +25,11 @@ final class AnnotationViewModel: ObservableObject {
     private var isDraggingTextLayer: Bool = false
     private var isResizingTextLayer: Bool = false
     private var resizingTextLayerID: UUID?
+    private var resizingTextHandle: TextResizeHandle?
     private var resizeStartRect: CGRect = .zero
     private var resizeStartPoint: CGPoint = .zero
     private let textResizeHitWidth: CGFloat = 8
+    private var textInputCommitHandler: (() -> Void)?
 
     init(annotationService: AnnotationService) {
         self.annotationService = annotationService
@@ -36,6 +38,10 @@ final class AnnotationViewModel: ObservableObject {
     func setWindow(_ window: NSWindow) {
         self.window = window
         setupMouseMonitor(for: window)
+    }
+
+    func setTextInputCommitHandler(_ handler: @escaping () -> Void) {
+        textInputCommitHandler = handler
     }
 
     func closeWindow() {
@@ -73,24 +79,35 @@ final class AnnotationViewModel: ObservableObject {
     private func onMouseDown(at point: CGPoint, event: NSEvent) {
         // 文字标注编辑中 → 不处理鼠标
         if editingTextLayerID != nil { return }
-        if isTextInput { return }
+        if isTextInput {
+            if !expandedTextInputRect.contains(point) {
+                textInputCommitHandler?()
+            }
+            return
+        }
 
-        // Cursor 模式：检查是否点中了文字标注（可拖动/编辑）
-        if annotationService.selectedTool == .cursor {
-            for layer in annotationService.layers where layer.tool == .text {
-                if layer.rect.contains(point) {
+        // 移动/文字模式：检查是否点中了文字标注（可拖动/编辑）
+        if annotationService.selectedTool == .cursor || annotationService.selectedTool == .text {
+            for layer in annotationService.layers.reversed() where layer.tool == .text {
+                if let handle = textResizeHandle(at: point, in: layer.rect) {
                     selectedTextLayerID = layer.id
-                    if isTextResizeHandleHit(point, in: layer.rect) {
-                        resizingTextLayerID = layer.id
-                        resizeStartRect = layer.rect
-                        resizeStartPoint = point
-                        isResizingTextLayer = true
-                    } else {
-                        startPoint = point
-                        isDraggingTextLayer = true
-                    }
+                    resizingTextLayerID = layer.id
+                    resizingTextHandle = handle
+                    resizeStartRect = layer.rect
+                    resizeStartPoint = point
+                    isResizingTextLayer = true
                     return
                 }
+
+                if layer.rect.contains(point) {
+                    selectedTextLayerID = layer.id
+                    startPoint = point
+                    isDraggingTextLayer = true
+                    return
+                }
+            }
+            if annotationService.selectedTool == .cursor {
+                selectedTextLayerID = nil
             }
         }
 
@@ -158,6 +175,7 @@ final class AnnotationViewModel: ObservableObject {
             resizeTextLayer(id: resizingTextLayerID, to: point)
             isResizingTextLayer = false
             resizingTextLayerID = nil
+            resizingTextHandle = nil
             return
         }
 
@@ -196,6 +214,7 @@ final class AnnotationViewModel: ObservableObject {
             return
         }
         annotationService.addText(in: textInputRect, text: trimmedText)
+        selectedTextLayerID = nil
         isTextInput = false
     }
 
@@ -289,31 +308,118 @@ final class AnnotationViewModel: ObservableObject {
         )
     }
 
-    private func isTextResizeHandleHit(_ point: CGPoint, in rect: CGRect) -> Bool {
-        let handleRect = CGRect(
-            x: rect.maxX - textResizeHitWidth,
-            y: rect.maxY - textResizeHitWidth,
-            width: textResizeHitWidth * 2,
-            height: textResizeHitWidth * 2
-        )
-        return handleRect.contains(point)
+    private var expandedTextInputRect: CGRect {
+        textInputRect.insetBy(dx: -textResizeHitWidth, dy: -textResizeHitWidth)
+    }
+
+    private func textResizeHandle(at point: CGPoint, in rect: CGRect) -> TextResizeHandle? {
+        let handles = TextResizeHandle.allCases.map { handle in
+            (handle, handle.hitRect(in: rect, hitWidth: textResizeHitWidth))
+        }
+        return handles.first { $0.1.contains(point) }?.0
     }
 
     private func resizeTextLayer(id: UUID?, to point: CGPoint) {
-        guard let id else { return }
+        guard let id, let resizingTextHandle else { return }
         let minSize = CGSize(width: 40, height: 24)
-        let width = max(minSize.width, resizeStartRect.width + point.x - resizeStartPoint.x)
-        let height = max(minSize.height, resizeStartRect.height + point.y - resizeStartPoint.y)
-        let rect = CGRect(
-            x: resizeStartRect.minX,
-            y: resizeStartRect.minY,
-            width: width,
-            height: height
+        let rect = resizingTextHandle.resizedRect(
+            from: resizeStartRect,
+            startPoint: resizeStartPoint,
+            currentPoint: point,
+            minSize: minSize
         )
         annotationService.updateTextLayer(id: id, rect: rect)
     }
 
     private func screenPoint(for event: NSEvent, in window: NSWindow) -> CGPoint {
         window.convertPoint(toScreen: event.locationInWindow)
+    }
+}
+
+private enum TextResizeHandle: CaseIterable {
+    case topLeft
+    case top
+    case topRight
+    case right
+    case bottomRight
+    case bottom
+    case bottomLeft
+    case left
+
+    func hitRect(in rect: CGRect, hitWidth: CGFloat) -> CGRect {
+        let center: CGPoint
+        switch self {
+        case .topLeft: center = CGPoint(x: rect.minX, y: rect.minY)
+        case .top: center = CGPoint(x: rect.midX, y: rect.minY)
+        case .topRight: center = CGPoint(x: rect.maxX, y: rect.minY)
+        case .right: center = CGPoint(x: rect.maxX, y: rect.midY)
+        case .bottomRight: center = CGPoint(x: rect.maxX, y: rect.maxY)
+        case .bottom: center = CGPoint(x: rect.midX, y: rect.maxY)
+        case .bottomLeft: center = CGPoint(x: rect.minX, y: rect.maxY)
+        case .left: center = CGPoint(x: rect.minX, y: rect.midY)
+        }
+        return CGRect(
+            x: center.x - hitWidth,
+            y: center.y - hitWidth,
+            width: hitWidth * 2,
+            height: hitWidth * 2
+        )
+    }
+
+    func resizedRect(from rect: CGRect, startPoint: CGPoint, currentPoint: CGPoint, minSize: CGSize) -> CGRect {
+        let dx = currentPoint.x - startPoint.x
+        let dy = currentPoint.y - startPoint.y
+        var minX = rect.minX
+        var minY = rect.minY
+        var maxX = rect.maxX
+        var maxY = rect.maxY
+
+        switch self {
+        case .topLeft:
+            minX += dx
+            minY += dy
+        case .top:
+            minY += dy
+        case .topRight:
+            maxX += dx
+            minY += dy
+        case .right:
+            maxX += dx
+        case .bottomRight:
+            maxX += dx
+            maxY += dy
+        case .bottom:
+            maxY += dy
+        case .bottomLeft:
+            minX += dx
+            maxY += dy
+        case .left:
+            minX += dx
+        }
+
+        if maxX - minX < minSize.width {
+            if adjustsLeftEdge {
+                minX = maxX - minSize.width
+            } else {
+                maxX = minX + minSize.width
+            }
+        }
+        if maxY - minY < minSize.height {
+            if adjustsTopEdge {
+                minY = maxY - minSize.height
+            } else {
+                maxY = minY + minSize.height
+            }
+        }
+
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    private var adjustsLeftEdge: Bool {
+        self == .topLeft || self == .bottomLeft || self == .left
+    }
+
+    private var adjustsTopEdge: Bool {
+        self == .topLeft || self == .top || self == .topRight
     }
 }

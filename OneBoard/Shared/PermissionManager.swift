@@ -26,6 +26,33 @@ final class PermissionManager {
         task.arguments = [urlStr]
         task.launch()
     }
+
+    func resetPrivacyAuthorizations() throws {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.app"
+        try resetPrivacyAuthorization(service: "Accessibility", bundleID: bundleID)
+        try resetPrivacyAuthorization(service: "ScreenCapture", bundleID: bundleID)
+    }
+
+    private func resetPrivacyAuthorization(service: String, bundleID: String) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", service, bundleID]
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw PrivacyAuthorizationResetError(service: service, status: process.terminationStatus)
+        }
+    }
+}
+
+struct PrivacyAuthorizationResetError: LocalizedError {
+    let service: String
+    let status: Int32
+
+    var errorDescription: String? {
+        "\(service) 授权记录清除失败（退出码 \(status)）"
+    }
 }
 
 // MARK: - 权限流程完成通知

@@ -16,6 +16,7 @@ struct AnnotationCanvasView: View {
     @State private var keyMonitor: Any?
     @State private var textFieldValue: String = ""
     @State private var textInputResizeStartRect: CGRect?
+    @State private var textInputResizeHandle: CanvasResizeHandle?
     @State private var isResizingTextInput: Bool = false
     @FocusState private var isTextFieldFocused: Bool
 
@@ -34,6 +35,12 @@ struct AnnotationCanvasView: View {
             }
         }
         .onAppear {
+            viewModel.setTextInputCommitHandler {
+                viewModel.commitText(textFieldValue)
+                textFieldValue = ""
+                isTextFieldFocused = false
+            }
+
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 if event.keyCode == 53 { // Esc
                     if viewModel.isTextInput {
@@ -131,7 +138,9 @@ struct AnnotationCanvasView: View {
                 }
                 .onAppear {
                     textFieldValue = ""
-                    isTextFieldFocused = true
+                    DispatchQueue.main.async {
+                        isTextFieldFocused = true
+                    }
                 }
                 // 焦点丢失时自动提交文字（光标在截图外激活 → 文字保留在图片上）
                 .onChange(of: isTextFieldFocused) { _, focused in
@@ -141,37 +150,70 @@ struct AnnotationCanvasView: View {
                     }
                 }
 
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color(nsColor: annotationService.selectedColor).opacity(0.55), lineWidth: 1)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.08))
-                )
-                .allowsHitTesting(false)
+            TextControlFrame(
+                rect: CGRect(origin: .zero, size: rect.size),
+                color: Color(nsColor: annotationService.selectedColor),
+                showsHandles: true
+            )
+            .allowsHitTesting(false)
 
-            Circle()
-                .fill(Color(nsColor: annotationService.selectedColor))
-                .frame(width: 8, height: 8)
-                .padding(3)
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.clear, lineWidth: 10)
+                .contentShape(Rectangle())
                 .gesture(
-                    DragGesture(minimumDistance: 0)
+                    DragGesture(minimumDistance: 2)
                         .onChanged { value in
                             isResizingTextInput = true
                             if textInputResizeStartRect == nil {
                                 textInputResizeStartRect = viewModel.textInputRect
                             }
                             let startRect = textInputResizeStartRect ?? rect
-                            viewModel.textInputRect.size = CGSize(
-                                width: max(40, startRect.width + value.translation.width),
-                                height: max(24, startRect.height + value.translation.height)
+                            viewModel.textInputRect.origin = CGPoint(
+                                x: startRect.origin.x + value.translation.width,
+                                y: startRect.origin.y + value.translation.height
                             )
                         }
                         .onEnded { _ in
                             textInputResizeStartRect = nil
                             isResizingTextInput = false
-                            isTextFieldFocused = true
+                            DispatchQueue.main.async {
+                                isTextFieldFocused = true
+                            }
                         }
                 )
+
+            ForEach(CanvasResizeHandle.allCases, id: \.self) { handle in
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 18, height: 18)
+                    .position(handle.position(in: CGRect(origin: .zero, size: rect.size)))
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                isResizingTextInput = true
+                                if textInputResizeStartRect == nil {
+                                    textInputResizeStartRect = viewModel.textInputRect
+                                    textInputResizeHandle = handle
+                                }
+                                let startRect = textInputResizeStartRect ?? rect
+                                let activeHandle = textInputResizeHandle ?? handle
+                                viewModel.textInputRect = activeHandle.resizedRect(
+                                    from: startRect,
+                                    translation: value.translation,
+                                    minSize: CGSize(width: 40, height: 24)
+                                )
+                            }
+                            .onEnded { _ in
+                                textInputResizeStartRect = nil
+                                textInputResizeHandle = nil
+                                isResizingTextInput = false
+                                DispatchQueue.main.async {
+                                    isTextFieldFocused = true
+                                }
+                            }
+                    )
+            }
         }
         .frame(width: rect.width, height: rect.height)
         .position(x: rect.midX, y: rect.midY)
@@ -203,7 +245,9 @@ struct AnnotationCanvasView: View {
                         viewModel.commitEditText(layer.text ?? "")
                     }
                     .onAppear {
-                        isTextFieldFocused = true
+                        DispatchQueue.main.async {
+                            isTextFieldFocused = true
+                        }
                     }
 
                     HStack(spacing: 8) {
@@ -299,7 +343,7 @@ struct AnnotationLayerView: View {
     }
 
     private var textLayerView: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             Text(layer.text ?? "")
                 .font(.system(size: layer.fontSize))
                 .foregroundColor(Color(nsColor: layer.color))
@@ -308,22 +352,16 @@ struct AnnotationLayerView: View {
                 .frame(width: layer.rect.width, height: layer.rect.height, alignment: .topLeading)
                 .fixedSize(horizontal: false, vertical: false)
 
-            RoundedRectangle(cornerRadius: 4)
-                .fill(isSelected ? Color.blue.opacity(0.08) : Color.clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(
-                            (isSelected || isHoveringText) ? Color.blue.opacity(0.45) : Color.clear,
-                            lineWidth: 1
-                        )
+            if isSelected {
+                TextControlFrame(
+                    rect: CGRect(origin: .zero, size: layer.rect.size),
+                    color: Color(nsColor: layer.color),
+                    showsHandles: true
                 )
                 .allowsHitTesting(false)
-
-            if isSelected || isHoveringText {
-                Circle()
-                    .fill(Color.blue.opacity(0.75))
-                    .frame(width: 7, height: 7)
-                    .padding(3)
+            } else if isHoveringText {
+                RoundedRectangle(cornerRadius: 2)
+                    .stroke(Color(nsColor: layer.color).opacity(0.35), lineWidth: 1)
                     .allowsHitTesting(false)
             }
         }
@@ -333,6 +371,109 @@ struct AnnotationLayerView: View {
         .onHover { hovering in
             isHoveringText = hovering
         }
+    }
+}
+
+private struct TextControlFrame: View {
+    let rect: CGRect
+    let color: Color
+    let showsHandles: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 2)
+                .stroke(color.opacity(0.8), lineWidth: 1.5)
+
+            if showsHandles {
+                ForEach(CanvasResizeHandle.allCases, id: \.self) { handle in
+                    Rectangle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                        .position(handle.position(in: rect))
+                }
+            }
+        }
+        .frame(width: rect.width, height: rect.height)
+    }
+}
+
+private enum CanvasResizeHandle: CaseIterable {
+    case topLeft
+    case top
+    case topRight
+    case right
+    case bottomRight
+    case bottom
+    case bottomLeft
+    case left
+
+    func position(in rect: CGRect) -> CGPoint {
+        switch self {
+        case .topLeft: return CGPoint(x: rect.minX, y: rect.minY)
+        case .top: return CGPoint(x: rect.midX, y: rect.minY)
+        case .topRight: return CGPoint(x: rect.maxX, y: rect.minY)
+        case .right: return CGPoint(x: rect.maxX, y: rect.midY)
+        case .bottomRight: return CGPoint(x: rect.maxX, y: rect.maxY)
+        case .bottom: return CGPoint(x: rect.midX, y: rect.maxY)
+        case .bottomLeft: return CGPoint(x: rect.minX, y: rect.maxY)
+        case .left: return CGPoint(x: rect.minX, y: rect.midY)
+        }
+    }
+
+    func resizedRect(from rect: CGRect, translation: CGSize, minSize: CGSize) -> CGRect {
+        var minX = rect.minX
+        var minY = rect.minY
+        var maxX = rect.maxX
+        var maxY = rect.maxY
+
+        switch self {
+        case .topLeft:
+            minX += translation.width
+            minY += translation.height
+        case .top:
+            minY += translation.height
+        case .topRight:
+            maxX += translation.width
+            minY += translation.height
+        case .right:
+            maxX += translation.width
+        case .bottomRight:
+            maxX += translation.width
+            maxY += translation.height
+        case .bottom:
+            maxY += translation.height
+        case .bottomLeft:
+            minX += translation.width
+            maxY += translation.height
+        case .left:
+            minX += translation.width
+        }
+
+        if maxX - minX < minSize.width {
+            if adjustsLeftEdge {
+                minX = maxX - minSize.width
+            } else {
+                maxX = minX + minSize.width
+            }
+        }
+
+        if maxY - minY < minSize.height {
+            if adjustsTopEdge {
+                minY = maxY - minSize.height
+            } else {
+                maxY = minY + minSize.height
+            }
+        }
+
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    private var adjustsLeftEdge: Bool {
+        self == .topLeft || self == .bottomLeft || self == .left
+    }
+
+    private var adjustsTopEdge: Bool {
+        self == .topLeft || self == .top || self == .topRight
     }
 }
 

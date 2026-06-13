@@ -12,10 +12,12 @@ final class DragDetector {
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
     private var lastTriggerTime: TimeInterval = 0
     private var isDragConfirmed: Bool = false  // 当前拖拽已确认是文件拖拽
+    private var lastSeenDragPasteboardChangeCount: Int = NSPasteboard(name: .drag).changeCount
 
     private init() {}
 
     func start() {
+        lastSeenDragPasteboardChangeCount = NSPasteboard(name: .drag).changeCount
         startEventTap()
         startPolling()
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
@@ -41,6 +43,7 @@ final class DragDetector {
         pollTimer?.invalidate()
         pollTimer = nil
         recentPositions.removeAll()
+        finishCurrentDrag()
     }
 
     // MARK: - 轮询
@@ -50,11 +53,13 @@ final class DragDetector {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] _ in
             guard let self else { return }
             guard self.isLeftMouseButtonDown else {
-                if !self.recentPositions.isEmpty { self.recentPositions.removeAll() }
-                self.isDragConfirmed = false
+                self.finishCurrentDrag()
                 return
             }
-            guard self.isDraggingSupportedContent else { return }
+            guard self.isDraggingSupportedContent else {
+                self.recentPositions.removeAll()
+                return
+            }
             self.handleDrag(at: NSEvent.mouseLocation)
         }
         RunLoop.main.add(pollTimer!, forMode: .common)
@@ -94,11 +99,13 @@ final class DragDetector {
     private func handleCGEvent(type: CGEventType, event: CGEvent) {
         switch type {
         case .leftMouseDragged:
-            guard isDraggingSupportedContent else { break }
+            guard isDraggingSupportedContent else {
+                recentPositions.removeAll()
+                break
+            }
             handleDrag(at: event.location)
         case .leftMouseUp:
-            recentPositions.removeAll()
-            isDragConfirmed = false
+            finishCurrentDrag()
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
         default: break
@@ -108,11 +115,13 @@ final class DragDetector {
     private func handleMouseEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDragged:
-            guard isDraggingSupportedContent else { break }
+            guard isDraggingSupportedContent else {
+                recentPositions.removeAll()
+                break
+            }
             handleDrag(at: NSEvent.mouseLocation)
         case .leftMouseUp:
-            recentPositions.removeAll()
-            isDragConfirmed = false
+            finishCurrentDrag()
         default: break
         }
     }
@@ -147,19 +156,27 @@ final class DragDetector {
         if isDragConfirmed { return true }
 
         let pasteboard = NSPasteboard(name: .drag)
+        let changeCount = pasteboard.changeCount
         let types = pasteboard.types ?? []
-        if Self.supportsDraggedFileTypes(types) {
+
+        if Self.canConfirmFileDrag(
+            types: types,
+            changeCount: changeCount,
+            lastSeenChangeCount: lastSeenDragPasteboardChangeCount
+        ) || canReadDraggedFileURL(from: pasteboard, changeCount: changeCount) {
             isDragConfirmed = true
-            return true
-        }
-        let fileURLReadOptions: [NSPasteboard.ReadingOptionKey: Any] = [
-            .urlReadingFileURLsOnly: true
-        ]
-        if pasteboard.canReadObject(forClasses: [NSURL.self], options: fileURLReadOptions) {
-            isDragConfirmed = true
+            lastSeenDragPasteboardChangeCount = changeCount
             return true
         }
         return false
+    }
+
+    private func canReadDraggedFileURL(from pasteboard: NSPasteboard, changeCount: Int) -> Bool {
+        guard changeCount != lastSeenDragPasteboardChangeCount else { return false }
+        let fileURLReadOptions: [NSPasteboard.ReadingOptionKey: Any] = [
+            .urlReadingFileURLsOnly: true
+        ]
+        return pasteboard.canReadObject(forClasses: [NSURL.self], options: fileURLReadOptions)
     }
 
     static func supportsDraggedFileTypes(_ types: [NSPasteboard.PasteboardType]) -> Bool {
@@ -171,10 +188,24 @@ final class DragDetector {
         return types.contains { fileTypes.contains($0.rawValue) }
     }
 
+    static func canConfirmFileDrag(
+        types: [NSPasteboard.PasteboardType],
+        changeCount: Int,
+        lastSeenChangeCount: Int
+    ) -> Bool {
+        changeCount != lastSeenChangeCount && supportsDraggedFileTypes(types)
+    }
+
     // MARK: - 工具方法
 
     private var isLeftMouseButtonDown: Bool {
         (NSEvent.pressedMouseButtons & 1) == 1
+    }
+
+    private func finishCurrentDrag() {
+        recentPositions.removeAll()
+        isDragConfirmed = false
+        lastSeenDragPasteboardChangeCount = NSPasteboard(name: .drag).changeCount
     }
 
     private func detectShake() -> Bool {
