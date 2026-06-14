@@ -58,19 +58,19 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 6. ✅ 创建 `.app` bundle 并打包 `build/OneBoard.dmg`
 7. ⬜ 配置签名/公证（后续发布操作）
 
-### 第五阶段：网关切换集成设计 ⬜
+### 第五阶段：网关切换集成 ✅
 
-**状态：设计已完成，待实施**
+**状态：已完成第一版实现**
 
 1. ✅ 明确将独立 `gateway-switch` 完全并入 OneBoard
 2. ✅ 确定第一版范围：网关/DNS Profile、专用切换小窗、可配置全局快捷键、OneBoard 专属免密 helper
 3. ✅ 确定不迁移旧 `gateway-switch` 配置，不并入 Widget 和 URL Scheme
 4. ✅ 设计独立“授权”设置页，统一管理辅助功能、屏幕录制、网关 helper、开机自启
 5. ✅ 设计 `清除 OneBoard 授权...` 弹窗，支持仅清隐私权限或清除全部授权
-6. ⬜ 实施 `OneBoard/Modules/Gateway/` 模块
-7. ⬜ 实施设置页、菜单入口、小窗和快捷键
-8. ⬜ 修复权限开关和文案状态联动
-9. ⬜ 迁移/补充网关相关测试并通过 `swift build`
+6. ✅ 实施 `OneBoard/Modules/Gateway/` 模块
+7. ✅ 实施设置页、菜单入口、小窗和快捷键
+8. ✅ 修复权限开关和文案状态联动
+9. ✅ 迁移/补充网关相关测试并通过 `swift build`
 
 ## 验证方案
 

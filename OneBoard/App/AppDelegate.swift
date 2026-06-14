@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LaunchAtLogin
 
 /// AppDelegate - 管理应用生命周期
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -34,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 6. 启动拖拽检测 + 强制初始化暂存区 ViewModel（注册摇动通知监听）
         DragDetector.shared.start()
         _ = FileStagingViewModel.shared  // 触发 lazy init，注册 DragDetector 通知 observer
+        _ = GatewayProfileStore.shared.initializeDefaultsIfNeeded()
 
         // 7. 设置默认 UserDefaults
         setupDefaultSettings()
@@ -98,5 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         defaults.set(PermissionManager.shared.hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
         defaults.set(PermissionManager.shared.hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
+        defaults.set(LaunchAtLogin.isEnabled, forKey: keys.launchAtLogin)
     }
 }

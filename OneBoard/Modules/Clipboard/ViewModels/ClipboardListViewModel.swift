@@ -129,12 +129,8 @@ final class ClipboardListViewModel: ObservableObject {
         MenuBarManager.shared.closeClipboardFloatingWindow()
 
         // 3. 恢复前台应用 + 粘贴
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
-            previousApp?.activate()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                self?.simulatePaste()
-                PasteboardMonitor.shared.isPasting = false
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            self?.activateAndPaste(into: previousApp)
         }
     }
 
@@ -234,10 +230,43 @@ final class ClipboardListViewModel: ObservableObject {
     }
 
     /// 模拟 Cmd+V 按键（需要辅助功能权限）
+    private func activateAndPaste(into app: NSRunningApplication?) {
+        guard let app else {
+            print("[ViewModel] ⚠️ 找不到目标应用，已只写入剪贴板")
+            PasteboardMonitor.shared.isPasting = false
+            return
+        }
+
+        app.activate()
+        waitForActivation(app, remainingAttempts: 8)
+    }
+
+    private func waitForActivation(_ app: NSRunningApplication, remainingAttempts: Int) {
+        guard remainingAttempts > 0 else {
+            print("[ViewModel] ⚠️ 目标应用未及时激活，尝试发送粘贴快捷键")
+            simulatePaste()
+            PasteboardMonitor.shared.isPasting = false
+            return
+        }
+
+        if app.isActive {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                self?.simulatePaste()
+                PasteboardMonitor.shared.isPasting = false
+            }
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            self?.waitForActivation(app, remainingAttempts: remainingAttempts - 1)
+        }
+    }
+
     private func simulatePaste() {
         // 检查辅助功能权限
         guard PermissionManager.shared.hasAccessibilityPermission else {
             print("[ViewModel] ⚠️ 缺少辅助功能权限，无法自动粘贴")
+            PasteboardMonitor.shared.isPasting = false
             PermissionManager.shared.promptAccessibilityPermission()
             return
         }

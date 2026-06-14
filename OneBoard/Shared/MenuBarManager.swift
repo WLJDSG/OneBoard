@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LaunchAtLogin
 
 private final class ClipboardPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -15,6 +16,9 @@ final class MenuBarManager: NSObject {
     private var clipboardGlobalMouseMonitor: Any?  // 全局鼠标点击监听
     private var clipboardAppDeactivateObserver: NSObjectProtocol?  // 应用失活监听
     private var clipboardTargetApplication: NSRunningApplication?
+    private var gatewayPanel: NSPanel?
+    private var gatewayGlobalMouseMonitor: Any?
+    private var gatewayAppDeactivateObserver: NSObjectProtocol?
     var onSettings: (() -> Void)?
 
     private override init() { super.init() }
@@ -42,21 +46,101 @@ final class MenuBarManager: NSObject {
 
     private func showMenu() {
         let menu = NSMenu()
+        let gatewayItem = NSMenuItem(title: "网关切换...", action: #selector(openGatewaySwitcher), keyEquivalent: "g")
+        gatewayItem.target = self
+        gatewayItem.image = NSImage(systemSymbolName: "network", accessibilityDescription: "网关切换")
+        menu.addItem(gatewayItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "设置")
         menu.addItem(settingsItem)
 
-        let clearPrivacyItem = NSMenuItem(title: "清除隐私授权...", action: #selector(clearPrivacyAuthorizations), keyEquivalent: "")
+        let clearPrivacyItem = NSMenuItem(title: "清除 OneBoard 授权...", action: #selector(clearPrivacyAuthorizations), keyEquivalent: "")
         clearPrivacyItem.target = self
+        clearPrivacyItem.image = NSImage(systemSymbolName: "lock.slash", accessibilityDescription: "清除授权")
         menu.addItem(clearPrivacyItem)
 
         menu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(title: "退出 OneBoard", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
+        quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: "退出")
         menu.addItem(quitItem)
 
         if let button = statusItem?.button {
             menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY - 4), in: button)
+        }
+    }
+
+    // MARK: - 网关切换窗口
+
+    @MainActor
+    func toggleGatewaySwitcherPanel() {
+        if let gatewayPanel, gatewayPanel.isVisible {
+            closeGatewaySwitcherPanel()
+        } else {
+            showGatewaySwitcherPanel()
+        }
+    }
+
+    @MainActor
+    func showGatewaySwitcherPanel() {
+        if let gatewayPanel, gatewayPanel.isVisible {
+            gatewayPanel.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let hostingView = NSHostingView(rootView: GatewaySwitcherPanelView())
+        hostingView.wantsLayer = true
+
+        let panel = ClipboardPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 360),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.backgroundColor = .windowBackgroundColor
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.contentView = hostingView
+
+        FloatingWindowManager.positionAtTopRight(panel)
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        gatewayPanel = panel
+
+        gatewayAppDeactivateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.closeGatewaySwitcherPanel()
+        }
+
+        gatewayGlobalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            guard let self, let panel = self.gatewayPanel, panel.isVisible else { return }
+            if !NSPointInRect(NSEvent.mouseLocation, panel.frame) {
+                self.closeGatewaySwitcherPanel()
+            }
+        }
+    }
+
+    func closeGatewaySwitcherPanel() {
+        gatewayPanel?.close()
+        gatewayPanel = nil
+        if let monitor = gatewayGlobalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            gatewayGlobalMouseMonitor = nil
+        }
+        if let observer = gatewayAppDeactivateObserver {
+            NotificationCenter.default.removeObserver(observer)
+            gatewayAppDeactivateObserver = nil
         }
     }
 
@@ -144,21 +228,57 @@ final class MenuBarManager: NSObject {
         onSettings?()
     }
 
+    @objc private func openGatewaySwitcher() {
+        Task { @MainActor in
+            showGatewaySwitcherPanel()
+        }
+    }
+
     @objc private func clearPrivacyAuthorizations() {
         let confirm = NSAlert()
-        confirm.messageText = "清除 OneBoard 的隐私授权？"
-        confirm.informativeText = "这会清除辅助功能和屏幕录制授权记录。下次使用相关功能时，macOS 会重新请求授权。"
+        confirm.messageText = "清除 OneBoard 授权？"
+        confirm.informativeText = "可以仅清除辅助功能和屏幕录制，也可以同时卸载网关免密 Helper 并关闭开机自启。普通配置和网关 Profile 不会被删除。"
         confirm.alertStyle = .warning
-        confirm.addButton(withTitle: "清除授权")
+        confirm.addButton(withTitle: "仅清除隐私权限")
+        confirm.addButton(withTitle: "清除全部授权")
         confirm.addButton(withTitle: "取消")
 
-        guard confirm.runModal() == .alertFirstButtonReturn else { return }
+        let choice = confirm.runModal()
+        guard choice != .alertThirdButtonReturn else { return }
 
+        var failures: [String] = []
         do {
             try PermissionManager.shared.resetPrivacyAuthorizations()
-            showPrivacyResetResult(title: "已清除隐私授权", message: "辅助功能和屏幕录制授权记录已清除。")
         } catch {
-            showPrivacyResetResult(title: "清除授权失败", message: error.localizedDescription)
+            failures.append(error.localizedDescription)
+        }
+
+        if choice == .alertSecondButtonReturn {
+            do {
+                try OneBoardGatewayHelper().uninstall()
+            } catch {
+                failures.append("网关 Helper 卸载失败：\(error.localizedDescription)")
+            }
+            LaunchAtLogin.isEnabled = false
+            UserDefaults.standard.set(false, forKey: Constants.UserDefaultsKeys.launchAtLogin)
+        }
+
+        PermissionManager.shared.syncStoredPermissionStates()
+        Task { @MainActor in
+            SystemCapabilityViewModel.shared.refresh()
+            GatewayViewModel.shared.refreshHelperStatus()
+            NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
+        }
+
+        if failures.isEmpty {
+            showPrivacyResetResult(
+                title: "已清除 OneBoard 授权",
+                message: choice == .alertSecondButtonReturn
+                    ? "隐私权限、网关免密 Helper 和开机自启已清理。"
+                    : "辅助功能和屏幕录制授权记录已清除。"
+            )
+        } else {
+            showPrivacyResetResult(title: "部分授权清除失败", message: failures.joined(separator: "\n"))
         }
     }
 

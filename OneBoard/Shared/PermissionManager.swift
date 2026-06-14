@@ -31,6 +31,28 @@ final class PermissionManager {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.app"
         try resetPrivacyAuthorization(service: "Accessibility", bundleID: bundleID)
         try resetPrivacyAuthorization(service: "ScreenCapture", bundleID: bundleID)
+        syncStoredPermissionStates()
+        NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
+    }
+
+    func resetPrivacyAuthorization(for kind: OneBoardPermissionKind) throws {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.app"
+        let service: String
+        switch kind {
+        case .accessibility:
+            service = "Accessibility"
+        case .screenRecording:
+            service = "ScreenCapture"
+        }
+        try resetPrivacyAuthorization(service: service, bundleID: bundleID)
+        syncStoredPermissionStates()
+        NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
+    }
+
+    func syncStoredPermissionStates() {
+        let keys = Constants.UserDefaultsKeys.self
+        UserDefaults.standard.set(hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
+        UserDefaults.standard.set(hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
     }
 
     private func resetPrivacyAuthorization(service: String, bundleID: String) throws {
@@ -59,9 +81,10 @@ struct PrivacyAuthorizationResetError: LocalizedError {
 
 extension Notification.Name {
     static let permissionFlowCompleted = Notification.Name("OneBoardPermissionFlowCompleted")
+    static let systemCapabilityStatusDidChange = Notification.Name("OneBoardSystemCapabilityStatusDidChange")
 }
 
-enum OneBoardPermissionKind {
+enum OneBoardPermissionKind: Equatable {
     case accessibility
     case screenRecording
 
@@ -185,8 +208,10 @@ final class PermissionGuideWindowManager {
 
         // 恢复设置窗口 + 通知刷新
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            PermissionManager.shared.syncStoredPermissionStates()
             SettingsWindowManager.shared.bringToFront()
             NotificationCenter.default.post(name: .permissionFlowCompleted, object: nil)
+            NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
         }
     }
 

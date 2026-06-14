@@ -1,6 +1,14 @@
 import SwiftUI
 import KeyboardShortcuts
-import LaunchAtLogin
+
+enum SettingsTab: String {
+    case general
+    case authorization
+    case hotkeys
+    case gateway
+    case recognition
+    case about
+}
 
 @main
 struct OneBoardApp: App {
@@ -22,9 +30,10 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
 
     private override init() {}
 
-    func show() {
+    func show(selectedTab: SettingsTab = .general) {
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
+        UserDefaults.standard.set(selectedTab.rawValue, forKey: Constants.UserDefaultsKeys.selectedSettingsTab)
 
         if let window {
             window.center()
@@ -70,7 +79,7 @@ final class SettingsWindowManager: NSObject, NSWindowDelegate {
 struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.maxClipboardItems) private var maxItems = Constants.defaultMaxClipboardItems
     @AppStorage(Constants.UserDefaultsKeys.retentionDays) private var retentionDays = Constants.defaultRetentionDays
-    @AppStorage(Constants.UserDefaultsKeys.launchAtLogin) private var launchAtLogin = false
+    @AppStorage(Constants.UserDefaultsKeys.selectedSettingsTab) private var selectedTabRawValue = SettingsTab.general.rawValue
 
     // OCR / 翻译设置
     @AppStorage(Constants.UserDefaultsKeys.ocrServiceType) private var ocrServiceType = "apple"
@@ -78,47 +87,58 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) private var ocrAPIKey = ""
     @AppStorage(Constants.UserDefaultsKeys.translationSourceLanguage) private var sourceLanguage = ""
     @AppStorage(Constants.UserDefaultsKeys.translationTargetLanguage) private var targetLanguage = "en"
-    @AppStorage(Constants.UserDefaultsKeys.accessibilityPermissionEnabled) private var accessibilityEnabled = false
-    @AppStorage(Constants.UserDefaultsKeys.screenRecordingPermissionEnabled) private var screenRecordingEnabled = false
 
-    // 用 @State 跟踪实际权限状态，避免 forceRefresh UUID 重建视图树导致窗口关闭
-    @State private var accessibilityGranted = PermissionManager.shared.hasAccessibilityPermission
-    @State private var screenRecordingGranted = PermissionManager.shared.hasScreenRecordingPermission
+    @StateObject private var systemCapabilities = SystemCapabilityViewModel.shared
+    @StateObject private var gatewayViewModel = GatewayViewModel.shared
 
     var body: some View {
-        TabView {
+        TabView(selection: settingsTabSelection) {
             generalSettings
                 .tabItem { Label("通用", systemImage: "gear") }
+                .tag(SettingsTab.general)
+
+            authorizationSettings
+                .tabItem { Label("授权", systemImage: "lock.shield") }
+                .tag(SettingsTab.authorization)
 
             hotkeySettings
                 .tabItem { Label("快捷键", systemImage: "keyboard") }
+                .tag(SettingsTab.hotkeys)
+
+            GatewaySettingsView()
+                .tabItem { Label("网关", systemImage: "network") }
+                .tag(SettingsTab.gateway)
 
             ocrTranslationSettings
                 .tabItem { Label("识别·翻译", systemImage: "text.viewfinder") }
+                .tag(SettingsTab.recognition)
 
             aboutView
                 .tabItem { Label("关于", systemImage: "info.circle") }
+                .tag(SettingsTab.about)
         }
-        .frame(width: 520, height: 480)
-        .onAppear(perform: syncPermissionSwitches)
+        .frame(width: 620, height: 540)
+        .onAppear {
+            systemCapabilities.refresh()
+            gatewayViewModel.refreshHelperStatus()
+        }
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
-            syncPermissionSwitches()
+            systemCapabilities.refresh()
         }
         .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in
-            syncPermissionSwitches()
+            systemCapabilities.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .systemCapabilityStatusDidChange)) { _ in
+            systemCapabilities.refresh()
+            gatewayViewModel.refreshHelperStatus()
         }
     }
 
-    private func syncPermissionSwitches() {
-        // 有活跃流程时不同步（避免覆盖用户的开关意图）
-        guard !PermissionGuideWindowManager.shared.hasActiveFlow else { return }
-        let acc = PermissionManager.shared.hasAccessibilityPermission
-        let scr = PermissionManager.shared.hasScreenRecordingPermission
-        // 仅在权限状态与 UI 不一致时更新
-        if accessibilityEnabled != acc { accessibilityEnabled = acc }
-        if screenRecordingEnabled != scr { screenRecordingEnabled = scr }
-        if accessibilityGranted != acc { accessibilityGranted = acc }
-        if screenRecordingGranted != scr { screenRecordingGranted = scr }
+    private var settingsTabSelection: Binding<SettingsTab> {
+        Binding(
+            get: { SettingsTab(rawValue: selectedTabRawValue) ?? .general },
+            set: { selectedTabRawValue = $0.rawValue }
+        )
     }
 
     // MARK: - 通用设置
@@ -126,11 +146,6 @@ struct SettingsView: View {
     private var generalSettings: some View {
         Form {
             Section {
-                Toggle("开机自启", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) {
-                        LaunchAtLogin.isEnabled = launchAtLogin
-                    }
-
                 Picker("最大记录条数", selection: $maxItems) {
                     Text("100 条").tag(100)
                     Text("200 条（默认）").tag(200)
@@ -148,37 +163,52 @@ struct SettingsView: View {
             } header: {
                 Text("剪贴板设置")
             }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
 
+    private var authorizationSettings: some View {
+        Form {
             Section {
-                // 辅助功能权限
                 permissionToggle(
                     title: "辅助功能",
                     description: "用于拖拽摇晃唤出暂存区、全局快捷键等交互",
-                    isOn: $accessibilityEnabled,
-                    isGranted: accessibilityGranted,
-                    enable: {
-                        PermissionGuideWindowManager.shared.show(for: .accessibility)
-                    },
-                    disable: {
-                        PermissionGuideWindowManager.shared.show(for: .accessibility, revokeMode: true)
-                    }
+                    isOn: Binding(
+                        get: { systemCapabilities.accessibilityGranted },
+                        set: { systemCapabilities.setAccessibilityEnabled($0) }
+                    ),
+                    isGranted: systemCapabilities.accessibilityGranted
                 )
 
-                // 屏幕录制权限
                 permissionToggle(
                     title: "屏幕录制",
                     description: "用于截图、OCR 和截图翻译",
-                    isOn: $screenRecordingEnabled,
-                    isGranted: screenRecordingGranted,
-                    enable: {
-                        PermissionGuideWindowManager.shared.show(for: .screenRecording)
-                    },
-                    disable: {
-                        PermissionGuideWindowManager.shared.show(for: .screenRecording, revokeMode: true)
-                    }
+                    isOn: Binding(
+                        get: { systemCapabilities.screenRecordingGranted },
+                        set: { systemCapabilities.setScreenRecordingEnabled($0) }
+                    ),
+                    isGranted: systemCapabilities.screenRecordingGranted
                 )
+
+                capabilityToggle(
+                    title: "网关免密 Helper",
+                    description: "用于网关切换时避免反复输入管理员密码",
+                    isOn: systemCapabilities.gatewayHelperInstalled,
+                    enable: { systemCapabilities.setGatewayHelperEnabled(true) },
+                    disable: { systemCapabilities.setGatewayHelperEnabled(false) }
+                )
+
+                Toggle("开机自启", isOn: Binding(
+                    get: { systemCapabilities.launchAtLoginEnabled },
+                    set: { systemCapabilities.setLaunchAtLoginEnabled($0) }
+                ))
             } header: {
-                Text("必要权限")
+                Text("系统能力")
+            } footer: {
+                if let message = systemCapabilities.errorMessage ?? systemCapabilities.statusMessage ?? gatewayViewModel.statusMessage {
+                    Text(message)
+                }
             }
         }
         .formStyle(.grouped)
@@ -189,20 +219,10 @@ struct SettingsView: View {
         title: String,
         description: String,
         isOn: Binding<Bool>,
-        isGranted: Bool,
-        enable: @escaping () -> Void,
-        disable: @escaping () -> Void
+        isGranted: Bool
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Toggle("", isOn: Binding(
-                get: { isOn.wrappedValue },
-                set: { newValue in
-                    // 先启动/停止权限流程（设置 hasActiveFlow），再更新 @AppStorage
-                    // 防止 syncPermissionSwitches() 定时器在间隙中覆盖用户意图
-                    if newValue { enable() } else { disable() }
-                    isOn.wrappedValue = newValue
-                }
-            ))
+            Toggle("", isOn: isOn)
             .toggleStyle(.switch)
             .labelsHidden()
 
@@ -212,6 +232,36 @@ struct SettingsView: View {
                     Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundColor(isGranted ? .green : .orange)
+                }
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func capabilityToggle(
+        title: String,
+        description: String,
+        isOn: Bool,
+        enable: @escaping () -> Void,
+        disable: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { $0 ? enable() : disable() }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(title)
+                    Label(isOn ? "已启用" : "未启用", systemImage: isOn ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(isOn ? .green : .orange)
                 }
                 Text(description)
                     .font(.caption)
@@ -259,6 +309,16 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("文件暂存快捷键")
+            }
+
+            Section {
+                HStack {
+                    Text("显示网关切换")
+                    Spacer()
+                    KeyboardShortcuts.Recorder(for: .showGatewaySwitcher)
+                }
+            } header: {
+                Text("网关快捷键")
             }
         }
         .formStyle(.grouped)

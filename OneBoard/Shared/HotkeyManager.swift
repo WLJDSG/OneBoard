@@ -9,6 +9,8 @@ extension KeyboardShortcuts.Name {
     static let translateSelectedText = Self("translateSelectedText", default: .init(.t, modifiers: [.command, .shift]))
     /// 显示/隐藏文件暂存架
     static let showFileShelf = Self("showFileShelf", default: .init(.d, modifiers: [.command, .shift]))
+    /// 显示/隐藏网关切换小窗
+    static let showGatewaySwitcher = Self("showGatewaySwitcher", default: .init(.g, modifiers: [.command, .shift]))
 }
 
 /// 全局快捷键管理器
@@ -40,6 +42,13 @@ final class HotkeyManager {
             print("[Hotkey] 文件暂存快捷键触发")
             Task { @MainActor in
                 FileStagingViewModel.shared.toggleFloatingShelf()
+            }
+        }
+
+        KeyboardShortcuts.onKeyDown(for: .showGatewaySwitcher) {
+            print("[Hotkey] 网关切换快捷键触发")
+            Task { @MainActor in
+                MenuBarManager.shared.toggleGatewaySwitcherPanel()
             }
         }
     }
