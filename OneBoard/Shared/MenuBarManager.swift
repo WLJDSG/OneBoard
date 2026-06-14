@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+private final class ClipboardPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 /// 菜单栏管理器
 final class MenuBarManager: NSObject {
     static let shared = MenuBarManager()
@@ -9,6 +14,7 @@ final class MenuBarManager: NSObject {
     private var clipboardFloatingWindow: NSPanel?
     private var clipboardGlobalMouseMonitor: Any?  // 全局鼠标点击监听
     private var clipboardAppDeactivateObserver: NSObjectProtocol?  // 应用失活监听
+    private var clipboardTargetApplication: NSRunningApplication?
     var onSettings: (() -> Void)?
 
     private override init() { super.init() }
@@ -60,6 +66,8 @@ final class MenuBarManager: NSObject {
         if let existing = clipboardFloatingWindow, existing.isVisible {
             closeClipboardFloatingWindow(); return
         }
+        let frontmostApplication = NSWorkspace.shared.frontmostApplication
+        clipboardTargetApplication = frontmostApplication?.bundleIdentifier == Bundle.main.bundleIdentifier ? nil : frontmostApplication
 
         let hostingView = ClipboardTrackingHostingView(
             rootView: ClipboardPopoverView(),
@@ -69,7 +77,7 @@ final class MenuBarManager: NSObject {
         )
         hostingView.wantsLayer = true
 
-        let panel = NSPanel(
+        let panel = ClipboardPanel(
             contentRect: NSRect(x: 0, y: 0, width: Constants.popoverWidth, height: Constants.popoverHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false
@@ -84,6 +92,7 @@ final class MenuBarManager: NSObject {
         panel.contentView = hostingView
 
         FloatingWindowManager.positionAtTopRight(panel)
+        NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         clipboardFloatingWindow = panel
 
@@ -117,6 +126,15 @@ final class MenuBarManager: NSObject {
         if let observer = clipboardAppDeactivateObserver {
             NotificationCenter.default.removeObserver(observer)
             clipboardAppDeactivateObserver = nil
+        }
+    }
+
+    func targetApplicationForClipboardPaste() -> NSRunningApplication? {
+        if let clipboardTargetApplication, !clipboardTargetApplication.isTerminated {
+            return clipboardTargetApplication
+        }
+        return NSWorkspace.shared.runningApplications.first { app in
+            app.isActive && app.bundleIdentifier != Bundle.main.bundleIdentifier
         }
     }
 

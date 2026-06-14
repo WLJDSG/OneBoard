@@ -34,6 +34,7 @@ final class ScreenshotViewModel: ObservableObject {
 
     /// 开始截图（快捷键触发）
     func startCapture() async {
+        resetRecognitionState()
         guard let result = await captureService.captureRegion() else {
             print("[ScreenshotViewModel] 截图取消或失败")
             return
@@ -270,15 +271,15 @@ final class ScreenshotViewModel: ObservableObject {
 
     func performOCR(on image: NSImage) async {
         isProcessing = true
+        ocrResult = ""
         defer { isProcessing = false }
 
-        let language = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.ocrLanguage) ?? "zh-Hans"
-
         do {
-            let ocrService = OCRServiceFactory.create()
-            ocrResult = try await ocrService.recognizeText(in: image, language: language)
-            if ocrResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let recognizedText = try await recognizeText(in: image)
+            if recognizedText.isEmpty {
                 ocrResult = "未识别到文字"
+            } else {
+                ocrResult = recognizedText
             }
             print("[ScreenshotViewModel] OCR 完成: \(ocrResult.prefix(50))...")
         } catch {
@@ -290,31 +291,133 @@ final class ScreenshotViewModel: ObservableObject {
     // MARK: - 翻译
 
     func performTranslation(on image: NSImage) async {
-        if ocrResult.isEmpty {
-            await performOCR(on: image)
-        }
+        isProcessing = true
+        ocrResult = ""
+        translationResult = ""
+        defer { isProcessing = false }
 
-        guard !ocrResult.isEmpty else {
-            translationResult = "没有可翻译的文字"
+        let text: String
+        do {
+            text = try await recognizeText(in: image)
+            ocrResult = text.isEmpty ? "未识别到文字" : text
+        } catch {
+            ocrResult = "OCR 识别失败: \(error.localizedDescription)"
+            translationResult = "翻译失败: \(error.localizedDescription)"
+            print("[ScreenshotViewModel] 翻译前 OCR 失败: \(error)")
             return
         }
 
+        guard !text.isEmpty else {
+            translationResult = "没有可翻译的文字"
+            AnnotationResultWindowManager.shared.show(
+                title: "翻译",
+                text: translationResult,
+                relativeTo: annotationWindow?.frame
+            )
+            return
+        }
+
+        TranslationPanelWindowManager.shared.show(
+            sourceText: text,
+            relativeTo: annotationWindow?.frame
+        )
+    }
+
+    /// 翻译当前前台应用中选中的文字
+    func translateSelectedText() async {
         isProcessing = true
+        ocrResult = ""
+        translationResult = ""
         defer { isProcessing = false }
 
-        let targetLang = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.translationTargetLanguage) ?? "en"
+        let selectedText = await SelectedTextReader.readSelectedText()
+        guard !selectedText.isEmpty else {
+            translationResult = "没有检测到选中的文字"
+            AnnotationResultWindowManager.shared.show(title: "翻译", text: translationResult)
+            return
+        }
 
-        do {
-            let translationService = TranslationServiceFactory.create()
-            translationResult = try await translationService.translate(
-                ocrResult,
-                from: nil,
-                to: targetLang
-            )
-            print("[ScreenshotViewModel] 翻译完成: \(translationResult.prefix(50))...")
-        } catch {
-            translationResult = "翻译失败: \(error.localizedDescription)"
-            print("[ScreenshotViewModel] 翻译失败: \(error)")
+        TranslationPanelWindowManager.shared.show(sourceText: selectedText)
+    }
+
+    private func resetRecognitionState() {
+        ocrResult = ""
+        translationResult = ""
+    }
+
+    private func recognizeText(in image: NSImage) async throws -> String {
+        let language = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.ocrLanguage) ?? "zh-Hans"
+        let ocrService = OCRServiceFactory.create()
+        return try await ocrService.recognizeText(in: image, language: language)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+}
+
+@MainActor
+private enum SelectedTextReader {
+    static func readSelectedText() async -> String {
+        await PasteboardMonitor.shared.performIgnoringChanges {
+            await copySelectedText()
+        }
+    }
+
+    private static func copySelectedText() async -> String {
+        let pasteboard = NSPasteboard.general
+        let snapshot = PasteboardSnapshot(pasteboard: pasteboard)
+        let originalChangeCount = pasteboard.changeCount
+
+        pasteboard.clearContents()
+        sendCopyShortcut()
+
+        try? await Task.sleep(nanoseconds: 180_000_000)
+
+        let copiedText: String
+        if pasteboard.changeCount != originalChangeCount {
+            copiedText = pasteboard.string(forType: .string)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        } else {
+            copiedText = ""
+        }
+
+        snapshot.restore(to: pasteboard)
+        return copiedText
+    }
+
+    private static func sendCopyShortcut() {
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false) else {
+            return
+        }
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+}
+
+private struct PasteboardSnapshot {
+    private let items: [NSPasteboardItem]
+
+    init(pasteboard: NSPasteboard) {
+        items = pasteboard.pasteboardItems?.map { item in
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) {
+                    copy.setData(data, forType: type)
+                } else if let string = item.string(forType: type) {
+                    copy.setString(string, forType: type)
+                }
+            }
+            return copy
+        } ?? []
+    }
+
+    func restore(to pasteboard: NSPasteboard) {
+        pasteboard.clearContents()
+        if !items.isEmpty {
+            pasteboard.writeObjects(items)
         }
     }
 }

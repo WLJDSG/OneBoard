@@ -17,13 +17,16 @@ struct ClipboardRowView: View {
 
             // 内容预览
             contentPreview
-
-            Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
 
             // 操作按钮（悬停时显示）
-            if isHovered {
-                actionButtons
-            }
+            actionButtons
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
+                .disabled(!isHovered)
+                .accessibilityHidden(!isHovered)
+                .frame(width: 42, alignment: .trailing)
 
             // 时间
             Text(entry.createdAt.timeAgoDescription)
@@ -83,14 +86,20 @@ struct ClipboardRowView: View {
                         .foregroundColor(OneBoardColors.primary)
                     Text(entry.previewText)
                         .font(.system(size: 12))
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .foregroundColor(OneBoardColors.textPrimary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
             } else {
                 Text(entry.previewText)
                     .font(.system(size: 12))
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .foregroundColor(OneBoardColors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .clipped()
             }
 
             if let sourceApp = entry.sourceAppBundleId {
@@ -98,8 +107,11 @@ struct ClipboardRowView: View {
                     .font(.system(size: 9))
                     .foregroundColor(OneBoardColors.textSecondary.opacity(0.7))
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     // MARK: - Row Background

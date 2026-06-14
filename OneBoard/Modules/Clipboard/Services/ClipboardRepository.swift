@@ -1,6 +1,31 @@
 import Foundation
 import GRDB
 
+/// 剪贴板搜索 SQL 片段生成。
+enum ClipboardSearchQuery {
+    struct Plan {
+        let sqlPredicate: String
+        let arguments: [String]
+    }
+
+    static func plan(for query: String) -> Plan {
+        let terms = query
+            .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+            .map(String.init)
+            .filter { !$0.isEmpty }
+
+        let predicates = terms.map { _ in
+            "clipboard_history.plainText LIKE ? COLLATE NOCASE"
+        }
+        let arguments = terms.map { "%\($0)%" }
+
+        return Plan(
+            sqlPredicate: predicates.joined(separator: " AND "),
+            arguments: arguments
+        )
+    }
+}
+
 /// 剪贴板数据库操作
 final class ClipboardRepository {
     private let dbManager: DatabaseManager
@@ -51,20 +76,19 @@ final class ClipboardRepository {
     func search(query: String, limit: Int = 50) async throws -> [ClipboardEntry] {
         let queue = try dbManager.queue
         return try await queue.read { db in
-            let searchPattern = query
-                .split(separator: " ")
-                .map { "\"\($0)\"" }
-                .joined(separator: " AND ")
+            let plan = ClipboardSearchQuery.plan(for: query)
+            guard !plan.sqlPredicate.isEmpty else { return [] }
 
             let sql = """
                 SELECT clipboard_history.*
                 FROM clipboard_history
-                JOIN clipboard_fts ON clipboard_history.id = clipboard_fts.rowid
-                WHERE clipboard_fts MATCH ?
+                WHERE \(plan.sqlPredicate)
                 ORDER BY clipboard_history.isPinned DESC, clipboard_history.createdAt DESC
                 LIMIT ?
                 """
-            return try ClipboardEntry.fetchAll(db, sql: sql, arguments: [searchPattern, limit])
+            var arguments = StatementArguments(plan.arguments)
+            arguments += [limit]
+            return try ClipboardEntry.fetchAll(db, sql: sql, arguments: arguments)
         }
     }
 

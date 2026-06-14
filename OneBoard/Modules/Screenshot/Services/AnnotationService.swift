@@ -201,7 +201,7 @@ final class AnnotationService: ObservableObject {
         ctx.translateBy(x: 0, y: outputPointSize.height)
         ctx.scaleBy(x: 1, y: -1)
         for layer in layers {
-            drawLayer(layer, in: ctx)
+            drawLayer(layer, in: ctx, canvasHeight: outputPointSize.height)
         }
         ctx.restoreGState()
 
@@ -222,7 +222,7 @@ final class AnnotationService: ObservableObject {
         return image.size
     }
 
-    private func drawLayer(_ layer: AnnotationLayer, in ctx: CGContext) {
+    private func drawLayer(_ layer: AnnotationLayer, in ctx: CGContext, canvasHeight: CGFloat) {
         ctx.saveGState()
 
         switch layer.tool {
@@ -253,7 +253,7 @@ final class AnnotationService: ObservableObject {
 
         case .text:
             if let text = layer.text {
-                drawText(text, rect: layer.rect, color: layer.color, fontSize: layer.fontSize, in: ctx)
+                drawText(text, rect: layer.rect, color: layer.color, fontSize: layer.fontSize, in: ctx, canvasHeight: canvasHeight)
             }
 
         case .mosaic:
@@ -264,7 +264,7 @@ final class AnnotationService: ObservableObject {
         ctx.restoreGState()
     }
 
-    private func drawText(_ text: String, rect: CGRect, color: NSColor, fontSize: CGFloat, in ctx: CGContext) {
+    private func drawText(_ text: String, rect: CGRect, color: NSColor, fontSize: CGFloat, in ctx: CGContext, canvasHeight: CGFloat) {
         let font = NSFont.systemFont(ofSize: fontSize)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -279,7 +279,18 @@ final class AnnotationService: ObservableObject {
             width: rect.width - 8,
             height: textSize.height
         )
-        nsText.draw(in: drawRect, withAttributes: attrs)
+        let appKitRect = CGRect(
+            x: drawRect.minX,
+            y: canvasHeight - drawRect.maxY,
+            width: drawRect.width,
+            height: drawRect.height
+        )
+
+        ctx.saveGState()
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.translateBy(x: 0, y: -canvasHeight)
+        nsText.draw(in: appKitRect, withAttributes: attrs)
+        ctx.restoreGState()
     }
 
     private func drawArrowHead(for layer: AnnotationLayer, in ctx: CGContext) {

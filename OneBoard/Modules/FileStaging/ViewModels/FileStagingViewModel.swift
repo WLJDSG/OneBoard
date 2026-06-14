@@ -65,6 +65,9 @@ final class FileStagingViewModel: ObservableObject {
                 do {
                     _ = try await self.repository.insert(stagedFile)
                     await self.reloadFiles()
+                    if self.isShelfVisible {
+                        self.updateFloatingWindow()
+                    }
                     print("[FileStaging] 文件已暂存: \(url.lastPathComponent)")
                 } catch {
                     print("[FileStaging] 暂存失败: \(error)")
@@ -81,8 +84,7 @@ final class FileStagingViewModel: ObservableObject {
         do {
             try await repository.delete(id: id)
             await reloadFiles()
-            // 如果没有文件了，变成空状态提示
-            if stagedFiles.isEmpty {
+            if isShelfVisible {
                 updateFloatingWindow()
             }
         } catch {
@@ -102,9 +104,13 @@ final class FileStagingViewModel: ObservableObject {
 
     func showFloatingShelf() {
         guard !isShelfVisible else { return }
-        Task { await reloadFiles() }
-        createFloatingWindow()
         isShelfVisible = true
+        Task { [weak self] in
+            guard let self else { return }
+            await self.reloadFiles()
+            guard self.isShelfVisible else { return }
+            self.createFloatingWindow()
+        }
     }
 
     func hideFloatingShelf() {
@@ -131,15 +137,18 @@ final class FileStagingViewModel: ObservableObject {
         hostingView.layer?.cornerRadius = 24
         hostingView.layer?.masksToBounds = true
 
-        let width: CGFloat = 304
+        let width: CGFloat = 348
         let rows = max(1, Int(ceil(Double(max(stagedFiles.count, 1)) / 3.0)))
-        let height = stagedFiles.isEmpty ? CGFloat(168) : min(CGFloat(rows) * 104 + 58, 374)
+        let height = stagedFiles.isEmpty ? CGFloat(192) : min(CGFloat(rows) * 126 + 64, 434)
 
         if let existingWindow = floatingWindow {
             existingWindow.contentView = hostingView
             var frame = existingWindow.frame
+            let topRight = NSPoint(x: frame.maxX, y: frame.maxY)
             frame.size.width = width
             frame.size.height = height
+            frame.origin.x = topRight.x - width
+            frame.origin.y = topRight.y - height
             existingWindow.setFrame(frame, display: true, animate: false)
         } else {
             let panel = NSPanel(

@@ -5,12 +5,12 @@
 | 层级 | 技术 | 版本要求 |
 |------|------|---------|
 | 语言 | Swift | 5.9+ |
-| UI 框架 | SwiftUI + AppKit | macOS 14.0+ |
+| UI 框架 | SwiftUI + AppKit | macOS 15.0+ |
 | 数据库 | GRDB.swift | 6.x |
 | 全局快捷键 | KeyboardShortcuts | 2.x |
 | 开机自启 | LaunchAtLogin | 4.x |
 | OCR | Apple Vision | macOS 内置 |
-| 翻译 | Apple Translation | macOS 14.4+ |
+| 翻译 | Apple Translation / Google Web / DeepSeek | macOS 15.0+ |
 | 截图 | CoreGraphics / ScreenCaptureKit | macOS 内置 |
 | 依赖管理 | Swift Package Manager | 5.9+ |
 

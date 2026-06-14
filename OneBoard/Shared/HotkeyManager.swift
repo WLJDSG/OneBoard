@@ -5,6 +5,8 @@ extension KeyboardShortcuts.Name {
     static let showClipboard = Self("showClipboard", default: .init(.c, modifiers: [.command, .shift]))
     /// 截图
     static let captureScreenshot = Self("captureScreenshot", default: .init(.a, modifiers: [.command, .shift]))
+    /// 翻译当前选中的文字
+    static let translateSelectedText = Self("translateSelectedText", default: .init(.t, modifiers: [.command, .shift]))
     /// 显示/隐藏文件暂存架
     static let showFileShelf = Self("showFileShelf", default: .init(.d, modifiers: [.command, .shift]))
 }
@@ -24,6 +26,13 @@ final class HotkeyManager {
             print("[Hotkey] 截图快捷键触发")
             Task { @MainActor in
                 await ScreenshotViewModel.shared.startCapture()
+            }
+        }
+
+        KeyboardShortcuts.onKeyDown(for: .translateSelectedText) {
+            print("[Hotkey] 翻译选中文字快捷键触发")
+            Task { @MainActor in
+                await ScreenshotViewModel.shared.translateSelectedText()
             }
         }
 

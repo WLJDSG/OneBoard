@@ -42,9 +42,10 @@ enum Constants {
         static let launchAtLogin = "launch_at_login"
         static let ocrServiceType = "ocr_service_type"          // "apple" | "third_party"
         static let thirdPartyOCRAPIKey = "third_party_ocr_api_key"
-        static let translationServiceType = "translation_service_type"  // "apple" | "third_party"
+        static let translationServiceType = "translation_service_type"  // "apple" | "google" | "deepseek"
         static let thirdPartyTranslationAPIKey = "third_party_translation_api_key"
         static let ocrLanguage = "ocr_language"                  // 默认 "zh-Hans"
+        static let translationSourceLanguage = "translation_source_language" // 默认 ""（自动检测）
         static let translationTargetLanguage = "translation_target_language" // 默认 "en"
         static let hasCompletedOnboarding = "has_completed_onboarding"
         static let accessibilityPermissionEnabled = "accessibility_permission_enabled"

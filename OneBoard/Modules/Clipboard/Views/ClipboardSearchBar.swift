@@ -20,7 +20,7 @@ struct ClipboardSearchBar: View {
                 .font(.system(size: 13))
                 .focused($isFocused)
                 .onSubmit { onSearch() }
-                .onChange(of: searchText) { _ in
+                .onChange(of: searchText) { _, _ in
                     handleSearchTextChange()
                 }
 
@@ -42,6 +42,10 @@ struct ClipboardSearchBar: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(OneBoardColors.primary.opacity(0.08))
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isFocused = true
+        }
     }
 
     private func handleSearchTextChange() {

@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "OneBoard",
     platforms: [
-        .macOS(.v14)
+        .macOS("15.0")
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "6.29.0"),

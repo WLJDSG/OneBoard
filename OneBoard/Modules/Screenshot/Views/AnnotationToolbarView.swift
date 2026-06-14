@@ -203,7 +203,7 @@ struct AnnotationToolbarView: View {
                 Task {
                     let vm = ScreenshotViewModel.shared
                     await vm.performOCR(on: rendered)
-                    await AnnotationResultWindowManager.shared.show(title: "文字识别", text: vm.ocrResult)
+                    AnnotationResultWindowManager.shared.show(title: "文字识别", text: vm.ocrResult)
                 }
             }
 
@@ -212,7 +212,6 @@ struct AnnotationToolbarView: View {
                 Task {
                     let vm = ScreenshotViewModel.shared
                     await vm.performTranslation(on: rendered)
-                    await AnnotationResultWindowManager.shared.show(title: "翻译", text: vm.translationResult)
                 }
             }
         }

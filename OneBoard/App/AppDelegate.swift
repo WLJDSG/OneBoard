@@ -90,6 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if defaults.object(forKey: keys.ocrLanguage) == nil {
             defaults.set("zh-Hans", forKey: keys.ocrLanguage)
         }
+        if defaults.object(forKey: keys.translationSourceLanguage) == nil {
+            defaults.set("", forKey: keys.translationSourceLanguage)
+        }
         if defaults.object(forKey: keys.translationTargetLanguage) == nil {
             defaults.set("en", forKey: keys.translationTargetLanguage)
         }

@@ -49,6 +49,20 @@ final class AnnotationServiceTests: XCTestCase {
         XCTAssertTrue(isMostlyWhite(rep.colorAt(x: 195, y: 95)))
     }
 
+    func testRenderTextKeepsGlyphsFacingLeftToRight() throws {
+        let image = makeImage(points: CGSize(width: 100, height: 60), pixels: CGSize(width: 100, height: 60))
+        let service = AnnotationService(baseImage: image)
+        service.selectedColor = .systemRed
+        service.addText(in: CGRect(x: 8, y: 8, width: 54, height: 36), text: "L", fontSize: 30)
+
+        let rendered = service.renderToImage(baseImage: image, displaySize: image.size)
+        let rep = try XCTUnwrap(rendered.representations.compactMap { $0 as? NSBitmapImageRep }.first)
+
+        let redPixels = redPixelBounds(in: rep)
+        XCTAssertLessThan(redPixels.minX, 28)
+        XCTAssertLessThan(redPixels.midX, 40)
+    }
+
     private func makeImage(points: CGSize, pixels: CGSize) -> NSImage {
         let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -82,5 +96,23 @@ final class AnnotationServiceTests: XCTestCase {
     private func isMostlyWhite(_ color: NSColor?) -> Bool {
         guard let color = color?.usingColorSpace(.deviceRGB) else { return false }
         return color.redComponent > 0.9 && color.greenComponent > 0.9 && color.blueComponent > 0.9 && color.alphaComponent > 0.9
+    }
+
+    private func redPixelBounds(in rep: NSBitmapImageRep) -> CGRect {
+        var minX = rep.pixelsWide
+        var minY = rep.pixelsHigh
+        var maxX = 0
+        var maxY = 0
+
+        for y in 0..<rep.pixelsHigh {
+            for x in 0..<rep.pixelsWide where isMostlyRed(rep.colorAt(x: x, y: y)) {
+                minX = min(minX, x)
+                minY = min(minY, y)
+                maxX = max(maxX, x)
+                maxY = max(maxY, y)
+            }
+        }
+
+        return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
     }
 }

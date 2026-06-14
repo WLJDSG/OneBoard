@@ -124,15 +124,17 @@ final class ClipboardListViewModel: ObservableObject {
         // 1. 写入剪贴板
         writeToPasteboard(entry)
 
-        // 2. 保存当前前台应用，关闭浮动窗口
-        let previousApp = NSWorkspace.shared.frontmostApplication
+        // 2. 恢复打开剪贴板前的前台应用，关闭浮动窗口
+        let previousApp = MenuBarManager.shared.targetApplicationForClipboardPaste()
         MenuBarManager.shared.closeClipboardFloatingWindow()
 
         // 3. 恢复前台应用 + 粘贴
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) { [weak self] in
             previousApp?.activate()
-            self?.simulatePaste()
-            PasteboardMonitor.shared.isPasting = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                self?.simulatePaste()
+                PasteboardMonitor.shared.isPasting = false
+            }
         }
     }
 

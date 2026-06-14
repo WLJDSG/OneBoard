@@ -18,7 +18,10 @@ struct StagedFile: Codable, Identifiable {
         self.fileURL = url.path
         self.fileSize = Int64(resourceValues.fileSize ?? 0)
         self.stagedAt = Date()
-        self.thumbnailData = FileIconProvider.thumbnail(for: url)?.pngData
+        self.thumbnailData = FileIconProvider.thumbnail(
+            for: url,
+            size: NSSize(width: 96, height: 96)
+        )?.pngData
     }
 }
 

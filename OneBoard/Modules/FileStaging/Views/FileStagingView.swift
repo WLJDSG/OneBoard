@@ -29,7 +29,7 @@ struct FileStagingView: View {
                     .stroke(Color.white.opacity(0.45), lineWidth: 1)
             )
         }
-        .frame(width: 304)
+        .frame(width: 348)
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
@@ -54,9 +54,13 @@ struct FileStagingView: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.black.opacity(0.55))
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(Color.white.opacity(0.34)))
+                .foregroundColor(.black.opacity(0.62))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.white.opacity(0.58)))
+                .overlay(
+                    Circle()
+                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
     }
@@ -72,13 +76,13 @@ struct FileStagingView: View {
                 .foregroundColor(isDropTargeted ? OneBoardColors.primary : .black.opacity(0.45))
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 104)
+        .frame(height: 124)
         .background(WindowDragArea())
     }
 
     private var stagedPreview: some View {
         let columns = [
-            GridItem(.adaptive(minimum: 76), spacing: 12)
+            GridItem(.adaptive(minimum: 92), spacing: 14)
         ]
 
         return ScrollView {
@@ -90,12 +94,12 @@ struct FileStagingView: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
         }
-        .frame(maxHeight: 308)
+        .frame(maxHeight: 366)
     }
 
     private func stagedFileTile(_ file: StagedFile) -> some View {
         ZStack(alignment: .topTrailing) {
-            VStack(spacing: 7) {
+            VStack(spacing: 8) {
                 filePreview(file)
                     .onDrag {
                         let url = URL(fileURLWithPath: file.fileURL)
@@ -105,21 +109,16 @@ struct FileStagingView: View {
                 Text(file.fileName)
                     .font(.system(size: 10, weight: .medium))
                     .lineLimit(1)
-                    .frame(maxWidth: 78)
+                    .truncationMode(.tail)
+                    .frame(width: 92)
                     .foregroundColor(.black.opacity(0.78))
             }
-            .frame(width: 82, height: 94)
+            .frame(width: 96, height: 116)
 
-            Button {
+            StagedFileDeleteButton {
                 Task { await viewModel.removeFile(file) }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.red.opacity(0.86))
-                    .background(Circle().fill(Color.white.opacity(0.82)))
             }
-            .buttonStyle(.plain)
-            .offset(x: 6, y: -6)
+            .offset(x: -2, y: 2)
         }
     }
 
@@ -135,8 +134,8 @@ struct FileStagingView: View {
                     .aspectRatio(contentMode: .fit)
             }
         }
-        .frame(width: 54, height: 62)
-        .padding(8)
+        .frame(width: 72, height: 78)
+        .padding(10)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.52)))
     }
 
@@ -148,6 +147,47 @@ struct FileStagingView: View {
                 DispatchQueue.main.async {
                     viewModel.addFile(url: url)
                 }
+            }
+        }
+    }
+}
+
+private struct StagedFileDeleteButton: View {
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @FocusState private var isFocused: Bool
+
+    private var isActive: Bool {
+        isHovered || isFocused
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(isActive ? .white : OneBoardColors.destructive.opacity(0.68))
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(isActive ? OneBoardColors.destructive.opacity(0.92) : Color.white.opacity(0.78))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(
+                            isActive ? OneBoardColors.destructive.opacity(0.95) : OneBoardColors.destructive.opacity(0.18),
+                            lineWidth: 1
+                        )
+                )
+                .clipShape(Circle())
+                .shadow(color: isActive ? OneBoardColors.destructive.opacity(0.18) : .black.opacity(0.08), radius: isActive ? 4 : 2, x: 0, y: 1)
+        }
+        .buttonStyle(.plain)
+        .focused($isFocused)
+        .contentShape(Circle())
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
             }
         }
     }

@@ -38,6 +38,16 @@ final class PasteboardMonitor {
         timer = nil
     }
 
+    /// 执行期间忽略剪贴板变化，用于读取选中文本等临时复制场景。
+    func performIgnoringChanges<T>(_ operation: () async -> T) async -> T {
+        isPasting = true
+        defer {
+            lastChangeCount = NSPasteboard.general.changeCount
+            isPasting = false
+        }
+        return await operation()
+    }
+
     // MARK: - Polling
 
     private func checkPasteboard() {

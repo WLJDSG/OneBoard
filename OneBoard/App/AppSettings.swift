@@ -30,9 +30,9 @@ enum AppSettings {
 
     // MARK: - 翻译设置
 
-    /// 翻译服务类型: "apple" | "third_party"
+    /// 翻译服务类型: "apple" | "google" | "deepseek"
     @AppStorage(Constants.UserDefaultsKeys.translationServiceType)
-    static var translationServiceType: String = "apple"
+    static var translationServiceType: String = TranslationServiceType.apple.rawValue
 
     /// 第三方翻译 API Key
     @AppStorage(Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)

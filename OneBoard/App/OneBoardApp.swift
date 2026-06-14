@@ -76,6 +76,7 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.ocrServiceType) private var ocrServiceType = "apple"
     @AppStorage(Constants.UserDefaultsKeys.translationServiceType) private var translationServiceType = "apple"
     @AppStorage(Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) private var ocrAPIKey = ""
+    @AppStorage(Constants.UserDefaultsKeys.translationSourceLanguage) private var sourceLanguage = ""
     @AppStorage(Constants.UserDefaultsKeys.translationTargetLanguage) private var targetLanguage = "en"
     @AppStorage(Constants.UserDefaultsKeys.accessibilityPermissionEnabled) private var accessibilityEnabled = false
     @AppStorage(Constants.UserDefaultsKeys.screenRecordingPermissionEnabled) private var screenRecordingEnabled = false
@@ -240,6 +241,12 @@ struct SettingsView: View {
                     Spacer()
                     KeyboardShortcuts.Recorder(for: .captureScreenshot)
                 }
+
+                HStack {
+                    Text("翻译选中文字")
+                    Spacer()
+                    KeyboardShortcuts.Recorder(for: .translateSelectedText)
+                }
             } header: {
                 Text("截图快捷键")
             }
@@ -288,12 +295,13 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("翻译服务", selection: $translationServiceType) {
-                    Text("DeepSeek AI 翻译").tag("third_party")
-                    Text("Apple Translation（macOS 15+）").tag("apple")
+                Picker("翻译服务", selection: translationServiceSelection) {
+                    ForEach(TranslationServiceType.allCases) { serviceType in
+                        Text(serviceType.settingsDisplayName).tag(serviceType.rawValue)
+                    }
                 }
 
-                if translationServiceType == "third_party" {
+                if selectedTranslationServiceType.requiresAPIKey {
                     SecureField("API Key", text: Binding(
                         get: { UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey) ?? "" },
                         set: { UserDefaults.standard.set($0, forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey) }
@@ -301,9 +309,21 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                 }
 
+                Picker("源语言", selection: $sourceLanguage) {
+                    Text("自动检测").tag("")
+                    Text("英文").tag("en")
+                    Text("中文（简体）").tag("zh-Hans")
+                    Text("中文（繁体）").tag("zh-Hant")
+                    Text("日文").tag("ja")
+                    Text("韩文").tag("ko")
+                    Text("法文").tag("fr")
+                    Text("德文").tag("de")
+                }
+
                 Picker("目标语言", selection: $targetLanguage) {
                     Text("英文").tag("en")
                     Text("中文（简体）").tag("zh-Hans")
+                    Text("中文（繁体）").tag("zh-Hant")
                     Text("日文").tag("ja")
                     Text("韩文").tag("ko")
                     Text("法文").tag("fr")
@@ -315,6 +335,21 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private var translationServiceSelection: Binding<String> {
+        Binding(
+            get: { normalizedTranslationServiceRawValue(translationServiceType) },
+            set: { translationServiceType = normalizedTranslationServiceRawValue($0) }
+        )
+    }
+
+    private var selectedTranslationServiceType: TranslationServiceType {
+        TranslationServiceType(rawValue: normalizedTranslationServiceRawValue(translationServiceType)) ?? .apple
+    }
+
+    private func normalizedTranslationServiceRawValue(_ rawValue: String) -> String {
+        rawValue == "third_party" ? TranslationServiceType.deepSeek.rawValue : rawValue
     }
 
     // MARK: - 关于

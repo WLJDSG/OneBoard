@@ -58,7 +58,7 @@
 
 ## 技术约束
 
-- **平台**：macOS 14.0+
+- **平台**：macOS 15.0+
 - **语言**：Swift 5.9+
 - **框架**：SwiftUI + AppKit
 - **数据库**：SQLite（GRDB.swift）

@@ -8,10 +8,10 @@ enum FileIconProvider {
     /// - Parameter url: 文件 URL
     /// - Parameter size: 缩略图尺寸
     /// - Returns: 缩略图 NSImage
-    static func thumbnail(for url: URL, size: NSSize = NSSize(width: 48, height: 48)) -> NSImage? {
+    static func thumbnail(for url: URL, size: NSSize = NSSize(width: 96, height: 96)) -> NSImage? {
         let options: [CFString: Any] = [
             kQLThumbnailOptionIconModeKey: false,
-            kQLThumbnailOptionScaleFactorKey: 1.0,
+            kQLThumbnailOptionScaleFactorKey: NSScreen.main?.backingScaleFactor ?? 2.0,
         ]
 
         guard let ref = QLThumbnailImageCreate(
