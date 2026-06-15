@@ -48,6 +48,7 @@ final class SystemCapabilityViewModel: ObservableObject {
     @Published private(set) var screenRecordingGranted = false
     @Published private(set) var gatewayHelperInstalled = false
     @Published private(set) var launchAtLoginEnabled = false
+    @Published private(set) var activePermissionOperation: OneBoardPermissionKind?
     @Published var statusMessage: String?
     @Published var errorMessage: String?
 
@@ -90,7 +91,7 @@ final class SystemCapabilityViewModel: ObservableObject {
         launchAtLoginEnabled = launchAtLogin.isEnabled
         UserDefaults.standard.set(launchAtLoginEnabled, forKey: Constants.UserDefaultsKeys.launchAtLogin)
         if launchAtLoginEnabled != enabled {
-            statusMessage = "开机自启未能启用，请确认 OneBoard 已从完整 .app 启动。"
+            statusMessage = "开机自启未能启用，请确认 OneBoard 位于 /Applications，且登录项 Helper 已正确打包并签名。"
         } else {
             statusMessage = enabled ? "开机自启已启用" : "开机自启已关闭"
         }
@@ -125,9 +126,13 @@ final class SystemCapabilityViewModel: ObservableObject {
     }
 
     private func setPermission(_ kind: OneBoardPermissionKind, enabled: Bool) {
+        activePermissionOperation = kind
+        defer { activePermissionOperation = nil }
+
         if enabled {
             permissions.showPermissionGuide(for: kind)
             refresh()
+            schedulePermissionRefresh()
             return
         }
 
@@ -144,7 +149,16 @@ final class SystemCapabilityViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
         refresh()
+        schedulePermissionRefresh()
         NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
+    }
+
+    private func schedulePermissionRefresh() {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            refresh()
+            NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
+        }
     }
 
     private static func confirmDisablePermission(_ kind: OneBoardPermissionKind) -> Bool {

@@ -18,12 +18,14 @@ struct TranslationPanelView: View {
                 statusBar
                 actionBar
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 16)
         }
         .translationTask(viewModel.appleTranslationConfiguration) { session in
             await viewModel.translateWithAppleSession(session)
         }
-        .frame(width: 520, height: 640)
+        .frame(width: 520, height: 600)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
@@ -36,30 +38,24 @@ struct TranslationPanelView: View {
         ZStack {
             TranslationPanelDragHandle()
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("翻译工作台")
-                        .font(.system(size: 15, weight: .semibold))
-                    HStack(spacing: 6) {
-                        Image(systemName: serviceIconName)
-                            .font(.system(size: 10, weight: .medium))
-                        Text(viewModel.translationServiceType.displayName)
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-                }
+                Text("翻译工作台 · \(viewModel.translationServiceType.displayName)")
+                    .font(.system(size: 15, weight: .semibold))
                 Spacer()
                 Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .symbolRenderingMode(.hierarchical)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("关闭")
             }
-            .padding(.horizontal, 16)
+            .padding(.leading, 16)
+            .padding(.trailing, 10)
+            .padding(.top, 6)
         }
-        .frame(height: 58)
+        .frame(height: 44)
         .background(
             LinearGradient(
                 colors: [
@@ -167,7 +163,7 @@ struct TranslationPanelView: View {
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Color.black.opacity(0.10), lineWidth: 1)
                 )
-                .frame(height: 140)
+                .frame(height: 128)
         }
     }
 
@@ -190,7 +186,7 @@ struct TranslationPanelView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(Color.black.opacity(0.10), lineWidth: 1)
             )
-            .frame(height: 160)
+            .frame(height: 132)
         }
     }
 
@@ -209,7 +205,7 @@ struct TranslationPanelView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
     }
 
     private var serviceStatusText: String {

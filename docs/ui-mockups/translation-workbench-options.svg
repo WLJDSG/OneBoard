@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="880" viewBox="0 0 1320 880">
+  <defs>
+    <filter id="shadow" x="-15%" y="-20%" width="130%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      .bg { fill: #F5F7FA; }
+      .title { font: 700 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; fill: #20242A; }
+      .subtitle { font: 400 15px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #6E7681; }
+      .label { font: 700 18px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; fill: #252A31; }
+      .note { font: 400 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #68717D; }
+      .cap { font: 700 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #77808B; }
+      .body { font: 500 14px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #2E343B; }
+      .muted { font: 500 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #7A838E; }
+      .button { font: 700 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #FFFFFF; }
+      .button2 { font: 700 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #2E343B; }
+    </style>
+  </defs>
+  <rect class="bg" width="1320" height="880"/>
+  <text x="56" y="58" class="title">翻译工作台布局方案</text>
+  <text x="56" y="86" class="subtitle">三套都去掉顶部大留白，把标题栏压到 44pt 左右，并让服务、语言、原文/译文形成更清楚的工作区。</text>
+
+  <!-- A -->
+  <g transform="translate(56,135)">
+    <text x="0" y="0" class="label">A. 紧凑双栏</text>
+    <text x="0" y="24" class="note">原文和译文并排，适合快速对照。窗口更宽但更矮。</text>
+    <rect x="0" y="48" width="382" height="500" rx="18" fill="#FFFFFF" stroke="#DDE4EC" filter="url(#shadow)"/>
+    <rect x="0" y="48" width="382" height="44" rx="18" fill="#F9FAFC"/>
+    <rect x="0" y="74" width="382" height="18" fill="#F9FAFC"/>
+    <text x="18" y="76" class="body" font-weight="700">翻译工作台</text>
+    <text x="348" y="72" class="muted">×</text>
+
+    <rect x="18" y="112" width="346" height="34" rx="10" fill="#EDF1F6"/>
+    <rect x="20" y="114" width="110" height="30" rx="8" fill="#0A84FF"/>
+    <text x="56" y="134" class="button">Apple</text>
+    <text x="169" y="134" class="button2">Google</text>
+    <text x="274" y="134" class="button2">DeepSeek</text>
+
+    <rect x="18" y="158" width="346" height="42" rx="12" fill="#F7F9FB" stroke="#E4E9EF"/>
+    <text x="34" y="182" class="muted">自动检测</text>
+    <text x="181" y="183" class="muted">⇄</text>
+    <text x="254" y="182" class="muted">中文（简体）</text>
+
+    <text x="18" y="226" class="cap">原文</text>
+    <text x="198" y="226" class="cap">译文</text>
+    <rect x="18" y="238" width="164" height="210" rx="10" fill="#FAFBFC" stroke="#D9E0E8"/>
+    <rect x="198" y="238" width="166" height="210" rx="10" fill="#FAFBFC" stroke="#D9E0E8"/>
+    <text x="34" y="268" class="body">checksum</text>
+    <text x="214" y="268" class="body">校验和</text>
+    <text x="214" y="294" class="body">校验通过</text>
+
+    <text x="18" y="475" class="note">Apple 系统 Translation，离线能力取决于系统。</text>
+    <rect x="18" y="500" width="104" height="32" rx="9" fill="#0A84FF"/>
+    <text x="42" y="521" class="button">重新翻译</text>
+    <rect x="134" y="500" width="92" height="32" rx="9" fill="#E8ECF1"/>
+    <text x="158" y="521" class="button2">复制译文</text>
+  </g>
+
+  <!-- B -->
+  <g transform="translate(480,135)">
+    <text x="0" y="0" class="label">B. 上下阅读流</text>
+    <text x="0" y="24" class="note">保留现有上下结构，但标题更薄、控件更规整。</text>
+    <rect x="0" y="48" width="382" height="500" rx="18" fill="#FFFFFF" stroke="#DDE4EC" filter="url(#shadow)"/>
+    <rect x="0" y="48" width="382" height="44" rx="18" fill="#F9FAFC"/>
+    <rect x="0" y="74" width="382" height="18" fill="#F9FAFC"/>
+    <text x="18" y="76" class="body" font-weight="700">翻译工作台</text>
+    <text x="110" y="76" class="muted">· Apple</text>
+    <text x="348" y="72" class="muted">×</text>
+
+    <rect x="18" y="110" width="346" height="32" rx="10" fill="#EDF1F6"/>
+    <rect x="20" y="112" width="110" height="28" rx="8" fill="#0A84FF"/>
+    <text x="56" y="131" class="button">Apple</text>
+    <text x="169" y="131" class="button2">Google</text>
+    <text x="274" y="131" class="button2">DeepSeek</text>
+
+    <g transform="translate(18,154)">
+      <rect x="0" y="0" width="154" height="38" rx="10" fill="#F7F9FB" stroke="#E4E9EF"/>
+      <text x="14" y="24" class="muted">自动检测</text>
+      <rect x="170" y="0" width="38" height="38" rx="10" fill="#EEF2F6"/>
+      <text x="181" y="25" class="muted">⇄</text>
+      <rect x="224" y="0" width="122" height="38" rx="10" fill="#F7F9FB" stroke="#E4E9EF"/>
+      <text x="238" y="24" class="muted">中文（简体）</text>
+    </g>
+
+    <text x="18" y="222" class="cap">原文</text>
+    <rect x="18" y="234" width="346" height="122" rx="10" fill="#FAFBFC" stroke="#D9E0E8"/>
+    <text x="34" y="263" class="body">checksum</text>
+    <text x="18" y="386" class="cap">译文</text>
+    <rect x="18" y="398" width="346" height="104" rx="10" fill="#FAFBFC" stroke="#D9E0E8"/>
+    <text x="34" y="427" class="body">校验和</text>
+    <text x="34" y="453" class="body">校验通过</text>
+    <rect x="18" y="518" width="104" height="32" rx="9" fill="#0A84FF"/>
+    <text x="42" y="539" class="button">重新翻译</text>
+    <rect x="134" y="518" width="92" height="32" rx="9" fill="#E8ECF1"/>
+    <text x="158" y="539" class="button2">复制译文</text>
+  </g>
+
+  <!-- C -->
+  <g transform="translate(904,135)">
+    <text x="0" y="0" class="label">C. 专业侧栏面板</text>
+    <text x="0" y="24" class="note">左侧设置，右侧内容；最清楚，但窗口占屏更多。</text>
+    <rect x="0" y="48" width="382" height="500" rx="18" fill="#FFFFFF" stroke="#DDE4EC" filter="url(#shadow)"/>
+    <rect x="0" y="48" width="382" height="44" rx="18" fill="#F9FAFC"/>
+    <rect x="0" y="74" width="382" height="18" fill="#F9FAFC"/>
+    <text x="18" y="76" class="body" font-weight="700">翻译工作台</text>
+    <text x="348" y="72" class="muted">×</text>
+    <rect x="18" y="110" width="96" height="392" rx="12" fill="#F4F7FA" stroke="#E4E9EF"/>
+    <text x="32" y="138" class="cap">服务</text>
+    <rect x="30" y="152" width="72" height="28" rx="8" fill="#0A84FF"/>
+    <text x="48" y="171" class="button">Apple</text>
+    <text x="42" y="206" class="muted">Google</text>
+    <text x="36" y="238" class="muted">DeepSeek</text>
+    <text x="32" y="292" class="cap">语言</text>
+    <text x="32" y="324" class="muted">自动检测</text>
+    <text x="57" y="354" class="muted">⇄</text>
+    <text x="32" y="386" class="muted">中文</text>
+
+    <text x="138" y="132" class="cap">原文</text>
+    <rect x="138" y="144" width="226" height="150" rx="10" fill="#FAFBFC" stroke="#D9E0E8"/>
+    <text x="154" y="174" class="body">checksum</text>
+    <text x="138" y="326" class="cap">译文</text>
+    <rect x="138" y="338" width="226" height="128" rx="10" fill="#FAFBFC" stroke="#D9E0E8"/>
+    <text x="154" y="368" class="body">校验和</text>
+    <text x="154" y="394" class="body">校验通过</text>
+    <rect x="138" y="488" width="104" height="32" rx="9" fill="#0A84FF"/>
+    <text x="162" y="509" class="button">重新翻译</text>
+    <rect x="254" y="488" width="92" height="32" rx="9" fill="#E8ECF1"/>
+    <text x="278" y="509" class="button2">复制译文</text>
+  </g>
+
+  <g transform="translate(56,735)">
+    <rect x="0" y="0" width="1228" height="82" rx="18" fill="#FFFFFF" stroke="#DDE4EC"/>
+    <text x="24" y="32" class="label">我的推荐：B 上下阅读流</text>
+    <text x="24" y="58" class="note">它改动最稳，保留原有信息架构但把头部压薄、控件对齐、内容区更平衡。A 更适合大量短文本快速对照；C 更像专业工具但对这个浮窗来说略重。</text>
+  </g>
+</svg>

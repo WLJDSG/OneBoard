@@ -53,11 +53,13 @@ final class TranslationPanelWindowManager {
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
         let panel = TranslationPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
+        panel.minSize = NSSize(width: 520, height: 600)
+        panel.maxSize = NSSize(width: 520, height: 600)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
@@ -77,7 +79,7 @@ final class TranslationPanelWindowManager {
         startTranslation(for: viewModel)
     }
 
-    private func closePanel() {
+    func closePanel() {
         translationTask?.cancel()
         translationTask = nil
         panel?.close()

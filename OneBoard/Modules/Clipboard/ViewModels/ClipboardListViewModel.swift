@@ -119,19 +119,14 @@ final class ClipboardListViewModel: ObservableObject {
         guard isSupportedEntry(entry) else { return }
 
         selectedEntry = entry
-        PasteboardMonitor.shared.isPasting = true
 
-        // 1. 写入剪贴板
-        writeToPasteboard(entry)
-
-        // 2. 恢复打开剪贴板前的前台应用，关闭浮动窗口
-        let previousApp = MenuBarManager.shared.targetApplicationForClipboardPaste()
-        MenuBarManager.shared.closeClipboardFloatingWindow()
-
-        // 3. 恢复前台应用 + 粘贴
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            self?.activateAndPaste(into: previousApp)
-        }
+        let coordinator = ClipboardPasteCoordinator(
+            pasteboardWriter: { [weak self] entry in self?.writeToPasteboard(entry) },
+            pasteAction: { [weak self] app in
+                await self?.activateAndPasteAsync(into: app)
+            }
+        )
+        coordinator.paste(entry)
     }
 
     // MARK: - 粘贴
@@ -230,44 +225,58 @@ final class ClipboardListViewModel: ObservableObject {
     }
 
     /// 模拟 Cmd+V 按键（需要辅助功能权限）
-    private func activateAndPaste(into app: NSRunningApplication?) {
+    private func activateAndPasteAsync(into app: NSRunningApplication?) async {
+        await withCheckedContinuation { continuation in
+            activateAndPaste(into: app) {
+                continuation.resume()
+            }
+        }
+    }
+
+    private func activateAndPaste(into app: NSRunningApplication?, completion: @escaping () -> Void) {
         guard let app else {
             print("[ViewModel] ⚠️ 找不到目标应用，已只写入剪贴板")
-            PasteboardMonitor.shared.isPasting = false
+            completion()
             return
         }
 
         app.activate()
-        waitForActivation(app, remainingAttempts: 8)
+        waitForActivation(app, remainingAttempts: 8, completion: completion)
     }
 
-    private func waitForActivation(_ app: NSRunningApplication, remainingAttempts: Int) {
+    private func waitForActivation(_ app: NSRunningApplication, remainingAttempts: Int, completion: @escaping () -> Void) {
         guard remainingAttempts > 0 else {
             print("[ViewModel] ⚠️ 目标应用未及时激活，尝试发送粘贴快捷键")
-            simulatePaste()
-            PasteboardMonitor.shared.isPasting = false
+            simulatePaste(completion: completion)
             return
         }
 
         if app.isActive {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-                self?.simulatePaste()
-                PasteboardMonitor.shared.isPasting = false
+                guard let self else {
+                    completion()
+                    return
+                }
+                self.simulatePaste(completion: completion)
             }
             return
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-            self?.waitForActivation(app, remainingAttempts: remainingAttempts - 1)
+            guard let self else {
+                completion()
+                return
+            }
+            self.waitForActivation(app, remainingAttempts: remainingAttempts - 1, completion: completion)
         }
     }
 
-    private func simulatePaste() {
+    private func simulatePaste(completion: @escaping () -> Void) {
         // 检查辅助功能权限
         guard PermissionManager.shared.hasAccessibilityPermission else {
             print("[ViewModel] ⚠️ 缺少辅助功能权限，无法自动粘贴")
-            PasteboardMonitor.shared.isPasting = false
             PermissionManager.shared.promptAccessibilityPermission()
+            completion()
             return
         }
 
@@ -282,6 +291,7 @@ final class ClipboardListViewModel: ObservableObject {
             let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
             keyUp?.flags = CGEventFlags.maskCommand
             keyUp?.post(tap: CGEventTapLocation.cghidEventTap)
+            completion()
         }
     }
 

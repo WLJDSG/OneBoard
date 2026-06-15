@@ -35,6 +35,7 @@ final class ScreenshotViewModel: ObservableObject {
     /// 开始截图（快捷键触发）
     func startCapture() async {
         resetRecognitionState()
+        closeActiveScreenshotSession()
         guard let result = await captureService.captureRegion() else {
             print("[ScreenshotViewModel] 截图取消或失败")
             return
@@ -120,7 +121,10 @@ final class ScreenshotViewModel: ObservableObject {
             rootView: AnnotationToolbarView(
                 annotationService: annotationService,
                 viewModel: viewModel,
-                onCopy: { [weak self] img in self?.copyToClipboard(img) },
+                onComplete: { [weak self] img in
+                    self?.copyToClipboard(img)
+                    self?.closeActiveScreenshotSession()
+                },
                 onSave: { [weak self] img in self?.saveToFile(img) },
                 onPin: { [weak self] img in self?.pinToScreen(img, preferredFrame: self?.annotationWindow?.frame) },
                 onOCR: { [weak self] img in
@@ -210,6 +214,13 @@ final class ScreenshotViewModel: ObservableObject {
         annotationWindow = nil
         toolbarPanel?.close()
         toolbarPanel = nil
+    }
+
+    func closeActiveScreenshotSession() {
+        closeAnnotationWindows()
+        OCRBubbleWindowManager.shared.close()
+        AnnotationResultWindowManager.shared.close()
+        TranslationPanelWindowManager.shared.closePanel()
     }
 
     // MARK: - 操作

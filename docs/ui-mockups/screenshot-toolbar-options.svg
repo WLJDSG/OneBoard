@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="760" viewBox="0 0 1240 760">
+  <defs>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#000000" flood-opacity="0.14"/>
+    </filter>
+    <linearGradient id="glassA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAFBFD" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#EEF1F5" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="glassDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#303640"/>
+      <stop offset="1" stop-color="#20252D"/>
+    </linearGradient>
+    <style>
+      .bg { fill: #F4F6F8; }
+      .title { font: 700 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; fill: #20242A; }
+      .subtitle { font: 400 15px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #6E7681; }
+      .label { font: 700 18px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; fill: #252A31; }
+      .note { font: 400 14px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #68717D; }
+      .small { font: 600 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #727B86; }
+      .glyph { font: 600 20px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #2B3037; }
+      .glyphDark { font: 600 20px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; fill: #EEF3F8; }
+      .divider { stroke: #CBD2DA; stroke-width: 1; }
+      .dividerDark { stroke: #59616D; stroke-width: 1; }
+      .blue { fill: #0A84FF; }
+      .green { fill: #34C759; }
+      .red { fill: #FF3B30; }
+      .orange { fill: #FF9500; }
+      .yellow { fill: #FFD60A; }
+      .mint { fill: #00C7BE; }
+      .purple { fill: #AF52DE; }
+      .pink { fill: #FF2D55; }
+      .black { fill: #1D1D1F; }
+      .white { fill: #FFFFFF; stroke: #C9D0D8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1240" height="760"/>
+  <text x="56" y="58" class="title">截图工具栏视觉方向</text>
+  <text x="56" y="86" class="subtitle">都已移除“复制”按钮，新增“对钩完成”：复制当前截图并关闭。颜色选择从单色圆点升级为更多预设 + 系统颜色入口。</text>
+
+  <!-- Option A -->
+  <g transform="translate(56,135)">
+    <text x="0" y="0" class="label">A. macOS 系统浮层风</text>
+    <text x="0" y="25" class="note">低调、干净，和系统弹窗一致；适合长期悬浮不打扰。</text>
+    <rect x="0" y="58" width="720" height="70" rx="18" fill="url(#glassA)" stroke="#D8DEE6" filter="url(#shadow)"/>
+
+    <g transform="translate(18,73)">
+      <rect x="0" y="0" width="42" height="42" rx="12" fill="#E6E9EE"/>
+      <text x="13" y="28" class="glyph">↖</text>
+      <text x="61" y="28" class="glyph">▭</text>
+      <text x="107" y="28" class="glyph">○</text>
+      <text x="153" y="28" class="glyph">↗</text>
+      <text x="199" y="28" class="glyph">／</text>
+      <text x="245" y="28" class="glyph">字</text>
+      <text x="291" y="28" class="glyph">▦</text>
+      <line x1="340" y1="5" x2="340" y2="37" class="divider"/>
+      <circle cx="374" cy="21" r="14" class="red" stroke="#FFFFFF" stroke-width="3"/>
+      <circle cx="410" cy="21" r="10" class="orange"/>
+      <circle cx="438" cy="21" r="10" class="yellow"/>
+      <circle cx="466" cy="21" r="10" class="green"/>
+      <circle cx="494" cy="21" r="10" class="blue"/>
+      <circle cx="522" cy="21" r="10" class="purple"/>
+      <circle cx="550" cy="21" r="10" class="black"/>
+      <rect x="574" y="7" width="54" height="28" rx="9" fill="#FFFFFF" stroke="#D3D9E2"/>
+      <text x="590" y="27" class="small">更多</text>
+      <line x1="652" y1="5" x2="652" y2="37" class="divider"/>
+      <circle cx="684" cy="21" r="18" class="green"/>
+      <text x="674" y="29" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="25" font-weight="700" fill="#FFFFFF">✓</text>
+    </g>
+  </g>
+
+  <!-- Option B -->
+  <g transform="translate(56,315)">
+    <text x="0" y="0" class="label">B. Snipaste 紧凑风</text>
+    <text x="0" y="25" class="note">工具更集中，颜色直接铺开；截图时手感快，适合高频标注。</text>
+    <rect x="0" y="58" width="790" height="62" rx="12" fill="#FFFFFF" stroke="#DDE2E8" filter="url(#softShadow)"/>
+    <g transform="translate(14,68)">
+      <rect x="0" y="0" width="42" height="42" rx="9" fill="#E7EBF0"/>
+      <text x="13" y="28" class="glyph">↖</text>
+      <text x="58" y="28" class="glyph">▭</text>
+      <text x="101" y="28" class="glyph">○</text>
+      <text x="144" y="28" class="glyph">↗</text>
+      <text x="187" y="28" class="glyph">／</text>
+      <text x="230" y="28" class="glyph">字</text>
+      <text x="273" y="28" class="glyph">▦</text>
+      <line x1="318" y1="6" x2="318" y2="36" class="divider"/>
+      <circle cx="350" cy="21" r="13" class="red" stroke="#FFFFFF" stroke-width="3"/>
+      <circle cx="383" cy="21" r="11" class="orange"/>
+      <circle cx="414" cy="21" r="11" class="yellow"/>
+      <circle cx="445" cy="21" r="11" class="green"/>
+      <circle cx="476" cy="21" r="11" class="mint"/>
+      <circle cx="507" cy="21" r="11" class="blue"/>
+      <circle cx="538" cy="21" r="11" class="purple"/>
+      <circle cx="569" cy="21" r="11" class="pink"/>
+      <circle cx="600" cy="21" r="11" class="black"/>
+      <circle cx="631" cy="21" r="11" class="white"/>
+      <text x="662" y="28" class="glyph">🎨</text>
+      <line x1="704" y1="6" x2="704" y2="36" class="divider"/>
+      <rect x="724" y="0" width="42" height="42" rx="10" class="green"/>
+      <text x="734" y="29" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="27" font-weight="800" fill="#FFFFFF">✓</text>
+    </g>
+  </g>
+
+  <!-- Option C -->
+  <g transform="translate(56,495)">
+    <text x="0" y="0" class="label">C. 现代专业工具风</text>
+    <text x="0" y="25" class="note">分组最清楚，颜色/线宽/动作分区明显；更像轻量设计工具。</text>
+    <rect x="0" y="58" width="860" height="76" rx="20" fill="url(#glassDark)" filter="url(#shadow)"/>
+    <g transform="translate(18,73)">
+      <rect x="0" y="0" width="305" height="46" rx="14" fill="#3A414D"/>
+      <rect x="6" y="5" width="36" height="36" rx="10" fill="#4A5260"/>
+      <text x="17" y="30" class="glyphDark">↖</text>
+      <text x="58" y="30" class="glyphDark">▭</text>
+      <text x="101" y="30" class="glyphDark">○</text>
+      <text x="144" y="30" class="glyphDark">↗</text>
+      <text x="187" y="30" class="glyphDark">／</text>
+      <text x="230" y="30" class="glyphDark">字</text>
+      <text x="273" y="30" class="glyphDark">▦</text>
+
+      <rect x="325" y="0" width="265" height="46" rx="14" fill="#3A414D"/>
+      <circle cx="350" cy="23" r="12" class="red" stroke="#FFFFFF" stroke-width="3"/>
+      <circle cx="383" cy="23" r="10" class="orange"/>
+      <circle cx="414" cy="23" r="10" class="yellow"/>
+      <circle cx="445" cy="23" r="10" class="green"/>
+      <circle cx="476" cy="23" r="10" class="blue"/>
+      <circle cx="507" cy="23" r="10" class="purple"/>
+      <rect x="533" y="10" width="43" height="26" rx="8" fill="#4A5260"/>
+      <text x="543" y="28" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" font-weight="700" fill="#EEF3F8">•••</text>
+
+      <rect x="610" y="0" width="154" height="46" rx="14" fill="#3A414D"/>
+      <text x="632" y="30" class="glyphDark">⇩</text>
+      <text x="679" y="30" class="glyphDark">📌</text>
+      <text x="724" y="30" class="glyphDark">↶</text>
+
+      <rect x="784" y="0" width="46" height="46" rx="14" class="green"/>
+      <text x="796" y="32" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="29" font-weight="800" fill="#FFFFFF">✓</text>
+    </g>
+  </g>
+
+  <g transform="translate(930,146)">
+    <rect x="0" y="0" width="252" height="492" rx="18" fill="#FFFFFF" stroke="#DDE3EA" filter="url(#softShadow)"/>
+    <text x="24" y="38" class="label">我的推荐</text>
+    <text x="24" y="70" class="note">B + C 混合</text>
+    <line x1="24" y1="96" x2="228" y2="96" stroke="#E5E9EF"/>
+    <text x="24" y="130" class="note">保留 B 的高频效率：</text>
+    <text x="24" y="154" class="note">颜色直接可点，操作少。</text>
+    <text x="24" y="196" class="note">吸收 C 的分组：</text>
+    <text x="24" y="220" class="note">工具、颜色、动作分开。</text>
+    <text x="24" y="262" class="note">视觉不走深色主面板，</text>
+    <text x="24" y="286" class="note">避免遮挡截图内容。</text>
+    <text x="24" y="344" class="note">最终按钮顺序：</text>
+    <text x="24" y="370" class="note">工具 → 颜色 → 保存/贴图/</text>
+    <text x="24" y="394" class="note">OCR/翻译 → 撤销 → 完成</text>
+  </g>
+</svg>

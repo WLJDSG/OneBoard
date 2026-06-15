@@ -43,5 +43,14 @@ else
     exit 1
 fi
 
+echo "Signing LaunchAtLogin helper and OneBoard.app..."
+/usr/bin/codesign --force --deep --sign - "$HELPER_APP"
+/usr/bin/codesign --force --deep --sign - "$APP_DIR"
+
+echo "Validating app bundle..."
+/usr/bin/codesign --verify --deep --strict "$APP_DIR"
+echo "Main bundle id: $APP_BUNDLE_ID"
+echo "Helper bundle id: $(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$HELPER_APP/Contents/Info.plist")"
+
 chmod +x "$MACOS_DIR/OneBoard"
 echo "Built $APP_DIR"
