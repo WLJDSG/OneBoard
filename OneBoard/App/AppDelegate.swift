@@ -5,8 +5,13 @@ import LaunchAtLogin
 /// AppDelegate - 管理应用生命周期
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // 尽早设置 activation policy，避免 SwiftUI App 初始化覆盖
+        NSApp.setActivationPolicy(.accessory)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 1. 隐藏 Dock 图标（菜单栏应用）
+        // 1. 确保菜单栏应用激活策略已设置（applicationWillFinishLaunching 已设置）
         NSApp.setActivationPolicy(.accessory)
 
         // 2. 初始化数据库

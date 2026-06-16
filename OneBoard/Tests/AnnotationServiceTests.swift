@@ -63,6 +63,96 @@ final class AnnotationServiceTests: XCTestCase {
         XCTAssertLessThan(redPixels.midX, 40)
     }
 
+    func testNumberedMarkersIncrementFromOne() {
+        let image = makeImage(points: CGSize(width: 100, height: 100), pixels: CGSize(width: 100, height: 100))
+        let service = AnnotationService(baseImage: image)
+
+        service.addNumber(at: CGPoint(x: 20, y: 20))
+        service.addNumber(at: CGPoint(x: 50, y: 50))
+
+        XCTAssertEqual(service.layers.map(\.tool), [.number, .number])
+        XCTAssertEqual(service.layers.map(\.numberValue), [1, 2])
+    }
+
+    func testRenderNumberedMarkerDrawsColoredBadge() throws {
+        let image = makeImage(points: CGSize(width: 100, height: 100), pixels: CGSize(width: 100, height: 100))
+        let service = AnnotationService(baseImage: image)
+        service.selectedColor = .systemBlue
+        service.addNumber(at: CGPoint(x: 50, y: 50))
+
+        let rendered = service.renderToImage(baseImage: image, displaySize: image.size)
+        let rep = try XCTUnwrap(rendered.representations.compactMap { $0 as? NSBitmapImageRep }.first)
+
+        var bluePixelCount = 0
+        for y in 36...64 {
+            for x in 36...64 where isMostlyBlue(rep.colorAt(x: x, y: y)) {
+                bluePixelCount += 1
+            }
+        }
+        XCTAssertGreaterThan(bluePixelCount, 300)
+    }
+
+    func testUndoAndRedoRestoreLastLayer() {
+        let image = makeImage(points: CGSize(width: 100, height: 100), pixels: CGSize(width: 100, height: 100))
+        let service = AnnotationService(baseImage: image)
+
+        service.addRectangle(CGRect(x: 1, y: 2, width: 30, height: 40))
+        service.addNumber(at: CGPoint(x: 60, y: 60))
+
+        service.undo()
+        XCTAssertEqual(service.layers.count, 1)
+        XCTAssertTrue(service.canRedo)
+
+        service.redo()
+        XCTAssertEqual(service.layers.count, 2)
+        XCTAssertEqual(service.layers.last?.tool, .number)
+        XCTAssertEqual(service.layers.last?.numberValue, 1)
+    }
+
+    func testAddingLayerAfterUndoClearsRedo() {
+        let image = makeImage(points: CGSize(width: 100, height: 100), pixels: CGSize(width: 100, height: 100))
+        let service = AnnotationService(baseImage: image)
+
+        service.addRectangle(CGRect(x: 1, y: 2, width: 30, height: 40))
+        service.addEllipse(CGRect(x: 10, y: 10, width: 20, height: 20))
+        service.undo()
+        XCTAssertTrue(service.canRedo)
+
+        service.addLine(from: CGPoint(x: 0, y: 0), to: CGPoint(x: 40, y: 40))
+
+        XCTAssertFalse(service.canRedo)
+        service.redo()
+        XCTAssertEqual(service.layers.map(\.tool), [.rectangle, .line])
+    }
+
+    func testCyclePresetColorMovesThroughPalette() {
+        let service = AnnotationService()
+        service.selectedColor = .systemRed
+
+        service.cyclePresetColorBackward()
+
+        XCTAssertEqual(service.selectedColor, .white)
+    }
+
+    func testIncrementStyleValueUsesSelectedTool() {
+        let service = AnnotationService()
+
+        service.selectedTool = .rectangle
+        service.lineWidth = 2
+        service.incrementStyleValue()
+        XCTAssertEqual(service.lineWidth, 3)
+
+        service.selectedTool = .text
+        service.fontSize = 18
+        service.incrementStyleValue()
+        XCTAssertEqual(service.fontSize, 20)
+
+        service.selectedTool = .mosaic
+        service.mosaicBlockSize = 6
+        service.incrementStyleValue()
+        XCTAssertEqual(service.mosaicBlockSize, 8)
+    }
+
     private func makeImage(points: CGSize, pixels: CGSize) -> NSImage {
         let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -91,6 +181,11 @@ final class AnnotationServiceTests: XCTestCase {
     private func isMostlyRed(_ color: NSColor?) -> Bool {
         guard let color = color?.usingColorSpace(.deviceRGB) else { return false }
         return color.redComponent > 0.75 && color.greenComponent < 0.35 && color.blueComponent < 0.35
+    }
+
+    private func isMostlyBlue(_ color: NSColor?) -> Bool {
+        guard let color = color?.usingColorSpace(.deviceRGB) else { return false }
+        return color.blueComponent > 0.45 && color.redComponent < 0.45
     }
 
     private func isMostlyWhite(_ color: NSColor?) -> Bool {

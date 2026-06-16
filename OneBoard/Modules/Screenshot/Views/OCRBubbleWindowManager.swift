@@ -14,16 +14,37 @@ final class OCRBubbleWindowManager {
     func show(text: String, relativeTo sourceFrame: NSRect?) {
         close()
 
+        // 根据文字内容计算弹窗尺寸
+        let font = NSFont.systemFont(ofSize: 17, weight: .medium)
+        let panelWidth: CGFloat = 380
+        let textMaxWidth = panelWidth - 36  // 左右各 18 padding
+        let textHeight = (text as NSString).boundingRect(
+            with: NSSize(width: textMaxWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        ).height
+
+        // 头部 ~40px + 间距 14 + 底部按钮 ~36px + 间距 + padding 36 = ~130px 固定开销
+        // 文字区域最小 82px
+        let contentBodyHeight = max(textHeight + 40, 82)
+        let pointerHeight: CGFloat = 12
+        let totalHeight = min(max(contentBodyHeight + 130, 200), 520)
+
         let hostingView = NSHostingView(
-            rootView: OCRBubbleView(text: text) { [weak self] in
-                self?.close()
-            }
+            rootView: OCRBubbleView(
+                text: text,
+                panelSize: CGSize(width: panelWidth, height: totalHeight),
+                pointerHeight: pointerHeight,
+                onClose: { [weak self] in
+                    self?.close()
+                }
+            )
         )
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 230),
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: totalHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -80,15 +101,32 @@ final class OCRBubbleWindowManager {
         }
 
         let gap: CGFloat = 12
+        let panelFrame = panel.frame
+
+        // 默认：居中，放在截图窗口下方
         var origin = NSPoint(
-            x: sourceFrame.midX - panel.frame.width / 2,
-            y: sourceFrame.minY - panel.frame.height - gap
+            x: sourceFrame.midX - panelFrame.width / 2,
+            y: sourceFrame.minY - panelFrame.height - gap
         )
+
+        // 下方不够 → 放上方
         if origin.y < screenFrame.minY {
             origin.y = sourceFrame.maxY + gap
         }
-        origin.x = min(max(origin.x, screenFrame.minX + 8), screenFrame.maxX - panel.frame.width - 8)
-        origin.y = min(max(origin.y, screenFrame.minY + 8), screenFrame.maxY - panel.frame.height - 8)
+        // 上方也不够 → 放右侧
+        if origin.y + panelFrame.height > screenFrame.maxY {
+            origin.y = sourceFrame.midY - panelFrame.height / 2
+            origin.x = sourceFrame.maxX + gap
+        }
+        // 右侧超出 → 放左侧
+        if origin.x + panelFrame.width > screenFrame.maxX {
+            origin.x = sourceFrame.minX - panelFrame.width - gap
+        }
+
+        // 最终 clamp
+        origin.x = min(max(origin.x, screenFrame.minX + 8), screenFrame.maxX - panelFrame.width - 8)
+        origin.y = min(max(origin.y, screenFrame.minY + 8), screenFrame.maxY - panelFrame.height - 8)
+
         panel.setFrameOrigin(origin)
     }
 
@@ -104,17 +142,24 @@ final class OCRBubbleWindowManager {
 }
 
 private struct OCRBubbleView: View {
-    @State private var editableText: String
-    @State private var isEditing = false
+    let text: String
+    let panelSize: CGSize
+    let pointerHeight: CGFloat
     let onClose: () -> Void
 
-    init(text: String, onClose: @escaping () -> Void) {
-        _editableText = State(initialValue: text)
+    @State private var editableText: String
+    @State private var isEditing = false
+
+    init(text: String, panelSize: CGSize, pointerHeight: CGFloat, onClose: @escaping () -> Void) {
+        self.text = text
+        self.panelSize = panelSize
+        self.pointerHeight = pointerHeight
         self.onClose = onClose
+        _editableText = State(initialValue: text)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("提取文字")
                     .font(.system(size: 15, weight: .semibold))
@@ -144,7 +189,6 @@ private struct OCRBubbleView: View {
                     }
                 }
             }
-            .frame(minHeight: 82)
 
             HStack(spacing: 10) {
                 Spacer()
@@ -162,18 +206,25 @@ private struct OCRBubbleView: View {
             }
         }
         .padding(18)
-        .frame(width: 360, height: 230)
-        .background(BubbleShape().fill(Color(nsColor: .windowBackgroundColor)))
-        .overlay(BubbleShape().stroke(Color.black.opacity(0.12), lineWidth: 1))
+        .frame(width: panelSize.width, height: panelSize.height)
+        .background(
+            BubbleShape(pointerHeight: pointerHeight)
+                .fill(Color(nsColor: .windowBackgroundColor))
+        )
+        .overlay(
+            BubbleShape(pointerHeight: pointerHeight)
+                .stroke(Color.black.opacity(0.12), lineWidth: 1)
+        )
     }
 }
 
 private struct BubbleShape: Shape {
+    let pointerHeight: CGFloat
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let corner: CGFloat = 14
         let pointerWidth: CGFloat = 20
-        let pointerHeight: CGFloat = 12
         let body = rect.insetBy(dx: 0, dy: pointerHeight).offsetBy(dx: 0, dy: pointerHeight)
 
         path.addRoundedRect(in: body, cornerSize: CGSize(width: corner, height: corner))

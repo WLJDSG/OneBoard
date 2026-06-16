@@ -17,33 +17,35 @@ struct AnnotationToolbarView: View {
 
     @State private var showColorPicker: Bool = false
 
-    private let presetColors: [NSColor] = [
-        .systemRed, .systemOrange, .systemYellow, .systemGreen,
-        .systemTeal, .systemBlue, .systemPurple, .systemPink,
-        .black, .white
+    private let toolShortcuts: [AnnotationTool: String] = [
+        .cursor: "1",
+        .rectangle: "2",
+        .ellipse: "3",
+        .arrow: "4",
+        .line: "5",
+        .text: "6",
+        .number: "7",
+        .mosaic: "8",
     ]
 
     var body: some View {
         HStack(spacing: 8) {
             toolGroup
-            colorGroup
-            actionButtonsRow
+            styleGroup
+            historyGroup
+            outputGroup
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.08), lineWidth: 1))
         .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
         .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
             colorPickerPopover
         }
     }
+
+    // MARK: - 工具组
 
     private var toolGroup: some View {
         HStack(spacing: 4) {
@@ -52,26 +54,44 @@ struct AnnotationToolbarView: View {
             }
         }
         .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.045))
-        )
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
     }
 
-    private var colorGroup: some View {
+    // MARK: - 样式组
+
+    private var styleGroup: some View {
         HStack(spacing: 7) {
-            ForEach(presetColors, id: \.self) { color in
+            ForEach(annotationService.presetColors, id: \.self) { color in
                 colorSwatch(color)
             }
+
+            Divider().frame(height: 22)
+
+            Button(action: { annotationService.decrementStyleValue() }) {
+                Image(systemName: "minus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("减小样式")
+
+            Text(styleValueText)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .frame(minWidth: 34)
+
+            Button(action: { annotationService.incrementStyleValue() }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("增大样式 Right Option")
 
             Button(action: { showColorPicker.toggle() }) {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 13, weight: .bold))
                     .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.black.opacity(0.06))
-                    )
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.06)))
                     .foregroundColor(Color.black.opacity(0.74))
             }
             .buttonStyle(.plain)
@@ -79,10 +99,80 @@ struct AnnotationToolbarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.045))
-        )
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
+    }
+
+    private var styleValueText: String {
+        switch annotationService.selectedTool {
+        case .cursor:
+            return "-"
+        case .rectangle, .ellipse, .arrow, .line:
+            return "\(Int(annotationService.lineWidth))"
+        case .text:
+            return "\(Int(annotationService.fontSize))"
+        case .number:
+            return "\(Int(annotationService.numberBadgeSize))"
+        case .mosaic:
+            return "\(Int(annotationService.mosaicBlockSize))"
+        }
+    }
+
+    // MARK: - 历史操作组
+
+    private var historyGroup: some View {
+        HStack(spacing: 6) {
+            iconActionButton("撤销 Cmd+Z", icon: "arrow.uturn.backward") {
+                viewModel.undo()
+            }
+            .disabled(!annotationService.canUndo)
+
+            iconActionButton("重做 Cmd+Shift+Z", icon: "arrow.uturn.forward") {
+                viewModel.redo()
+            }
+            .disabled(!annotationService.canRedo)
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
+    }
+
+    // MARK: - 输出操作组
+
+    private var outputGroup: some View {
+        HStack(spacing: 6) {
+            iconActionButton("保存到桌面 Cmd+S", icon: "square.and.arrow.down") {
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
+                onSave(rendered)
+            }
+
+            iconActionButton("贴图", icon: "pin") {
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
+                onPin(rendered)
+                onClose()
+            }
+
+            iconActionButton("OCR", icon: "text.viewfinder") {
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
+                Task {
+                    let vm = ScreenshotViewModel.shared
+                    await vm.performOCR(on: rendered)
+                    OCRBubbleWindowManager.shared.show(
+                        text: vm.ocrResult,
+                        relativeTo: NSApp.keyWindow?.frame
+                    )
+                }
+            }
+
+            iconActionButton("完成 Enter", icon: "checkmark", prominent: true) {
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
+                onComplete(rendered)
+            }
+
+            iconActionButton("关闭 Esc", icon: "xmark", muted: true) {
+                onClose()
+            }
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
     }
 
     // MARK: - 工具按钮
@@ -95,17 +185,18 @@ struct AnnotationToolbarView: View {
                 .font(.system(size: 13))
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(annotationService.selectedTool == tool
-                              ? Color.black.opacity(0.1)
-                              : Color.clear)
+                    RoundedRectangle(cornerRadius: 5).fill(
+                        annotationService.selectedTool == tool
+                            ? Color.black.opacity(0.1)
+                            : Color.clear
+                    )
                 )
-                .foregroundColor(annotationService.selectedTool == tool
-                                 ? Color.black
-                                 : Color.black.opacity(0.76))
+                .foregroundColor(
+                    annotationService.selectedTool == tool ? Color.black : Color.black.opacity(0.76)
+                )
         }
         .buttonStyle(.plain)
-        .help(tool.displayName)
+        .help("\(tool.displayName) \(toolShortcuts[tool] ?? "")")
     }
 
     // MARK: - 颜色选择按钮
@@ -147,9 +238,8 @@ struct AnnotationToolbarView: View {
 
     private var colorPickerPopover: some View {
         VStack(spacing: 10) {
-            // 预设颜色
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 6), count: 4), spacing: 6) {
-                ForEach(presetColors, id: \.self) { color in
+                ForEach(annotationService.presetColors, id: \.self) { color in
                     Button(action: {
                         annotationService.selectedColor = color
                     }) {
@@ -168,7 +258,6 @@ struct AnnotationToolbarView: View {
 
             Divider()
 
-            // 系统颜色选择器按钮
             Button(action: {
                 showColorPicker = false
                 showSystemColorPanel()
@@ -192,7 +281,6 @@ struct AnnotationToolbarView: View {
         panel.isContinuous = true
         panel.mode = .RGB
 
-        // 存储 coordinator 防止被释放
         objc_setAssociatedObject(panel, "colorCoordinator", coordinator, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         panel.setTarget(coordinator)
         panel.setAction(#selector(Coordinator.colorPanelDidChange(_:)))
@@ -207,62 +295,6 @@ struct AnnotationToolbarView: View {
         @MainActor @objc func colorPanelDidChange(_ sender: NSColorPanel) {
             annotationService?.selectedColor = sender.color
         }
-    }
-
-    // MARK: - 操作按钮
-
-    private var actionButtonsRow: some View {
-        HStack(spacing: 6) {
-            iconActionButton("保存", icon: "square.and.arrow.down") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
-                onSave(rendered)
-            }
-
-            iconActionButton("贴图", icon: "pin") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
-                onPin(rendered)
-                onClose()
-            }
-
-            iconActionButton("OCR", icon: "text.viewfinder") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
-                Task {
-                    let vm = ScreenshotViewModel.shared
-                    await vm.performOCR(on: rendered)
-                    OCRBubbleWindowManager.shared.show(
-                        text: vm.ocrResult,
-                        relativeTo: NSApp.keyWindow?.frame
-                    )
-                }
-            }
-
-            iconActionButton("翻译", icon: "character.bubble") {
-                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
-                Task {
-                    let vm = ScreenshotViewModel.shared
-                    await vm.performTranslation(on: rendered)
-                }
-            }
-
-            iconActionButton("撤销", icon: "arrow.uturn.backward") {
-                viewModel.undo()
-            }
-            .disabled(annotationService.layers.isEmpty)
-
-            iconActionButton("完成", icon: "checkmark", prominent: true) {
-                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
-                onComplete(rendered)
-            }
-
-            iconActionButton("关闭", icon: "xmark", muted: true) {
-                onClose()
-            }
-        }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.045))
-        )
     }
 
     private func iconActionButton(
@@ -330,21 +362,17 @@ final class AnnotationResultWindowManager {
         panel.hasShadow = true
         panel.contentView = hostingView
 
-        // 定位在截图窗口右侧 1cm 处
         if let sourceFrame {
             let screenFrame = NSScreen.main?.visibleFrame ?? .zero
             let panelFrame = panel.frame
-            let gap: CGFloat = 38 // ~1cm
+            let gap: CGFloat = 38
 
-            // 优先放在右侧
             var x = sourceFrame.maxX + gap
             let y = sourceFrame.midY - panelFrame.height / 2
 
-            // 如果右侧超出屏幕，放到左侧
             if x + panelFrame.width > screenFrame.maxX {
                 x = sourceFrame.minX - panelFrame.width - gap
             }
-            // 如果左侧也超出，贴着屏幕右边缘
             if x < screenFrame.minX {
                 x = screenFrame.maxX - panelFrame.width - 8
             }
