@@ -26,9 +26,12 @@ final class MenuBarManager: NSObject {
     // MARK: - Setup
 
     func setup() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = createMenuBarIcon()
+            button.image = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: "OneBoard")
+            button.image?.isTemplate = true
+            button.imagePosition = .imageOnly
+            button.contentTintColor = .labelColor
             button.target = self
             button.action = #selector(handleClick)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -298,10 +301,30 @@ final class MenuBarManager: NSObject {
     // MARK: - Icon
 
     private func createMenuBarIcon() -> NSImage {
-        let icon = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: Constants.appName)
-            ?? NSImage(size: NSSize(width: 18, height: 18))
-        icon.isTemplate = true
-        return icon
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        NSColor.black.setStroke()
+        let outer = NSBezierPath(
+            roundedRect: NSRect(x: 3.5, y: 4.5, width: 11, height: 9),
+            xRadius: 2.2,
+            yRadius: 2.2
+        )
+        outer.lineWidth = 1.8
+        outer.stroke()
+
+        NSColor.black.setFill()
+        let inner = NSBezierPath(
+            roundedRect: NSRect(x: 7.2, y: 7.0, width: 7.3, height: 5.8),
+            xRadius: 1.6,
+            yRadius: 1.6
+        )
+        inner.fill()
+
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 }
 
