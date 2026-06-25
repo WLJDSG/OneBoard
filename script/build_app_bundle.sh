@@ -13,6 +13,10 @@ LOGIN_ITEMS_DIR="$CONTENTS_DIR/Library/LoginItems"
 cd "$PROJECT_DIR"
 : "${ONEBOARD_BUILD_HOME:=/private/tmp/oneboard-home}"
 : "${ONEBOARD_MODULE_CACHE:=/private/tmp/oneboard-module-cache}"
+if [ -z "${ONEBOARD_CODESIGN_IDENTITY:-}" ]; then
+    ONEBOARD_CODESIGN_IDENTITY="$(/usr/bin/security find-identity -v -p codesigning | /usr/bin/awk '/Developer ID Application|Apple Development/ { print $2; exit }')"
+fi
+: "${ONEBOARD_CODESIGN_IDENTITY:=-}"
 export HOME="$ONEBOARD_BUILD_HOME"
 export CLANG_MODULE_CACHE_PATH="$ONEBOARD_MODULE_CACHE"
 swift build -c release --disable-sandbox
@@ -21,12 +25,23 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp ".build/release/OneBoard" "$MACOS_DIR/OneBoard"
+chmod +x "$MACOS_DIR/OneBoard"
 sed 's/$(EXECUTABLE_NAME)/OneBoard/g' "Resources/Info.plist" > "$CONTENTS_DIR/Info.plist"
+printf 'APPL????' > "$CONTENTS_DIR/PkgInfo"
 
 if [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 elif [ -f "$BUILD_DIR/AppIcon.icns" ]; then
     cp "$BUILD_DIR/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+fi
+
+# 开发模式：通过环境变量追加后缀，避免污染正式 Bundle ID
+# 示例：ONEBOARD_BUNDLE_ID_SUFFIX=.dev → com.oneboard.mac.dev
+if [ -n "${ONEBOARD_BUNDLE_ID_SUFFIX:-}" ]; then
+    CURRENT_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$CONTENTS_DIR/Info.plist")"
+    NEW_ID="${CURRENT_ID}${ONEBOARD_BUNDLE_ID_SUFFIX}"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${NEW_ID}" "$CONTENTS_DIR/Info.plist"
+    echo "🔧 Bundle ID = $NEW_ID (suffix=${ONEBOARD_BUNDLE_ID_SUFFIX})"
 fi
 
 mkdir -p "$LOGIN_ITEMS_DIR"
@@ -43,14 +58,13 @@ else
     exit 1
 fi
 
-echo "Signing LaunchAtLogin helper and OneBoard.app..."
-/usr/bin/codesign --force --deep --sign - "$HELPER_APP"
-/usr/bin/codesign --force --deep --sign - "$APP_DIR"
+echo "Signing LaunchAtLogin helper and OneBoard.app with identity: $ONEBOARD_CODESIGN_IDENTITY"
+/usr/bin/codesign --force --deep --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPER_APP"
+/usr/bin/codesign --force --deep --sign "$ONEBOARD_CODESIGN_IDENTITY" "$APP_DIR"
 
 echo "Validating app bundle..."
 /usr/bin/codesign --verify --deep --strict "$APP_DIR"
 echo "Main bundle id: $APP_BUNDLE_ID"
 echo "Helper bundle id: $(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$HELPER_APP/Contents/Info.plist")"
 
-chmod +x "$MACOS_DIR/OneBoard"
 echo "Built $APP_DIR"

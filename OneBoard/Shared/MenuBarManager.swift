@@ -2,79 +2,213 @@ import AppKit
 import SwiftUI
 import LaunchAtLogin
 
+/// 剪贴板 / 网关浮动面板（复用类型）
 private final class ClipboardPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
 
-/// 菜单栏管理器
-final class MenuBarManager: NSObject {
-    static let shared = MenuBarManager()
+/// 菜单栏 + 浮动窗口管理器
+public final class MenuBarManager: NSObject, NSMenuDelegate {
+    public static let shared = MenuBarManager()
 
-    private var statusItem: NSStatusItem!
+    private var statusItem: NSStatusItem?
+    private var activeMenu: NSMenu?
     private var clipboardFloatingWindow: NSPanel?
-    private var clipboardGlobalMouseMonitor: Any?  // 全局鼠标点击监听
-    private var clipboardAppDeactivateObserver: NSObjectProtocol?  // 应用失活监听
+    private var clipboardGlobalMouseMonitor: Any?
+    private var clipboardAppDeactivateObserver: NSObjectProtocol?
     private var clipboardTargetApplication: NSRunningApplication?
     private var gatewayPanel: NSPanel?
     private var gatewayGlobalMouseMonitor: Any?
     private var gatewayAppDeactivateObserver: NSObjectProtocol?
-    var onSettings: (() -> Void)?
 
     private override init() { super.init() }
 
-    // MARK: - Setup
+    // MARK: - 菜单栏配置（statusItem 由 main.swift 预创建后传入）
 
-    func setup() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: "OneBoard")
-            button.image?.isTemplate = true
-            button.imagePosition = .imageOnly
-            button.contentTintColor = .labelColor
-            button.target = self
-            button.action = #selector(handleClick)
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.toolTip = Constants.appName
-        }
+    public func configure(statusItem: NSStatusItem) {
+        self.statusItem = statusItem
+        guard let button = statusItem.button else { return }
+        button.image = createMenuBarIcon()
+        button.imagePosition = .imageOnly
+        button.title = ""
+        button.contentTintColor = .labelColor
+        button.toolTip = Constants.appName
+        button.setAccessibilityLabel(Constants.appName)
+        button.target = self
+        button.action = #selector(handleClick)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        statusItem.length = NSStatusItem.squareLength
+        statusItem.isVisible = true
     }
 
     @objc private func handleClick() {
-        guard let event = NSApp.currentEvent else { return }
-        if event.type == .rightMouseUp {
-            return
-        }
+        guard let event = NSApp.currentEvent, event.type != .rightMouseUp else { return }
         showMenu()
     }
 
-    private func showMenu() {
+    func showMenu(anchor: NSView? = nil) {
         let menu = NSMenu()
+        menu.delegate = self
         let gatewayItem = NSMenuItem(title: "网关切换...", action: #selector(openGatewaySwitcher), keyEquivalent: "g")
         gatewayItem.target = self
         gatewayItem.image = NSImage(systemSymbolName: "network", accessibilityDescription: "网关切换")
         menu.addItem(gatewayItem)
-
         menu.addItem(NSMenuItem.separator())
-
         let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "设置")
         menu.addItem(settingsItem)
-
         let clearPrivacyItem = NSMenuItem(title: "清除 OneBoard 授权...", action: #selector(clearPrivacyAuthorizations), keyEquivalent: "")
         clearPrivacyItem.target = self
         clearPrivacyItem.image = NSImage(systemSymbolName: "lock.slash", accessibilityDescription: "清除授权")
         menu.addItem(clearPrivacyItem)
-
+        let uninstallItem = NSMenuItem(title: "彻底卸载并清理残留...", action: #selector(runUninstaller), keyEquivalent: "")
+        uninstallItem.target = self
+        uninstallItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "卸载")
+        menu.addItem(uninstallItem)
         menu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(title: "退出 OneBoard", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: "退出")
         menu.addItem(quitItem)
 
-        if let button = statusItem?.button {
-            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.minY - 4), in: button)
+        let anchorView = anchor ?? statusItem?.button
+        if let anchorView {
+            activeMenu = menu
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchorView.bounds.minY - 4), in: anchorView)
         }
+    }
+
+    public func menuDidClose(_ menu: NSMenu) {
+        if activeMenu === menu { activeMenu = nil }
+    }
+
+    @objc private func openSettings() {
+        Task { @MainActor in
+            SettingsWindowManager.shared.show()
+        }
+    }
+
+    @objc private func openGatewaySwitcher() {
+        Task { @MainActor in
+            showGatewaySwitcherPanel()
+        }
+    }
+
+    @objc private func runUninstaller() {
+        let alert = NSAlert()
+        alert.messageText = "彻底卸载 OneBoard？"
+        alert.informativeText = "将清理所有隐私权限、菜单栏状态、偏好设置和缓存。\n应用本身需手动拖入垃圾桶。"
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "彻底卸载")
+        alert.addButton(withTitle: "取消")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        // 执行与 uninstall.sh 相同的清理逻辑
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.mac"
+
+        // 1. UserDefaults
+        UserDefaults.standard.removePersistentDomain(forName: bundleID)
+
+        // 2. TCC
+        let tccTasks = ["All", "Accessibility", "ScreenCapture", "SystemPolicyAllFiles"]
+        for service in tccTasks {
+            let task = Process()
+            task.launchPath = "/usr/bin/tccutil"
+            task.arguments = ["reset", service, bundleID]
+            task.launch()
+            task.waitUntilExit()
+        }
+
+        // 3. 清理 plist 中的 OneBoard 条目
+        plistCleanHelper()
+
+        // 4. 缓存
+        let fm = FileManager.default
+        let home = NSHomeDirectory()
+        let paths = [
+            "\(home)/Library/Caches/\(bundleID)",
+            "\(home)/Library/Application Support/\(bundleID)",
+            "\(home)/Library/Saved Application State/\(bundleID).savedState",
+            "\(home)/Library/HTTPStorages/\(bundleID)",
+        ]
+        for path in paths { try? fm.removeItem(atPath: path) }
+
+        // 5. 重启 daemons
+        for daemon in ["cfprefsd", "ControlCenter", "Dock"] {
+            let task = Process()
+            task.launchPath = "/usr/bin/killall"
+            task.arguments = [daemon]
+            task.launch()
+            task.waitUntilExit()
+        }
+
+        let done = NSAlert()
+        done.messageText = "残留已清理完成"
+        done.informativeText = "请将 OneBoard.app 拖入垃圾桶完成卸载。\n\n💡 提示：Launch Services 残留需要重启 Mac 才能完全清除。"
+        done.alertStyle = .informational
+        done.addButton(withTitle: "好")
+        done.runModal()
+    }
+
+    /// 清理系统 plist 中的 OneBoard 条目
+    private func plistCleanHelper() {
+        let home = NSHomeDirectory()
+        let files = [
+            "\(home)/Library/Preferences/com.apple.controlcenter.plist",
+            "\(home)/Library/Preferences/com.apple.universalaccessAuthWarning.plist",
+            "\(home)/Library/Preferences/com.apple.corespotlightui.plist",
+        ]
+        for filePath in files {
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
+                  var plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+            else { continue }
+            var changed = false
+            if var dict = plist["CSReceiverBundleIdentifierState"] as? [String: Any] {
+                let before = dict.count
+                dict = dict.filter { !$0.key.lowercased().contains("oneboard") }
+                if dict.count != before { changed = true; plist["CSReceiverBundleIdentifierState"] = dict }
+            }
+            let before = plist.count
+            plist = plist.filter { !$0.key.lowercased().contains("oneboard") }
+            if plist.count != before { changed = true }
+            if changed {
+                let newData = try? PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+                try? newData?.write(to: URL(fileURLWithPath: filePath))
+            }
+        }
+    }
+
+    @objc private func quitApp() {
+        AppDelegate.shared?.requestTermination()
+    }
+
+    // MARK: - 图标
+
+    private func createMenuBarIcon() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.black.withAlphaComponent(0.5).setStroke()
+            let back = NSBezierPath(
+                roundedRect: NSRect(x: rect.minX + 3.0, y: rect.minY + 6.0, width: 9.0, height: 7.5),
+                xRadius: 1.8, yRadius: 1.8
+            )
+            back.lineWidth = 1.5
+            back.stroke()
+            NSColor.black.setFill()
+            NSColor.black.setStroke()
+            let front = NSBezierPath(
+                roundedRect: NSRect(x: rect.minX + 6.2, y: rect.minY + 3.7, width: 9.0, height: 7.5),
+                xRadius: 1.8, yRadius: 1.8
+            )
+            front.lineWidth = 1.5
+            front.fill()
+            front.stroke()
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     // MARK: - 网关切换窗口
@@ -183,7 +317,6 @@ final class MenuBarManager: NSObject {
         panel.makeKeyAndOrderFront(nil)
         clipboardFloatingWindow = panel
 
-        // 监听应用失活（用户点击其他 App、Cmd+Tab 切换等）→ 关闭剪贴板
         clipboardAppDeactivateObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
             object: nil,
@@ -192,11 +325,9 @@ final class MenuBarManager: NSObject {
             self?.closeClipboardFloatingWindow()
         }
 
-        // 全局鼠标按下监听：点击剪贴板窗口外部时关闭
         clipboardGlobalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
             guard let self, let panel = self.clipboardFloatingWindow, panel.isVisible else { return }
-            // 使用屏幕坐标判断点击是否在剪贴板窗口外
-            let clickLocation = NSEvent.mouseLocation  // 屏幕坐标系
+            let clickLocation = NSEvent.mouseLocation
             if !NSPointInRect(clickLocation, panel.frame) {
                 self.closeClipboardFloatingWindow()
             }
@@ -225,16 +356,11 @@ final class MenuBarManager: NSObject {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - 授权管理
 
-    @objc private func openSettings() {
-        onSettings?()
-    }
-
-    @objc private func openGatewaySwitcher() {
-        Task { @MainActor in
-            showGatewaySwitcherPanel()
-        }
+    @MainActor
+    func clearPrivacyAuthorizationsFromMenu() {
+        clearPrivacyAuthorizations()
     }
 
     @objc private func clearPrivacyAuthorizations() {
@@ -292,39 +418,6 @@ final class MenuBarManager: NSObject {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "好")
         alert.runModal()
-    }
-
-    @objc private func quitApp() {
-        NSApp.terminate(nil)
-    }
-
-    // MARK: - Icon
-
-    private func createMenuBarIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size)
-        image.lockFocus()
-
-        NSColor.black.setStroke()
-        let outer = NSBezierPath(
-            roundedRect: NSRect(x: 3.5, y: 4.5, width: 11, height: 9),
-            xRadius: 2.2,
-            yRadius: 2.2
-        )
-        outer.lineWidth = 1.8
-        outer.stroke()
-
-        NSColor.black.setFill()
-        let inner = NSBezierPath(
-            roundedRect: NSRect(x: 7.2, y: 7.0, width: 7.3, height: 5.8),
-            xRadius: 1.6,
-            yRadius: 1.6
-        )
-        inner.fill()
-
-        image.unlockFocus()
-        image.isTemplate = true
-        return image
     }
 }
 

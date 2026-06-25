@@ -14,22 +14,21 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "OneBoard",
+            dependencies: ["OneBoardKit"],
+            path: ".",
+            exclude: ["Tests", "App", "Core", "Modules", "Shared"],
+            sources: ["App_minimal"]
+        ),
+        .target(
+            name: "OneBoardKit",
             dependencies: [
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                 .product(name: "LaunchAtLogin", package: "LaunchAtLogin"),
             ],
             path: ".",
-            exclude: [
-                "Resources",
-                "Tests",
-            ],
-            sources: [
-                "App",
-                "Core",
-                "Modules",
-                "Shared",
-            ]
+            exclude: ["Tests", "App_minimal"],
+            sources: ["App", "Core", "Modules", "Shared"]
         ),
         .testTarget(
             name: "OneBoardTests",
