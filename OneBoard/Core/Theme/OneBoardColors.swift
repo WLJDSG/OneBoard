@@ -6,9 +6,9 @@ import AppKit
 /// 暖白底 + 暖金强调 + 柔阴影 —— 像 Apple Notes
 enum OneBoardColors {
 
-    // MARK: 强调色 — 暖金 #E5A828
+    // MARK: 强调色 — 天空蓝 #4A9EF7
 
-    static let accent = Color(red: 0.898, green: 0.659, blue: 0.157)
+    static let accent = Color(red: 0.290, green: 0.620, blue: 0.969)
     static let accentLight = accent.opacity(0.08)
     static let accentMedium = accent.opacity(0.15)
 
@@ -61,7 +61,7 @@ enum OneBoardColors {
 
     // MARK: NSColor
 
-    static let nsAccent = NSColor(red: 0.898, green: 0.659, blue: 0.157, alpha: 1.0)
+    static let nsAccent = NSColor(red: 0.290, green: 0.620, blue: 0.969, alpha: 1.0)
     static let nsPrimary = nsAccent
     static let nsPrimaryLight = nsAccent.withAlphaComponent(0.08)
     static let nsPrimaryDark = NSColor(red: 0.8, green: 0.58, blue: 0.1, alpha: 1.0)

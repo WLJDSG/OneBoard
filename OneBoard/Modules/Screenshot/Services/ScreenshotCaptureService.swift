@@ -14,41 +14,31 @@ final class ScreenshotCaptureService: NSObject {
             print("[Screenshot] 全屏截图失败")
             return nil
         }
-        print("[Screenshot] 全屏截图完成, size=\(fullScreenImage.size)")
 
         // 2. 显示自定义遮罩，等待用户框选
-        return await withCheckedContinuation { continuation in
-            var didResume = false
-            let finish: (ScreenshotResult?) -> Void = { [weak self] result in
-                guard !didResume else { return }
-                didResume = true
-                Task { [weak self] in
-                    self?.overlayWindow?.close()
-                    self?.overlayWindow = nil
-                    continuation.resume(returning: result)
-                }
-            }
-
+        let result: ScreenshotResult? = await withCheckedContinuation { continuation in
             DispatchQueue.main.async { [weak self] in
-                guard let self else {
-                    finish(nil)
-                    return
-                }
-
-                guard let screen = NSScreen.main else {
-                    finish(nil)
-                    return
+                guard let self else { continuation.resume(returning: nil); return }
+                guard let screen = NSScreen.main else { continuation.resume(returning: nil); return }
+                var didResume = false
+                let finish: (ScreenshotResult?) -> Void = { [weak self] result in
+                    guard !didResume else { return }
+                    didResume = true
+                    DispatchQueue.main.async {
+                        self?.overlayWindow?.close()
+                        self?.overlayWindow = nil
+                    }
+                    continuation.resume(returning: result)
                 }
 
                 let eventManager = OverlayEventManager()
-
                 let overlayView = ScreenshotOverlayContentView(
                     screenshot: fullScreenImage,
                     eventManager: eventManager
                 )
-                overlayView.onConfirm = { [weak eventManager] croppedImage, selectionRect in
+                overlayView.onConfirm = { [weak eventManager] img, rect in
                     eventManager?.cleanup()
-                    finish(ScreenshotResult(image: croppedImage, selectionRect: selectionRect))
+                    finish(ScreenshotResult(image: img, selectionRect: rect))
                 }
                 overlayView.onCancel = { [weak eventManager] in
                     eventManager?.cleanup()
@@ -75,6 +65,7 @@ final class ScreenshotCaptureService: NSObject {
                 self.overlayWindow = window
             }
         }
+        return result
     }
 
     /// 在后台线程使用 screencapture 静默截取全屏

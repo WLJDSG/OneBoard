@@ -1,137 +1,127 @@
 import SwiftUI
 
+/// 网关切换面板 — Apple Notes 风格
 struct GatewaySwitcherPanelView: View {
     @StateObject private var viewModel = GatewayViewModel.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
-            VStack(alignment: .leading, spacing: 10) {
-                if !viewModel.snapshot.dnsServers.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "network")
-                            .font(.system(size: 10))
+            // Header
+            HStack(spacing: 8) {
+                Image(systemName: "network")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(OneBoardColors.accent)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("网关切换")
+                        .font(.system(size: 15, weight: .semibold))
+                    if !viewModel.displayGateway.isEmpty {
+                        Text(viewModel.displayGateway)
+                            .font(.system(size: 11))
                             .foregroundColor(OneBoardColors.textSecondary)
-                        Text("DNS \(viewModel.snapshot.dnsServers.joined(separator: ", "))")
-                            .oneBoardFont(.caption)
-                            .foregroundColor(OneBoardColors.textSecondary)
-                            .lineLimit(2)
                     }
-                    .padding(8)
-                    .background(OneBoardColors.accent.opacity(0.04))
-                    .cornerRadius(8)
                 }
+                Spacer()
+                Button { viewModel.refresh() } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12))
+                        .foregroundColor(OneBoardColors.textTertiary)
+                        .rotationEffect(.degrees(viewModel.isRefreshing ? 360 : 0))
+                        .animation(viewModel.isRefreshing ? .linear(duration:1).repeatForever(autoreverses:false) : nil, value: viewModel.isRefreshing)
+                }
+                .buttonStyle(.borderless)
+                OneBoardCloseButton { MenuBarManager.shared.closeGatewaySwitcherPanel() }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
 
-                VStack(spacing: 2) {
-                    ForEach(viewModel.profiles) { profile in
-                        Button {
-                            viewModel.switchGateway(to: profile)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: profile.symbolName)
-                                    .font(.system(size: 16))
-                                    .foregroundColor(OneBoardColors.accent)
-                                    .frame(width: 22)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(profile.title)
-                                        .oneBoardFont(.body)
-                                    Text(summary(for: profile))
-                                        .oneBoardFont(.caption)
-                                        .foregroundColor(OneBoardColors.textSecondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                if viewModel.activeProfile?.id == profile.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(OneBoardColors.success)
-                                }
+            // Profiles
+            VStack(spacing: 1) {
+                ForEach(viewModel.profiles) { profile in
+                    let isActive = viewModel.activeProfile?.id == profile.id
+                    let isDisabled = viewModel.isSwitching || isActive
+
+                    Button { viewModel.switchGateway(to: profile) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: isActive ? "circle.hexagongrid.fill" : "circle.hexagongrid")
+                                .font(.system(size: 16))
+                                .foregroundColor(isActive ? OneBoardColors.accent : OneBoardColors.textTertiary)
+                                .frame(width: 22)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(profile.title)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(OneBoardColors.textPrimary)
+                                Text(summary(for: profile))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(OneBoardColors.textSecondary)
+                                    .lineLimit(1)
                             }
-                            .contentShape(Rectangle())
-                            .oneBoardListRow()
-                            .background(
-                                viewModel.activeProfile?.id == profile.id
-                                    ? OneBoardColors.accent.opacity(0.08)
-                                    : Color.clear
-                            )
-                            .overlay(alignment: .leading) {
-                                if viewModel.activeProfile?.id == profile.id {
-                                    Rectangle()
-                                        .fill(OneBoardColors.accent)
-                                        .frame(width: 2)
-                                }
+
+                            Spacer()
+
+                            if isActive {
+                                Text("当前")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(OneBoardColors.accent)
                             }
                         }
-                        .buttonStyle(.plain)
-                        .opacity(viewModel.isSwitching || viewModel.activeProfile?.id == profile.id ? 0.5 : 1.0)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .contentShape(Rectangle())
+                        .background(isActive ? OneBoardColors.selectedBg : Color.clear)
+                        .overlay(alignment: .leading) {
+                            if isActive {
+                                Rectangle().fill(OneBoardColors.accent).frame(width: 3)
+                            }
+                        }
                     }
-                }
-
-                Divider()
-
-                HStack {
-                    Spacer()
-                    if let statusMessage = viewModel.statusMessage {
-                        Text(statusMessage)
-                            .oneBoardFont(.caption)
-                            .foregroundColor(OneBoardColors.textSecondary)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                }
-
-                HStack {
-                    Spacer()
-                    Button {
-                        SettingsWindowManager.shared.show(selectedTab: .gateway)
-                    } label: {
-                        Text("管理配置...")
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundColor(OneBoardColors.accent)
-                    Spacer()
+                    .buttonStyle(.plain)
+                    .opacity(isDisabled ? 0.5 : 1.0)
                 }
             }
-            .padding(OneBoardSpacing.sm)
+            .padding(.vertical, 4)
+
+            // DNS callout
+            if !viewModel.snapshot.dnsServers.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(OneBoardColors.textTertiary)
+                    Text("DNS: \(viewModel.snapshot.dnsServers.joined(separator: ", "))")
+                        .font(.system(size: 10))
+                        .foregroundColor(OneBoardColors.textSecondary)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+            }
+
+            // Manage button
+            HStack {
+                Spacer()
+                Button {
+                    SettingsWindowManager.shared.show(selectedTab: .gateway)
+                } label: {
+                    Text("管理配置...")
+                        .font(.system(size: 12))
+                        .foregroundColor(OneBoardColors.accent)
+                }
+                .buttonStyle(.borderless)
+                Spacer()
+            }
+            .padding(.vertical, 8)
         }
-        .frame(width: 360)
+        .frame(width: 330)
         .oneBoardPanelStyle()
         .onAppear { viewModel.refresh() }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "network")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(OneBoardColors.accent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(viewModel.displayGateway)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(viewModel.displayService.isEmpty ? "当前网络" : viewModel.displayService)
-                    .font(.system(size: 10))
-                    .foregroundColor(OneBoardColors.textSecondary)
-            }
-            Spacer()
-            Button { viewModel.refresh() } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11))
-                    .rotationEffect(.degrees(viewModel.isRefreshing ? 360 : 0))
-                    .animation(viewModel.isRefreshing ? .linear(duration:1).repeatForever(autoreverses:false) : nil, value: viewModel.isRefreshing)
-            }
-            .buttonStyle(.borderless)
-            OneBoardCloseButton { MenuBarManager.shared.closeGatewaySwitcherPanel() }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
-    }
-
     private func summary(for profile: GatewayProfile) -> String {
-        switch profile.mode {
-        case .gatewayAndDNS:
-            return "\(profile.gateway) · \(profile.dnsServers.joined(separator: ", "))"
-        case .dnsOnly:
-            return "仅 DNS · \(profile.dnsServers.joined(separator: ", "))"
+        let parts: [String] = [profile.gateway]
+        if !profile.dnsServers.isEmpty {
+            return (parts + [profile.dnsServers.joined(separator: ", ")]).joined(separator: " · ")
         }
+        return parts.joined(separator: " · ")
     }
 }
