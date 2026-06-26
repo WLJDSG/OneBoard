@@ -7,15 +7,11 @@ import SwiftUI
 
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 6).fill(OneBoardColors.accent).opacity(configuration.isPressed ? 0.8 : 1.0))
+        configuration.label.font(.system(size: 13, weight: .medium)).padding(.horizontal, 16).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(OneBoardColors.accent).opacity(configuration.isPressed ? 0.8 : 1.0))
             .foregroundColor(.white)
     }
 }
-
 struct HoverEffectModifier: ViewModifier {
     @State private var isHovered = false
     func body(content: Content) -> some View {
@@ -23,19 +19,15 @@ struct HoverEffectModifier: ViewModifier {
             .onHover { h in withAnimation(.easeInOut(duration: 0.15)) { isHovered = h } }
     }
 }
-
 struct CardStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.padding(OneBoardSpacing.sm).background(RoundedRectangle(cornerRadius: OneBoardRadius.md).fill(OneBoardColors.surface))
     }
 }
-
 struct OneBoardPanelStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .background(OneBoardColors.panelBg)
-            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.md).stroke(OneBoardColors.headerBorder, lineWidth: 1))
+        content.background(OneBoardColors.panelBg).clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.lg).stroke(OneBoardColors.panelBorder, lineWidth: 1))
             .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
     }
 }
