@@ -116,6 +116,9 @@ private final class StubPermissionProvider: SystemPermissionProviding {
 
     var hasAccessibilityPermission: Bool { accessibility }
     var hasScreenRecordingPermission: Bool { screenRecording }
+    var hasInputMonitoringPermission: Bool { true }
+
+    func hasNotificationPermission() async -> Bool { true }
 
     func showPermissionGuide(for kind: OneBoardPermissionKind) {}
 
@@ -126,6 +129,8 @@ private final class StubPermissionProvider: SystemPermissionProviding {
             accessibility = false
         case .screenRecording:
             screenRecording = false
+        case .inputMonitoring, .notifications:
+            break
         }
     }
 }

@@ -17,6 +17,14 @@ final class DragDetector {
     private init() {}
 
     func start() {
+        guard PermissionManager.shared.hasInputMonitoringPermission else {
+            print("[DragDetector] 缺少输入监控权限，无法监听全局拖拽")
+            return
+        }
+        guard PermissionManager.shared.hasAccessibilityPermission else {
+            print("[DragDetector] 缺少辅助功能权限，无法监听全局拖拽")
+            return
+        }
         lastSeenDragPasteboardChangeCount = NSPasteboard(name: .drag).changeCount
         startEventTap()
         startPolling()
@@ -84,7 +92,7 @@ final class DragDetector {
             },
             userInfo: userInfo
         ) else {
-            print("[DragDetector] CGEventTap 创建失败（可能缺少辅助功能权限）")
+            print("[DragDetector] CGEventTap 创建失败（可能缺少输入监控或辅助功能权限）")
             return
         }
 

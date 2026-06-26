@@ -1,5 +1,7 @@
 import AppKit
 import SwiftUI
+import IOKit.hid
+import UserNotifications
 
 // MARK: - 权限管理器
 
@@ -9,42 +11,89 @@ final class PermissionManager {
 
     var hasAccessibilityPermission: Bool { AXIsProcessTrusted() }
     var hasScreenRecordingPermission: Bool { CGPreflightScreenCaptureAccess() }
+    var hasInputMonitoringPermission: Bool {
+        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    }
+
+    func hasNotificationPermission() async -> Bool {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+    }
 
     @MainActor func promptAccessibilityPermission() {
-        PermissionGuideWindowManager.shared.show(for: .accessibility)
+        promptPermission(.accessibility)
     }
 
     @MainActor func promptScreenRecordingPermission() {
-        PermissionGuideWindowManager.shared.show(for: .screenRecording)
+        promptPermission(.screenRecording)
+    }
+
+    @MainActor func promptInputMonitoringPermission() {
+        promptPermission(.inputMonitoring)
+    }
+
+    @MainActor func promptNotificationPermission() {
+        promptPermission(.notifications)
+    }
+
+    @MainActor func promptPermission(_ kind: OneBoardPermissionKind) {
+        PermissionGuideWindowManager.shared.show(for: kind)
     }
 
     func openPrivacySetting(for kind: OneBoardPermissionKind) {
-        let anchor = (kind == .accessibility) ? "Privacy_Accessibility" : "Privacy_ScreenCapture"
-        let urlStr = "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+        let urlStr: String
+        switch kind {
+        case .accessibility:
+            urlStr = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        case .screenRecording:
+            urlStr = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+        case .inputMonitoring:
+            urlStr = "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+        case .notifications:
+            urlStr = "x-apple.systempreferences:com.apple.preference.notifications"
+        }
         let task = Process()
         task.launchPath = "/usr/bin/open"
         task.arguments = [urlStr]
         task.launch()
     }
 
+    func openFinderExtensionSetting() {
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = ["x-apple.systempreferences:com.apple.ExtensionsPreferences?extensionPointIdentifier=com.apple.FinderSync"]
+        task.launch()
+    }
+
     func resetPrivacyAuthorizations() throws {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.app"
-        try resetPrivacyAuthorization(service: "Accessibility", bundleID: bundleID)
-        try resetPrivacyAuthorization(service: "ScreenCapture", bundleID: bundleID)
+        try resetPrivacyAuthorizations(for: privacyBundleIdentifiers)
         syncStoredPermissionStates()
         NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
     }
 
     func resetPrivacyAuthorization(for kind: OneBoardPermissionKind) throws {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.app"
         let service: String
         switch kind {
         case .accessibility:
             service = "Accessibility"
         case .screenRecording:
             service = "ScreenCapture"
+        case .inputMonitoring:
+            service = "ListenEvent"
+        case .notifications:
+            service = "UserNotifications"
         }
-        try resetPrivacyAuthorization(service: service, bundleID: bundleID)
+        var failures: [Error] = []
+        for bundleID in privacyBundleIdentifiers {
+            do {
+                try resetPrivacyAuthorization(service: service, bundleID: bundleID)
+            } catch {
+                failures.append(error)
+            }
+        }
+        if let failure = failures.first {
+            throw failure
+        }
         syncStoredPermissionStates()
         NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
     }
@@ -53,6 +102,7 @@ final class PermissionManager {
         let keys = Constants.UserDefaultsKeys.self
         UserDefaults.standard.set(hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
         UserDefaults.standard.set(hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
+        UserDefaults.standard.set(hasInputMonitoringPermission, forKey: keys.inputMonitoringPermissionEnabled)
     }
 
     private func resetPrivacyAuthorization(service: String, bundleID: String) throws {
@@ -66,6 +116,35 @@ final class PermissionManager {
             throw PrivacyAuthorizationResetError(service: service, status: process.terminationStatus)
         }
     }
+
+    private var privacyBundleIdentifiers: [String] {
+        let current = Bundle.main.bundleIdentifier
+        let known = [
+            current,
+            "com.oneboard.mac",
+            "com.oneboard.mac.dev",
+            "com.oneboard.mac.Findersync",
+            "com.oneboard.mac.Findersync.dev",
+        ]
+        return Array(Set(known.compactMap { $0 })).sorted()
+    }
+
+    private func resetPrivacyAuthorizations(for bundleIDs: [String]) throws {
+        var failures: [String] = []
+        for bundleID in bundleIDs {
+            for service in ["All", "Accessibility", "ScreenCapture", "ListenEvent", "SystemPolicyAllFiles", "UserNotifications"] {
+                do {
+                    try resetPrivacyAuthorization(service: service, bundleID: bundleID)
+                } catch {
+                    failures.append("\(bundleID) \(service): \(error.localizedDescription)")
+                }
+            }
+        }
+
+        if !failures.isEmpty {
+            throw PrivacyAuthorizationResetFailures(failures: failures)
+        }
+    }
 }
 
 struct PrivacyAuthorizationResetError: LocalizedError {
@@ -74,6 +153,14 @@ struct PrivacyAuthorizationResetError: LocalizedError {
 
     var errorDescription: String? {
         "\(service) 授权记录清除失败（退出码 \(status)）"
+    }
+}
+
+struct PrivacyAuthorizationResetFailures: LocalizedError {
+    let failures: [String]
+
+    var errorDescription: String? {
+        failures.joined(separator: "\n")
     }
 }
 
@@ -87,11 +174,37 @@ extension Notification.Name {
 enum OneBoardPermissionKind: Equatable {
     case accessibility
     case screenRecording
+    case inputMonitoring
+    case notifications
 
     var title: String {
         switch self {
         case .accessibility: return "辅助功能"
         case .screenRecording: return "屏幕录制"
+        case .inputMonitoring: return "输入监控"
+        case .notifications: return "通知"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .accessibility: return "accessibility"
+        case .screenRecording: return "record.circle"
+        case .inputMonitoring: return "keyboard.badge.eye"
+        case .notifications: return "bell.badge"
+        }
+    }
+
+    var guideText: String {
+        switch self {
+        case .accessibility:
+            return "把 OneBoard 拖到右侧列表，打开开关"
+        case .screenRecording:
+            return "把 OneBoard 拖到右侧列表，打开开关后重启 App"
+        case .inputMonitoring:
+            return "把 OneBoard 拖到右侧列表，打开开关后重启 App"
+        case .notifications:
+            return "在系统设置里允许 OneBoard 发送通知"
         }
     }
 }
@@ -151,12 +264,20 @@ final class PermissionGuideWindowManager {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.contentView = view
-        FloatingWindowManager.positionAtTopRight(panel, offset: 28)
+        positionGuidePanel(panel)
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
 
         self.panel?.close()
         self.panel = panel
+    }
+
+    private func positionGuidePanel(_ panel: NSPanel) {
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let frame = screen.visibleFrame
+        let x = frame.maxX - panel.frame.width - 28
+        let y = frame.maxY - panel.frame.height - 28
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 
     func hide() {
@@ -192,6 +313,15 @@ final class PermissionGuideWindowManager {
         switch kind {
         case .accessibility:    granted = PermissionManager.shared.hasAccessibilityPermission
         case .screenRecording:  granted = PermissionManager.shared.hasScreenRecordingPermission
+        case .inputMonitoring:  granted = PermissionManager.shared.hasInputMonitoringPermission
+        case .notifications:
+            Task { @MainActor in
+                let granted = await PermissionManager.shared.hasNotificationPermission()
+                let completed = self.isRevoke ? !granted : granted
+                guard completed else { return }
+                self.finishFlow()
+            }
+            return
         }
 
         let completed = isRevoke ? !granted : granted
@@ -228,31 +358,39 @@ private struct PermissionGuideView: View {
     let onClose: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath))
-                .resizable()
-                .frame(width: 48, height: 48)
-                .shadow(radius: 4, y: 2)
-                .onDrag {
-                    NSItemProvider(object: Bundle.main.bundleURL as NSURL)
-                }
+        ZStack(alignment: .topTrailing) {
+            HStack(spacing: 12) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath))
+                    .resizable()
+                    .frame(width: 48, height: 48)
+                    .shadow(radius: 4, y: 2)
+                    .onDrag {
+                        NSItemProvider(object: Bundle.main.bundleURL as NSURL)
+                    }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("开启 \(kind.title)")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(kind == .accessibility
-                    ? "把 OneBoard 拖到右侧列表，打开开关"
-                    : "把 OneBoard 拖到右侧列表，打开开关后重启 App")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("打开设置") {
-                    PermissionManager.shared.openPrivacySetting(for: kind)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("开启 \(kind.title)")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(kind.guideText)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("打开设置") {
+                        PermissionManager.shared.openPrivacySetting(for: kind)
+                    }
+                    .controlSize(.small)
                 }
-                .controlSize(.small)
             }
+            .padding(14)
+
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(8)
         }
-        .padding(14)
         .frame(width: 250, height: 118)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 18))

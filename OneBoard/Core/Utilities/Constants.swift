@@ -34,6 +34,9 @@ enum Constants {
     /// 数据库文件名
     static let databaseFileName = "oneboard.sqlite"
 
+    /// App Group 标识符（主应用与 Finder Sync Extension 通信）
+    static let appGroupIdentifier = "group.com.oneboard.mac"
+
     // MARK: - UserDefaults Keys
 
     struct UserDefaultsKeys {
@@ -50,8 +53,18 @@ enum Constants {
         static let hasCompletedOnboarding = "has_completed_onboarding"
         static let accessibilityPermissionEnabled = "accessibility_permission_enabled"
         static let screenRecordingPermissionEnabled = "screen_recording_permission_enabled"
+        static let inputMonitoringPermissionEnabled = "input_monitoring_permission_enabled"
+        static let notificationPermissionEnabled = "notification_permission_enabled"
         static let gatewayProfiles = "gateway_profiles"
         static let selectedSettingsTab = "selected_settings_tab"
+
+        // 待办事项
+        static let todoRetentionDays = "todo_retention_days"          // -1 永久, 7/14/30/90
+        static let todoAutoRetractDelay = "todo_auto_retract_delay"   // 面板自动收起延迟（秒）
+        static let todoShowNotifications = "todo_show_notifications"   // 到期提醒通知
+
+        // Finder 新建文件
+        static let enabledFileTypes = "enabled_file_types"             // 共享 UserDefaults
     }
 
     // MARK: - Notification Names

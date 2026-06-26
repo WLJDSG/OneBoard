@@ -26,20 +26,24 @@ struct TranslationPanelView: View {
             await viewModel.translateWithAppleSession(session)
         }
         .frame(width: 520, height: 600)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
+        .oneBoardPanelStyle()
     }
 
     private var titleBar: some View {
         ZStack {
             TranslationPanelDragHandle()
             HStack {
-                Text("翻译工作台 · \(viewModel.translationServiceType.displayName)")
-                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: serviceIconName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("翻译工作台")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(viewModel.translationServiceType.displayName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
@@ -56,17 +60,7 @@ struct TranslationPanelView: View {
             .padding(.top, 6)
         }
         .frame(height: 44)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .controlBackgroundColor).opacity(0.92),
-                    Color(nsColor: .windowBackgroundColor).opacity(0.72)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .overlay(Divider(), alignment: .bottom)
+        .oneBoardPanelHeader()
     }
 
     private var serviceIconName: String {
@@ -157,11 +151,11 @@ struct TranslationPanelView: View {
             TextEditor(text: $viewModel.sourceText)
                 .font(.system(size: 13))
                 .scrollContentBackground(.hidden)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.86))
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.78))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
                 )
                 .frame(height: 128)
         }
@@ -180,11 +174,11 @@ struct TranslationPanelView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
             }
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.86))
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.78))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
             )
             .frame(height: 132)
         }

@@ -5,13 +5,40 @@ import KeyboardShortcuts
 // 入口点已移至 App_minimal/main.swift（模块隔离架构）
 // 此文件仅保留设置窗口相关类型
 
-public enum SettingsTab: String {
+public enum SettingsTab: String, CaseIterable, Identifiable {
     case general
     case authorization
     case hotkeys
     case gateway
     case recognition
+    case todo
     case about
+
+    public var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: return "通用"
+        case .authorization: return "授权"
+        case .hotkeys: return "快捷键"
+        case .gateway: return "网关"
+        case .recognition: return "识别·翻译"
+        case .todo: return "待办·文件"
+        case .about: return "关于"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: return "gear"
+        case .authorization: return "lock.shield"
+        case .hotkeys: return "keyboard"
+        case .gateway: return "network"
+        case .recognition: return "text.viewfinder"
+        case .todo: return "checklist"
+        case .about: return "info.circle"
+        }
+    }
 }
 
 /// 设置窗口管理器
@@ -36,7 +63,7 @@ public final class SettingsWindowManager: NSObject, NSWindowDelegate {
 
         let hostingView = NSHostingView(rootView: SettingsView())
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 480),
+            contentRect: NSRect(x: 0, y: 0, width: 780, height: 620),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -72,27 +99,72 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) private var ocrAPIKey = ""
     @AppStorage(Constants.UserDefaultsKeys.translationSourceLanguage) private var sourceLanguage = ""
     @AppStorage(Constants.UserDefaultsKeys.translationTargetLanguage) private var targetLanguage = "en"
+    @AppStorage(Constants.UserDefaultsKeys.todoShowNotifications) private var todoShowNotifications = true
     @StateObject private var systemCapabilities = SystemCapabilityViewModel.shared
     @StateObject private var gatewayViewModel = GatewayViewModel.shared
 
     var body: some View {
-        TabView(selection: settingsTabSelection) {
-            generalSettings.tabItem { Label("通用", systemImage: "gear") }.tag(SettingsTab.general)
-            authorizationSettings.tabItem { Label("授权", systemImage: "lock.shield") }.tag(SettingsTab.authorization)
-            hotkeySettings.tabItem { Label("快捷键", systemImage: "keyboard") }.tag(SettingsTab.hotkeys)
-            GatewaySettingsView().tabItem { Label("网关", systemImage: "network") }.tag(SettingsTab.gateway)
-            ocrTranslationSettings.tabItem { Label("识别·翻译", systemImage: "text.viewfinder") }.tag(SettingsTab.recognition)
-            aboutView.tabItem { Label("关于", systemImage: "info.circle") }.tag(SettingsTab.about)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                List(SettingsTab.allCases, selection: settingsTabSelection) { tab in
+                    Label(tab.title, systemImage: tab.systemImage)
+                        .tag(tab)
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
+            }
+            .frame(width: 190)
+            .background(.bar)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(selectedSettingsTab.title)
+                    .font(.title2.weight(.semibold))
+                    .padding(.horizontal, 28)
+                    .padding(.top, 24)
+                    .padding(.bottom, 8)
+
+                selectedSettingsContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
-        .frame(width: 620, height: 540)
+        .frame(width: 780, height: 620)
         .onAppear { systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in systemCapabilities.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in systemCapabilities.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .systemCapabilityStatusDidChange)) { _ in systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
     }
 
-    private var settingsTabSelection: Binding<SettingsTab> {
-        Binding(get: { SettingsTab(rawValue: selectedTabRawValue) ?? .general }, set: { selectedTabRawValue = $0.rawValue })
+    private var selectedSettingsTab: SettingsTab {
+        SettingsTab(rawValue: selectedTabRawValue) ?? .general
+    }
+
+    private var settingsTabSelection: Binding<SettingsTab?> {
+        Binding(
+            get: { selectedSettingsTab },
+            set: { selectedTabRawValue = ($0 ?? .general).rawValue }
+        )
+    }
+
+    @ViewBuilder
+    private var selectedSettingsContent: some View {
+        switch selectedSettingsTab {
+        case .general:
+            generalSettings
+        case .authorization:
+            authorizationSettings
+        case .hotkeys:
+            hotkeySettings
+        case .gateway:
+            GatewaySettingsView()
+        case .recognition:
+            ocrTranslationSettings
+        case .todo:
+            TodoSettingsView()
+        case .about:
+            aboutView
+        }
     }
 
     private var generalSettings: some View {
@@ -107,11 +179,28 @@ struct SettingsView: View {
     private var authorizationSettings: some View {
         Form {
             Section {
-                permissionToggle(title: "辅助功能", description: "用于拖拽摇晃唤出暂存区、全局快捷键等交互", isOn: Binding(get: { systemCapabilities.accessibilityGranted }, set: { systemCapabilities.setAccessibilityEnabled($0) }), isGranted: systemCapabilities.accessibilityGranted)
+                permissionToggle(title: "辅助功能", description: "用于自动粘贴、读取选中文字、全局交互", isOn: Binding(get: { systemCapabilities.accessibilityGranted }, set: { systemCapabilities.setAccessibilityEnabled($0) }), isGranted: systemCapabilities.accessibilityGranted)
                 permissionToggle(title: "屏幕录制", description: "用于截图、OCR 和截图翻译", isOn: Binding(get: { systemCapabilities.screenRecordingGranted }, set: { systemCapabilities.setScreenRecordingEnabled($0) }), isGranted: systemCapabilities.screenRecordingGranted)
+                permissionToggle(title: "输入监控", description: "用于文件拖拽摇晃检测等全局输入监听", isOn: Binding(get: { systemCapabilities.inputMonitoringGranted }, set: { systemCapabilities.setInputMonitoringEnabled($0) }), isGranted: systemCapabilities.inputMonitoringGranted)
+                permissionToggle(title: "通知", description: "用于待办事项到期提醒", isOn: Binding(get: { systemCapabilities.notificationGranted }, set: { newValue in todoShowNotifications = newValue; systemCapabilities.setNotificationEnabled(newValue) }), isGranted: systemCapabilities.notificationGranted)
+            } header: { Text("隐私权限") }
+
+            Section {
                 capabilityToggle(title: "网关免密 Helper", description: "用于网关切换时避免反复输入管理员密码", isOn: systemCapabilities.gatewayHelperInstalled, enable: { systemCapabilities.setGatewayHelperEnabled(true) }, disable: { systemCapabilities.setGatewayHelperEnabled(false) })
                 Toggle("开机自启", isOn: Binding(get: { systemCapabilities.launchAtLoginEnabled }, set: { systemCapabilities.setLaunchAtLoginEnabled($0) }))
-            } header: { Text("系统能力") } footer: { if let m = systemCapabilities.errorMessage ?? systemCapabilities.statusMessage ?? gatewayViewModel.statusMessage { Text(m) } }
+            } header: { Text("系统能力") }
+
+            Section {
+                Button("打开 Finder 扩展设置") {
+                    PermissionManager.shared.openFinderExtensionSetting()
+                }
+            } header: { Text("Finder 扩展") } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let m = systemCapabilities.errorMessage ?? systemCapabilities.statusMessage ?? gatewayViewModel.statusMessage { Text(m) }
+                    Text("Finder 右键新建文件需要先启用 OneBoard Finder 扩展。启用后，在桌面或 Finder 文件夹空白处右键，选择“新建文件”。")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
         }.formStyle(.grouped).padding()
     }
 
@@ -141,6 +230,10 @@ struct SettingsView: View {
             Section { HStack { Text("截图"); Spacer(); KeyboardShortcuts.Recorder(for: .captureScreenshot) }; HStack { Text("翻译选中文字"); Spacer(); KeyboardShortcuts.Recorder(for: .translateSelectedText) } } header: { Text("截图快捷键") }
             Section { HStack { Text("文件暂存架"); Spacer(); KeyboardShortcuts.Recorder(for: .showFileShelf) } } header: { Text("文件暂存快捷键") }
             Section { HStack { Text("显示网关切换"); Spacer(); KeyboardShortcuts.Recorder(for: .showGatewaySwitcher) } } header: { Text("网关快捷键") }
+            Section {
+                HStack { Text("显示待办面板"); Spacer(); KeyboardShortcuts.Recorder(for: .toggleTodoPanel) }
+                HStack { Text("将选中文字添加到待办"); Spacer(); KeyboardShortcuts.Recorder(for: .addSelectedTextToTodo) }
+            } header: { Text("待办快捷键") }
         }.formStyle(.grouped).padding()
     }
 

@@ -30,6 +30,12 @@ let package = Package(
             exclude: ["Tests", "App_minimal"],
             sources: ["App", "Core", "Modules", "Shared"]
         ),
+        .executableTarget(
+            name: "OneBoardFinderSync",
+            dependencies: [],
+            path: "FinderSync",
+            sources: ["FinderSyncController.swift"]
+        ),
         .testTarget(
             name: "OneBoardTests",
             dependencies: ["OneBoard"],

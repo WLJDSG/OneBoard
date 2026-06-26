@@ -49,6 +49,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
     func showMenu(anchor: NSView? = nil) {
         let menu = NSMenu()
+        menu.appearance = NSAppearance(named: .aqua)
         menu.delegate = self
         let gatewayItem = NSMenuItem(title: "网关切换...", action: #selector(openGatewaySwitcher), keyEquivalent: "g")
         gatewayItem.target = self
@@ -67,6 +68,11 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         uninstallItem.target = self
         uninstallItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "卸载")
         menu.addItem(uninstallItem)
+        menu.addItem(NSMenuItem.separator())
+        let todoItem = NSMenuItem(title: "待办列表...", action: #selector(openTodoPanel), keyEquivalent: "")
+        todoItem.target = self
+        todoItem.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: "待办")
+        menu.addItem(todoItem)
         menu.addItem(NSMenuItem.separator())
         let quitItem = NSMenuItem(title: "退出 OneBoard", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -96,60 +102,143 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         }
     }
 
+    @objc private func openTodoPanel() {
+        Task { @MainActor in
+            TodoSlidePanelWindowManager.shared.toggle()
+        }
+    }
+
     @objc private func runUninstaller() {
         let alert = NSAlert()
         alert.messageText = "彻底卸载 OneBoard？"
-        alert.informativeText = "将清理所有隐私权限、菜单栏状态、偏好设置和缓存。\n应用本身需手动拖入垃圾桶。"
+        alert.informativeText = "将清理隐私权限、菜单栏状态、偏好设置、缓存和当前 OneBoard.app，并退出应用。"
         alert.alertStyle = .critical
         alert.addButton(withTitle: "彻底卸载")
         alert.addButton(withTitle: "取消")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        // 执行与 uninstall.sh 相同的清理逻辑
+        do {
+            LaunchAtLogin.isEnabled = false
+            UserDefaults.standard.set(false, forKey: Constants.UserDefaultsKeys.launchAtLogin)
+            try launchDeferredUninstaller()
+            if let appDelegate = AppDelegate.shared {
+                appDelegate.requestTermination()
+            } else {
+                NSApp.terminate(nil)
+            }
+        } catch {
+            let failure = NSAlert()
+            failure.messageText = "卸载脚本启动失败"
+            failure.informativeText = error.localizedDescription
+            failure.alertStyle = .warning
+            failure.addButton(withTitle: "好")
+            failure.runModal()
+        }
+    }
+
+    private func launchDeferredUninstaller() throws {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.oneboard.mac"
+        let appPath = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let scriptURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("oneboard-uninstall-\(UUID().uuidString).sh")
+        let script = deferredUninstallScript()
 
-        // 1. UserDefaults
-        UserDefaults.standard.removePersistentDomain(forName: bundleID)
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
 
-        // 2. TCC
-        let tccTasks = ["All", "Accessibility", "ScreenCapture", "SystemPolicyAllFiles"]
-        for service in tccTasks {
-            let task = Process()
-            task.launchPath = "/usr/bin/tccutil"
-            task.arguments = ["reset", service, bundleID]
-            task.launch()
-            task.waitUntilExit()
-        }
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [scriptURL.path, "\(pid)", bundleID, appPath]
+        try task.run()
+    }
 
-        // 3. 清理 plist 中的 OneBoard 条目
-        plistCleanHelper()
+    private func deferredUninstallScript() -> String {
+        #"""
+        #!/bin/bash
+        set +e
 
-        // 4. 缓存
-        let fm = FileManager.default
-        let home = NSHomeDirectory()
-        let paths = [
-            "\(home)/Library/Caches/\(bundleID)",
-            "\(home)/Library/Application Support/\(bundleID)",
-            "\(home)/Library/Saved Application State/\(bundleID).savedState",
-            "\(home)/Library/HTTPStorages/\(bundleID)",
+        APP_PID="$1"
+        CURRENT_BUNDLE_ID="$2"
+        APP_PATH="$3"
+
+        while kill -0 "$APP_PID" 2>/dev/null; do
+            sleep 0.2
+        done
+
+        BUNDLE_IDS=(
+            "$CURRENT_BUNDLE_ID"
+            "com.oneboard.mac"
+            "com.oneboard.mac.dev"
+            "com.oneboard.mac.Findersync"
+            "com.oneboard.mac.Findersync.dev"
+        )
+
+        for BID in "${BUNDLE_IDS[@]}"; do
+            [ -z "$BID" ] && continue
+            /usr/bin/tccutil reset All "$BID" >/dev/null 2>&1
+            /usr/bin/tccutil reset Accessibility "$BID" >/dev/null 2>&1
+            /usr/bin/tccutil reset ScreenCapture "$BID" >/dev/null 2>&1
+            /usr/bin/tccutil reset SystemPolicyAllFiles "$BID" >/dev/null 2>&1
+            /usr/bin/defaults delete "$BID" >/dev/null 2>&1
+            /bin/rm -rf "$HOME/Library/Caches/$BID" >/dev/null 2>&1
+            /bin/rm -rf "$HOME/Library/Application Support/$BID" >/dev/null 2>&1
+            /bin/rm -rf "$HOME/Library/Saved Application State/$BID.savedState" >/dev/null 2>&1
+            /bin/rm -rf "$HOME/Library/HTTPStorages/$BID" >/dev/null 2>&1
+        done
+
+        /bin/rm -rf "$HOME/Library/Group Containers/group.com.oneboard.mac" >/dev/null 2>&1
+
+        /usr/bin/python3 - <<'PY' >/dev/null 2>&1
+        import os
+        import plistlib
+
+        files = [
+            os.path.expanduser('~/Library/Preferences/com.apple.controlcenter.plist'),
+            os.path.expanduser('~/Library/Preferences/com.apple.universalaccessAuthWarning.plist'),
+            os.path.expanduser('~/Library/Preferences/com.apple.corespotlightui.plist'),
         ]
-        for path in paths { try? fm.removeItem(atPath: path) }
 
-        // 5. 重启 daemons
-        for daemon in ["cfprefsd", "ControlCenter", "Dock"] {
-            let task = Process()
-            task.launchPath = "/usr/bin/killall"
-            task.arguments = [daemon]
-            task.launch()
-            task.waitUntilExit()
-        }
+        for path in files:
+            if not os.path.exists(path):
+                continue
+            try:
+                with open(path, 'rb') as f:
+                    plist = plistlib.load(f)
+            except Exception:
+                continue
 
-        let done = NSAlert()
-        done.messageText = "残留已清理完成"
-        done.informativeText = "请将 OneBoard.app 拖入垃圾桶完成卸载。\n\n💡 提示：Launch Services 残留需要重启 Mac 才能完全清除。"
-        done.alertStyle = .informational
-        done.addButton(withTitle: "好")
-        done.runModal()
+            changed = False
+            if isinstance(plist.get('CSReceiverBundleIdentifierState'), dict):
+                before = len(plist['CSReceiverBundleIdentifierState'])
+                plist['CSReceiverBundleIdentifierState'] = {
+                    k: v for k, v in plist['CSReceiverBundleIdentifierState'].items()
+                    if 'oneboard' not in str(k).lower()
+                }
+                changed = changed or len(plist['CSReceiverBundleIdentifierState']) != before
+
+            before = len(plist)
+            plist = {
+                k: v for k, v in plist.items()
+                if 'oneboard' not in str(k).lower()
+            }
+            changed = changed or len(plist) != before
+
+            if changed:
+                try:
+                    with open(path, 'wb') as f:
+                        plistlib.dump(plist, f)
+                except Exception:
+                    pass
+        PY
+
+        /usr/bin/killall cfprefsd ControlCenter Dock >/dev/null 2>&1
+
+        if [[ "$APP_PATH" == *.app && -d "$APP_PATH" ]]; then
+            /bin/rm -rf "$APP_PATH" >/dev/null 2>&1
+        fi
+
+        /bin/rm -f "$0" >/dev/null 2>&1
+        """#
     }
 
     /// 清理系统 plist 中的 OneBoard 条目
@@ -187,26 +276,8 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     // MARK: - 图标
 
     private func createMenuBarIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            NSColor.black.withAlphaComponent(0.5).setStroke()
-            let back = NSBezierPath(
-                roundedRect: NSRect(x: rect.minX + 3.0, y: rect.minY + 6.0, width: 9.0, height: 7.5),
-                xRadius: 1.8, yRadius: 1.8
-            )
-            back.lineWidth = 1.5
-            back.stroke()
-            NSColor.black.setFill()
-            NSColor.black.setStroke()
-            let front = NSBezierPath(
-                roundedRect: NSRect(x: rect.minX + 6.2, y: rect.minY + 3.7, width: 9.0, height: 7.5),
-                xRadius: 1.8, yRadius: 1.8
-            )
-            front.lineWidth = 1.5
-            front.fill()
-            front.stroke()
-            return true
-        }
+        let image = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: Constants.appName)
+            ?? NSImage(size: NSSize(width: 18, height: 18))
         image.isTemplate = true
         return image
     }
@@ -378,6 +449,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         var failures: [String] = []
         do {
             try PermissionManager.shared.resetPrivacyAuthorizations()
+            plistCleanHelper()
         } catch {
             failures.append(error.localizedDescription)
         }

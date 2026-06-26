@@ -3,6 +3,13 @@
 set -euo pipefail
 
 BUNDLE_ID="${ONEBOARD_BUNDLE_ID:-com.oneboard.mac}"
+BUNDLE_IDS=(
+    "$BUNDLE_ID"
+    "com.oneboard.mac"
+    "com.oneboard.mac.dev"
+    "com.oneboard.mac.Findersync"
+    "com.oneboard.mac.Findersync.dev"
+)
 APP_PATH="/Applications/OneBoard.app"
 
 echo "🧹 OneBoard 卸载脚本"
@@ -30,11 +37,20 @@ fi
 
 # ---- 3. 清理 UserDefaults ----
 echo "🧹 清理 UserDefaults..."
-defaults delete "$BUNDLE_ID" 2>/dev/null || true
+for BID in "${BUNDLE_IDS[@]}"; do
+    [ -z "$BID" ] && continue
+    defaults delete "$BID" 2>/dev/null || true
+done
 
 # ---- 4. 清理 TCC 隐私权限 ----
 echo "🧹 清理隐私权限..."
-tccutil reset All "$BUNDLE_ID" 2>/dev/null || true
+for BID in "${BUNDLE_IDS[@]}"; do
+    [ -z "$BID" ] && continue
+    tccutil reset All "$BID" 2>/dev/null || true
+    tccutil reset Accessibility "$BID" 2>/dev/null || true
+    tccutil reset ScreenCapture "$BID" 2>/dev/null || true
+    tccutil reset SystemPolicyAllFiles "$BID" 2>/dev/null || true
+done
 
 # ---- 5. 清理 Control Center 状态栏记录 ----
 echo "🧹 清理菜单栏状态..."
@@ -98,10 +114,14 @@ else:
 
 # ---- 8. 清理缓存 ----
 echo "🧹 清理缓存..."
-rm -rf ~/Library/Caches/"$BUNDLE_ID" 2>/dev/null || true
-rm -rf ~/Library/Application\ Support/"$BUNDLE_ID" 2>/dev/null || true
-rm -rf ~/Library/Saved\ Application\ State/"$BUNDLE_ID".savedState 2>/dev/null || true
-rm -rf ~/Library/HTTPStorages/"$BUNDLE_ID" 2>/dev/null || true
+for BID in "${BUNDLE_IDS[@]}"; do
+    [ -z "$BID" ] && continue
+    rm -rf ~/Library/Caches/"$BID" 2>/dev/null || true
+    rm -rf ~/Library/Application\ Support/"$BID" 2>/dev/null || true
+    rm -rf ~/Library/Saved\ Application\ State/"$BID".savedState 2>/dev/null || true
+    rm -rf ~/Library/HTTPStorages/"$BID" 2>/dev/null || true
+done
+rm -rf ~/Library/Group\ Containers/group.com.oneboard.mac 2>/dev/null || true
 
 # ---- 9. 重启系统服务 ----
 echo "🔄 重启系统服务..."

@@ -5,6 +5,8 @@ import LaunchAtLogin
 protocol SystemPermissionProviding {
     var hasAccessibilityPermission: Bool { get }
     var hasScreenRecordingPermission: Bool { get }
+    var hasInputMonitoringPermission: Bool { get }
+    func hasNotificationPermission() async -> Bool
     func showPermissionGuide(for kind: OneBoardPermissionKind)
     func resetAuthorization(for kind: OneBoardPermissionKind) throws
 }
@@ -46,6 +48,8 @@ final class SystemCapabilityViewModel: ObservableObject {
 
     @Published private(set) var accessibilityGranted = false
     @Published private(set) var screenRecordingGranted = false
+    @Published private(set) var inputMonitoringGranted = false
+    @Published private(set) var notificationGranted = false
     @Published private(set) var gatewayHelperInstalled = false
     @Published private(set) var launchAtLoginEnabled = false
     @Published private(set) var activePermissionOperation: OneBoardPermissionKind?
@@ -73,9 +77,17 @@ final class SystemCapabilityViewModel: ObservableObject {
     func refresh() {
         accessibilityGranted = permissions.hasAccessibilityPermission
         screenRecordingGranted = permissions.hasScreenRecordingPermission
+        inputMonitoringGranted = permissions.hasInputMonitoringPermission
         gatewayHelperInstalled = gatewayHelper.isHelperInstalled()
         launchAtLoginEnabled = launchAtLogin.isEnabled
         PermissionManager.shared.syncStoredPermissionStates()
+        Task { [permissions] in
+            let granted = await permissions.hasNotificationPermission()
+            await MainActor.run {
+                self.notificationGranted = granted
+                UserDefaults.standard.set(granted, forKey: Constants.UserDefaultsKeys.notificationPermissionEnabled)
+            }
+        }
     }
 
     func setAccessibilityEnabled(_ enabled: Bool) {
@@ -84,6 +96,27 @@ final class SystemCapabilityViewModel: ObservableObject {
 
     func setScreenRecordingEnabled(_ enabled: Bool) {
         setPermission(.screenRecording, enabled: enabled)
+    }
+
+    func setInputMonitoringEnabled(_ enabled: Bool) {
+        setPermission(.inputMonitoring, enabled: enabled)
+    }
+
+    func setNotificationEnabled(_ enabled: Bool) {
+        if enabled {
+            activePermissionOperation = .notifications
+            Task { @MainActor in
+                let granted = await TodoReminderService.shared.requestPermission()
+                if !granted {
+                    permissions.showPermissionGuide(for: .notifications)
+                }
+                refresh()
+                schedulePermissionRefresh()
+                activePermissionOperation = nil
+            }
+            return
+        }
+        setPermission(.notifications, enabled: false)
     }
 
     func setLaunchAtLoginEnabled(_ enabled: Bool) {

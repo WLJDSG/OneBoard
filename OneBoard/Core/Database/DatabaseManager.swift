@@ -32,6 +32,9 @@ final class DatabaseManager {
         migrator.registerMigration(V2_CreateFileStageTable.identifier) { db in
             try V2_CreateFileStageTable.migrate(db)
         }
+        migrator.registerMigration(V3_CreateTodoTable.identifier) { db in
+            try V3_CreateTodoTable.migrate(db)
+        }
 
         try migrator.migrate(queue)
         self.dbQueue = queue

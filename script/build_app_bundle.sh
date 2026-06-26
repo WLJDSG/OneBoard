@@ -26,6 +26,33 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp ".build/release/OneBoard" "$MACOS_DIR/OneBoard"
 chmod +x "$MACOS_DIR/OneBoard"
+
+# --- Finder Sync Extension ---
+echo "Building Finder Sync Extension..."
+swift build -c release --target OneBoardFinderSync --disable-sandbox
+
+PLUGINS_DIR="$CONTENTS_DIR/PlugIns"
+EXTENSION_DIR="$PLUGINS_DIR/OneBoardFinderSync.appex"
+mkdir -p "$EXTENSION_DIR/Contents/MacOS" "$EXTENSION_DIR/Contents/Resources"
+
+cp ".build/release/OneBoardFinderSync" "$EXTENSION_DIR/Contents/MacOS/OneBoardFinderSync"
+chmod +x "$EXTENSION_DIR/Contents/MacOS/OneBoardFinderSync"
+cp "FinderSync/Info.plist" "$EXTENSION_DIR/Contents/Info.plist"
+
+# 处理扩展 Info.plist 中的 Bundle ID（应用开发模式后缀）
+if [ -n "${ONEBOARD_BUNDLE_ID_SUFFIX:-}" ]; then
+    EXTENSION_CURRENT_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$EXTENSION_DIR/Contents/Info.plist")"
+    EXTENSION_NEW_ID="${EXTENSION_CURRENT_ID}${ONEBOARD_BUNDLE_ID_SUFFIX}"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${EXTENSION_NEW_ID}" "$EXTENSION_DIR/Contents/Info.plist"
+fi
+
+# 验证扩展结构
+if [ ! -f "$EXTENSION_DIR/Contents/MacOS/OneBoardFinderSync" ]; then
+    echo "ERROR: Finder Sync Extension binary missing!" >&2
+    exit 1
+fi
+echo "Finder Sync Extension bundled at $EXTENSION_DIR"
+
 sed 's/$(EXECUTABLE_NAME)/OneBoard/g' "Resources/Info.plist" > "$CONTENTS_DIR/Info.plist"
 printf 'APPL????' > "$CONTENTS_DIR/PkgInfo"
 
@@ -58,9 +85,13 @@ else
     exit 1
 fi
 
-echo "Signing LaunchAtLogin helper and OneBoard.app with identity: $ONEBOARD_CODESIGN_IDENTITY"
-/usr/bin/codesign --force --deep --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPER_APP"
-/usr/bin/codesign --force --deep --sign "$ONEBOARD_CODESIGN_IDENTITY" "$APP_DIR"
+echo "Signing with identity: $ONEBOARD_CODESIGN_IDENTITY"
+# 先签名扩展（必须在主应用之前）
+if [ -d "$EXTENSION_DIR" ]; then
+    /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "FinderSync/OneBoardFinderSync.entitlements" "$EXTENSION_DIR" || true
+fi
+/usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPER_APP" || true
+/usr/bin/codesign --force --deep --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "Resources/OneBoard.entitlements" "$APP_DIR"
 
 echo "Validating app bundle..."
 /usr/bin/codesign --verify --deep --strict "$APP_DIR"

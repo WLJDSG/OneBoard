@@ -34,6 +34,11 @@ final class ScreenshotViewModel: ObservableObject {
 
     /// 开始截图（快捷键触发）
     func startCapture() async {
+        guard PermissionManager.shared.hasScreenRecordingPermission else {
+            print("[ScreenshotViewModel] 缺少屏幕录制权限，无法截图")
+            PermissionManager.shared.promptScreenRecordingPermission()
+            return
+        }
         resetRecognitionState()
         closeActiveScreenshotSession()
         guard let result = await captureService.captureRegion() else {
@@ -366,7 +371,7 @@ final class ScreenshotViewModel: ObservableObject {
 }
 
 @MainActor
-private enum SelectedTextReader {
+enum SelectedTextReader {
     static func readSelectedText() async -> String {
         await PasteboardMonitor.shared.performIgnoringChanges {
             await copySelectedText()

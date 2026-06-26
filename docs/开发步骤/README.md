@@ -84,7 +84,37 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 6. ✅ 优化翻译工作台布局，压缩头部留白并固定窗口完整尺寸
 7. ✅ 优化权限页单项关闭后的状态刷新和文案
 8. ✅ 打包脚本新增 LaunchAtLogin helper 与主 App 的 ad-hoc 签名和验证输出
-9. ⚠️ `script/package_app.sh` 已完成构建和签名验证，但当前沙盒内 `hdiutil create` 报“设备未配置”，未能在本轮生成新的 DMG
+9. ⚠️ `script/package_app.sh` 已完成构建和签名验证，但当前沙盒内 `hdiutil create` 报”设备未配置”，未能在本轮生成新的 DMG
+
+### 第七阶段：待办事项模块 ✅
+
+**状态：已完成实现**
+
+1. ✅ V3 数据库迁移（todos 表 + FTS5 全文搜索）
+2. ✅ TodoItem 模型 + Priority 枚举 + TodoRepository（CRUD + 统计查询）
+3. ✅ TodoSlidePanelWindowManager（刘海触发 + 滑入/滑出动画 + 自动收起）
+4. ✅ TodoSlidePanelView + TodoRowView（勾选框、优先级色标、截止日期、来源应用）
+5. ✅ 全局快捷键（Cmd+Option+T 切换面板、Cmd+Shift+Option+T 添加选中文字）
+6. ✅ 系统服务菜单（NSServices 注册，”添加到待办”出现在右键 Services 菜单）
+7. ✅ 完成动画（勾选后 3 秒淡出 → 移入历史）
+8. ✅ TodoHistoryView + TodoHistoryViewModel（每日柱状图、来源应用统计、完成率）
+9. ✅ TodoReminderService（UNUserNotificationCenter 截止日期提醒 + 启动时过期待办通知）
+10. ✅ 通知权限管理（SystemCapabilityViewModel + PermissionManager 扩展）
+11. ✅ TodoSettingsView（保留天数、自动收起延迟、通知开关、Finder 文件类型管理）
+12. ✅ 菜单栏”待办列表...”入口
+
+### 第八阶段：Finder 新建文件 + Cmd+Q 修复 ✅
+
+**状态：已完成实现**
+
+1. ✅ Finder Sync Extension（独立 SPM target + FIFinderSync 协议）
+2. ✅ 右键文件夹/桌面空白 → “新建文件”子菜单（txt/docx/xlsx/文件夹）
+3. ✅ 文件创建逻辑（自动命名、冲突处理、Finder 中选中进入重命名）
+4. ✅ App Group 共享 UserDefaults（主应用设置页管理文件类型，扩展读取配置）
+5. ✅ build_app_bundle.sh 扩展编译 + .appex 打包 + 签名
+6. ✅ Cmd+Q 修复（setupHiddenMainMenu，仅应用活跃时响应）
+7. ✅ 主应用 entitlements 新增 app-group 权限
+8. ✅ 授权设置页新增 Finder 扩展启用提示
 
 ## 验证方案
 
@@ -98,3 +128,6 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 6. **权限**：首次启动确认权限引导页正常显示，引导用户开启所需权限
 7. **打包产物**：执行 `script/package_app.sh` 生成 `build/OneBoard.dmg`，并通过 `hdiutil verify build/OneBoard.dmg` 校验镜像
 8. **网关模块**：切换当前默认路由所在服务的网关/DNS，验证 Wi-Fi/有线网络自动识别、仅 DNS 模式、helper 安装/卸载和授权状态同步
+9. **待办模块**：选中文字 + 快捷键添加待办，右键 Services 菜单添加，鼠标移至顶部中央刘海触发面板，勾选完成淡出，查看历史统计，配置保留天数
+10. **Finder 扩展**：右键文件夹 → "新建文件"菜单 → 创建 txt/docx/xlsx/文件夹，文件在 Finder 中选中可重命名，设置页管理文件类型
+11. **Cmd+Q**：OneBoard 活跃时（设置窗口/浮动面板）Cmd+Q 退出；其他应用活跃时 Cmd+Q 不影响 OneBoard
