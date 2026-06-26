@@ -28,19 +28,19 @@ struct ClipboardListView: View {
     private var emptyView: some View {
         VStack(spacing: 12) {
             Image(systemName: "doc.on.clipboard")
-                .font(.system(size: 32))
+                .oneBoardFont(.titleLarge)
                 .foregroundColor(OneBoardColors.textSecondary.opacity(0.4))
 
             if viewModel.searchText.isEmpty {
                 Text("暂无剪贴板记录")
-                    .font(.system(size: 13))
+                    .oneBoardFont(.body)
                     .foregroundColor(OneBoardColors.textSecondary)
                 Text("复制任意内容后自动记录")
-                    .font(.system(size: 11))
+                    .oneBoardFont(.caption)
                     .foregroundColor(OneBoardColors.textSecondary.opacity(0.6))
             } else {
                 Text("未找到匹配结果")
-                    .font(.system(size: 13))
+                    .oneBoardFont(.body)
                     .foregroundColor(OneBoardColors.textSecondary)
             }
         }

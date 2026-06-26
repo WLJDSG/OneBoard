@@ -26,29 +26,31 @@ struct ClipboardRowView: View {
                 .allowsHitTesting(isHovered)
                 .disabled(!isHovered)
                 .accessibilityHidden(!isHovered)
-                .frame(width: 42, alignment: .trailing)
+                .frame(width: 36, alignment: .trailing)
 
             // 时间
             Text(entry.createdAt.timeAgoDescription)
                 .oneBoardFont(.captionSmall)
                 .foregroundColor(OneBoardColors.textSecondary)
-                .frame(width: 55, alignment: .trailing)
+                .frame(width: 44, alignment: .trailing)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(rowBackground)
+        .overlay(alignment: .leading) {
+            if entry.isPinned {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(OneBoardColors.accent)
+                    .frame(width: 2)
+                    .padding(.vertical, 4)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
-        }
-        .contextMenu {
-            Button("粘贴") { onTap() }
-            Button(entry.isPinned ? "取消置顶" : "置顶") { onPin() }
-            Divider()
-            Button("删除", role: .destructive) { onDelete() }
         }
     }
 
@@ -65,11 +67,11 @@ struct ClipboardRowView: View {
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                    .fill(OneBoardColors.primary.opacity(0.15))
+                    .fill(OneBoardColors.accent.opacity(0.15))
 
                 Image(systemName: entry.contentTypeEnum?.iconName ?? "doc")
                     .oneBoardFont(.callout)
-                    .foregroundColor(OneBoardColors.primary)
+                    .foregroundColor(OneBoardColors.accent)
             }
             .frame(width: 28, height: 28)
         }
@@ -83,7 +85,7 @@ struct ClipboardRowView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "pin.fill")
                         .oneBoardFont(.captionSmall)
-                        .foregroundColor(OneBoardColors.primary)
+                        .foregroundColor(OneBoardColors.accent)
                     Text(entry.previewText)
                         .oneBoardFont(.callout)
                         .lineLimit(1)
@@ -123,9 +125,9 @@ struct ClipboardRowView: View {
 
     private var backgroundColor: Color {
         if entry.isPinned {
-            OneBoardColors.pinnedHighlight.opacity(isHovered ? 1.0 : 0.7)
+            OneBoardColors.accent.opacity(0.06)
         } else if isHovered {
-            OneBoardColors.primary.opacity(0.08)
+            OneBoardColors.accent.opacity(0.06)
         } else {
             Color.clear
         }
@@ -139,7 +141,7 @@ struct ClipboardRowView: View {
             Button(action: onPin) {
                 Image(systemName: entry.isPinned ? "pin.slash" : "pin")
                     .oneBoardFont(.caption)
-                    .foregroundColor(entry.isPinned ? OneBoardColors.primary : OneBoardColors.textSecondary)
+                    .foregroundColor(entry.isPinned ? OneBoardColors.accent : OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
             .help(entry.isPinned ? "取消置顶" : "置顶")

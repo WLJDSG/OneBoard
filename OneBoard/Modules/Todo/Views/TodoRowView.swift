@@ -13,7 +13,7 @@ struct TodoRowView: View {
     @State private var showDueDatePicker = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: OneBoardSpacing.xs) {
             // 勾选框
             Button(action: onToggleComplete) {
                 Image(systemName: isVisuallyCompleted ? "checkmark.circle.fill" : "circle")
@@ -25,14 +25,14 @@ struct TodoRowView: View {
             // 优先级色标
             Circle()
                 .fill(item.priority.color)
-                .frame(width: 8, height: 8)
+                .frame(width: 10, height: 10)
                 .onTapGesture { showPriorityMenu = true }
                 .popover(isPresented: $showPriorityMenu) {
                     priorityMenu
                 }
 
             // 文字内容
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: OneBoardSpacing.twoXS) {
                 Text(item.text)
                     .oneBoardFont(.body)
                     .lineLimit(2)
@@ -40,10 +40,10 @@ struct TodoRowView: View {
                     .foregroundColor(isVisuallyCompleted ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
 
                 // 元信息行
-                HStack(spacing: 6) {
+                HStack(spacing: OneBoardSpacing.xs) {
                     // 来源应用
                     if let appName = item.sourceAppName {
-                        HStack(spacing: 2) {
+                        HStack(spacing: OneBoardSpacing.twoXS) {
                             Image(systemName: "app.badge")
                                 .oneBoardFont(.captionSmall)
                             Text(appName)
@@ -54,7 +54,7 @@ struct TodoRowView: View {
 
                     // 截止日期
                     if let dueDate = item.dueDate {
-                        HStack(spacing: 2) {
+                        HStack(spacing: OneBoardSpacing.twoXS) {
                             Image(systemName: item.isOverdue ? "exclamationmark.triangle.fill" : "calendar")
                                 .oneBoardFont(.captionSmall)
                                 .foregroundColor(item.isOverdue ? OneBoardColors.destructive : OneBoardColors.textSecondary)
@@ -78,8 +78,8 @@ struct TodoRowView: View {
             .buttonStyle(.plain)
             .opacity(0.6)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, OneBoardSpacing.sm)
+        .padding(.vertical, OneBoardSpacing.xs)
         .background(
             RoundedRectangle(cornerRadius: OneBoardRadius.md)
                 .fill(item.isOverdue ? OneBoardColors.destructive.opacity(0.08) : Color.clear)
@@ -109,18 +109,18 @@ struct TodoRowView: View {
                                 .oneBoardFont(.caption)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, OneBoardSpacing.sm)
+                    .padding(.vertical, OneBoardSpacing.xs)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, OneBoardSpacing.twoXS)
         .frame(width: 100)
     }
 
     private var dueDatePicker: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: OneBoardSpacing.xs) {
             DatePicker(
                 "截止日期",
                 selection: Binding(

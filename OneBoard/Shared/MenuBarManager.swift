@@ -38,7 +38,6 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         button.target = self
         button.action = #selector(handleClick)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        statusItem.length = NSStatusItem.squareLength
         statusItem.isVisible = true
     }
 
@@ -276,8 +275,31 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     // MARK: - 图标
 
     private func createMenuBarIcon() -> NSImage {
-        let image = NSImage(systemSymbolName: "square.on.square", accessibilityDescription: Constants.appName)
-            ?? NSImage(size: NSSize(width: 18, height: 18))
+        // 手绘图标确保精确居中对齐，避免 SF Symbol 的 baseline 偏移问题
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            // 前层方块
+            let frontPath = NSBezierPath(
+                roundedRect: NSRect(x: rect.minX + 6.2, y: rect.minY + 3.7, width: 9.0, height: 7.5),
+                xRadius: 1.8, yRadius: 1.8
+            )
+            NSColor.black.setFill()
+            NSColor.black.setStroke()
+            frontPath.lineWidth = 1.5
+            frontPath.fill()
+            frontPath.stroke()
+
+            // 后层方块（描边）
+            let backPath = NSBezierPath(
+                roundedRect: NSRect(x: rect.minX + 3.0, y: rect.minY + 6.0, width: 9.0, height: 7.5),
+                xRadius: 1.8, yRadius: 1.8
+            )
+            NSColor.black.withAlphaComponent(0.5).setStroke()
+            backPath.lineWidth = 1.5
+            backPath.stroke()
+
+            return true
+        }
         image.isTemplate = true
         return image
     }

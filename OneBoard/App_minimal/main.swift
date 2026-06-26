@@ -6,7 +6,7 @@ import OneBoardKit
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
-let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 MenuBarManager.shared.configure(statusItem: statusItem)
 
 let delegate = AppDelegate()

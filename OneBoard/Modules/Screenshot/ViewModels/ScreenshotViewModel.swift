@@ -177,9 +177,8 @@ final class ScreenshotViewModel: ObservableObject {
         self.toolbarPanel = toolbarPanel
 
         // 监听图片窗口移动 → 工具栏跟随
-        // 使用 assumeIsolated 断言已在主线程（frame KVO 回调保证在主线程），避免 Task 开销
         windowFrameObserver = imageWindow.observe(\.frame, options: [.new]) { [weak self] window, _ in
-            MainActor.assumeIsolated {
+            Task { @MainActor [weak self] in
                 guard let self, let toolbar = self.toolbarPanel else { return }
                 let sf = NSScreen.main?.visibleFrame ?? .zero
                 self.positionToolbar(toolbar, below: window, gap: toolbarGap, screenFrame: sf)
@@ -408,6 +407,7 @@ final class ScreenshotViewModel: ObservableObject {
             }
 
             var focusedElement: CFTypeRef?
+            // AXUIElementCopyAttributeValue 返回的 CFTypeRef 在成功时总是 AXUIElement 类型
             AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
 
             guard let element = focusedElement else {

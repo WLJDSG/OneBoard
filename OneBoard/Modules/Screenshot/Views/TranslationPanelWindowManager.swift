@@ -58,8 +58,8 @@ final class TranslationPanelWindowManager {
             backing: .buffered,
             defer: false
         )
-        panel.minSize = NSSize(width: 520, height: 600)
-        panel.maxSize = NSSize(width: 520, height: 600)
+        panel.minSize = NSSize(width: 520, height: 400)
+        panel.maxSize = NSSize(width: 520, height: 700)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true

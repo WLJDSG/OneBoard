@@ -141,6 +141,49 @@ struct OneBoardTextFieldStyle: ViewModifier {
     }
 }
 
+// MARK: - 统一关闭按钮（所有面板一致）
+
+/// 统一关闭按钮样式：28×28pt，xmark 图标，右上角位置
+struct OneBoardCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 28, height: 28)
+                .foregroundColor(OneBoardColors.textSecondary)
+                .background(
+                    RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                        .fill(Color.clear)
+                )
+        }
+        .buttonStyle(.borderless)
+    }
+}
+
+// MARK: - 统一置顶按钮
+
+/// 统一置顶按钮样式（有置顶功能的面板使用）
+struct OneBoardPinButton: View {
+    let isPinned: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isPinned ? "pin.fill" : "pin")
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 28, height: 28)
+                .foregroundColor(isPinned ? OneBoardColors.accent : OneBoardColors.textSecondary)
+                .background(
+                    RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                        .fill(isPinned ? OneBoardColors.accent.opacity(0.10) : Color.clear)
+                )
+        }
+        .buttonStyle(.borderless)
+    }
+}
+
 // MARK: - View 扩展
 
 extension View {

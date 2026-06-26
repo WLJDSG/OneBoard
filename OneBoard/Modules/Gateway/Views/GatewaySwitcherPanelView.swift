@@ -9,10 +9,18 @@ struct GatewaySwitcherPanelView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 if !viewModel.snapshot.dnsServers.isEmpty {
-                    Text("DNS \(viewModel.snapshot.dnsServers.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                    HStack(spacing: 6) {
+                        Image(systemName: "network")
+                            .font(.system(size: 10))
+                            .foregroundColor(OneBoardColors.textSecondary)
+                        Text("DNS \(viewModel.snapshot.dnsServers.joined(separator: ", "))")
+                            .oneBoardFont(.caption)
+                            .foregroundColor(OneBoardColors.textSecondary)
+                            .lineLimit(2)
+                    }
+                    .padding(8)
+                    .background(OneBoardColors.accent.opacity(0.04))
+                    .cornerRadius(8)
                 }
 
                 VStack(spacing: 2) {
@@ -22,15 +30,15 @@ struct GatewaySwitcherPanelView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: profile.symbolName)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.system(size: 16))
                                     .foregroundColor(OneBoardColors.accent)
                                     .frame(width: 22)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(profile.title)
                                         .oneBoardFont(.body)
                                     Text(summary(for: profile))
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .oneBoardFont(.caption)
+                                        .foregroundColor(OneBoardColors.textSecondary)
                                         .lineLimit(1)
                                 }
                                 Spacer()
@@ -41,32 +49,50 @@ struct GatewaySwitcherPanelView: View {
                             }
                             .contentShape(Rectangle())
                             .oneBoardListRow()
+                            .background(
+                                viewModel.activeProfile?.id == profile.id
+                                    ? OneBoardColors.accent.opacity(0.08)
+                                    : Color.clear
+                            )
+                            .overlay(alignment: .leading) {
+                                if viewModel.activeProfile?.id == profile.id {
+                                    Rectangle()
+                                        .fill(OneBoardColors.accent)
+                                        .frame(width: 2)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
-                        .disabled(viewModel.isSwitching || viewModel.activeProfile?.id == profile.id)
+                        .opacity(viewModel.isSwitching || viewModel.activeProfile?.id == profile.id ? 0.5 : 1.0)
                     }
                 }
 
                 Divider()
 
                 HStack {
+                    Spacer()
                     if let statusMessage = viewModel.statusMessage {
                         Text(statusMessage)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .oneBoardFont(.caption)
+                            .foregroundColor(OneBoardColors.textSecondary)
                             .lineLimit(2)
                     }
+                    Spacer()
+                }
+
+                HStack {
                     Spacer()
                     Button {
                         SettingsWindowManager.shared.show(selectedTab: .gateway)
                     } label: {
-                        Image(systemName: "gearshape")
+                        Text("管理配置...")
                     }
                     .buttonStyle(.borderless)
-                    .help("网关设置")
+                    .foregroundColor(OneBoardColors.accent)
+                    Spacer()
                 }
             }
-            .padding(14)
+            .padding(OneBoardSpacing.sm)
         }
         .frame(width: 360)
         .oneBoardPanelStyle()
@@ -83,8 +109,8 @@ struct GatewaySwitcherPanelView: View {
                 Text(viewModel.displayGateway)
                     .oneBoardFont(.headline)
                 Text(viewModel.displayService.isEmpty ? "未检测到当前网络服务" : viewModel.displayService)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.caption)
+                    .foregroundColor(OneBoardColors.textSecondary)
             }
             Spacer()
             HStack(spacing: 8) {
@@ -92,18 +118,20 @@ struct GatewaySwitcherPanelView: View {
                     viewModel.refresh()
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .rotationEffect(.degrees(viewModel.isRefreshing ? 360 : 0))
+                        .animation(
+                            viewModel.isRefreshing
+                                ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                : nil,
+                            value: viewModel.isRefreshing
+                        )
                 }
                 .buttonStyle(.borderless)
-                .disabled(viewModel.isRefreshing)
                 .help("刷新")
 
-                Button {
+                OneBoardCloseButton {
                     MenuBarManager.shared.closeGatewaySwitcherPanel()
-                } label: {
-                    Image(systemName: "xmark")
                 }
-                .buttonStyle(.borderless)
-                .help("关闭")
             }
         }
         .oneBoardPanelHeader()

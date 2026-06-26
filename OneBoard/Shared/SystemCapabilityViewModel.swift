@@ -56,6 +56,9 @@ final class SystemCapabilityViewModel: ObservableObject {
     @Published var statusMessage: String?
     @Published var errorMessage: String?
 
+    /// 当前正在请求的权限（UI 用于显示 spinner）
+    @Published private(set) var permissionRequestingKind: OneBoardPermissionKind?
+
     private let permissions: SystemPermissionProviding
     private let gatewayHelper: GatewayHelperStatusProviding
     private let launchAtLogin: LaunchAtLoginProviding
@@ -163,6 +166,7 @@ final class SystemCapabilityViewModel: ObservableObject {
         defer { activePermissionOperation = nil }
 
         if enabled {
+            permissionRequestingKind = kind
             permissions.showPermissionGuide(for: kind)
             refresh()
             schedulePermissionRefresh()
@@ -190,6 +194,7 @@ final class SystemCapabilityViewModel: ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
             refresh()
+            permissionRequestingKind = nil
             NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
         }
     }

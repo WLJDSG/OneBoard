@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Translation
 
@@ -11,21 +12,19 @@ struct TranslationPanelView: View {
         VStack(spacing: 0) {
             titleBar
             VStack(alignment: .leading, spacing: 12) {
-                serviceControl
-                languageControls
                 sourceSection
                 translationSection
                 statusBar
                 actionBar
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.top, 12)
             .padding(.bottom, 16)
         }
         .translationTask(viewModel.appleTranslationConfiguration) { session in
             await viewModel.translateWithAppleSession(session)
         }
-        .frame(width: 520, height: 600)
+        .frame(minWidth: 520, maxWidth: 520, minHeight: 400, maxHeight: 700)
         .oneBoardPanelStyle()
     }
 
@@ -41,22 +40,21 @@ struct TranslationPanelView: View {
                     Text("翻译工作台")
                         .oneBoardFont(.headline)
                     Text(viewModel.translationServiceType.displayName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11))
+                        .foregroundColor(OneBoardColors.textSecondary)
                 }
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .oneBoardFont(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .medium))
                         .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
+                        .foregroundColor(OneBoardColors.textSecondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .help("关闭")
             }
             .padding(.leading, 16)
-            .padding(.trailing, 10)
+            .padding(.trailing, 8)
             .padding(.top, 6)
         }
         .frame(height: 44)
@@ -74,70 +72,12 @@ struct TranslationPanelView: View {
         }
     }
 
-    private var serviceControl: some View {
-        Picker("翻译服务", selection: serviceSelection) {
-            ForEach(TranslationServiceType.allCases) { serviceType in
-                Text(serviceType.displayName).tag(serviceType)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-    }
-
-    private var serviceSelection: Binding<TranslationServiceType> {
-        Binding(
-            get: { viewModel.translationServiceType },
-            set: { newValue in
-                onSelectService(newValue)
-            }
-        )
-    }
-
-    private var languageControls: some View {
-        HStack(spacing: 8) {
-            languagePicker("源语言", selection: $viewModel.sourceLanguage, options: TranslationLanguage.sourceOptions)
-
-            Button {
-                viewModel.swapLanguages()
-            } label: {
-                Image(systemName: "arrow.left.arrow.right")
-                    .frame(width: 26, height: 26)
-            }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.sourceLanguage == .auto || viewModel.translatedText.isEmpty || viewModel.isTranslating)
-            .help("交换语言")
-
-            languagePicker("目标语言", selection: $viewModel.targetLanguage, options: TranslationLanguage.targetOptions)
-        }
-    }
-
-    private func languagePicker(
-        _ title: String,
-        selection: Binding<TranslationLanguage>,
-        options: [TranslationLanguage]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .oneBoardFont(.captionSmall)
-                .foregroundStyle(.secondary)
-            Picker(title, selection: selection) {
-                ForEach(options) { language in
-                    Text(language.displayName).tag(language)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .disabled(viewModel.isTranslating)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private var sourceSection: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text("原文")
                     .oneBoardFont(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(OneBoardColors.textSecondary)
                 Spacer()
                 Button {
                     viewModel.clearSourceText()
@@ -151,13 +91,14 @@ struct TranslationPanelView: View {
             TextEditor(text: $viewModel.sourceText)
                 .oneBoardFont(.body)
                 .scrollContentBackground(.hidden)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.78))
+                .background(OneBoardColors.background)
                 .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
                 .overlay(
                     RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                        .stroke(OneBoardColors.textPrimary.opacity(0.10), lineWidth: 1)
+                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
                 )
-                .frame(height: 128)
+                .frame(minHeight: 120)
+                .frame(height: 132)
         }
     }
 
@@ -165,30 +106,40 @@ struct TranslationPanelView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text("译文")
                 .oneBoardFont(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundColor(OneBoardColors.textSecondary)
             ScrollView {
-                Text(translationText)
-                    .oneBoardFont(.body)
-                    .foregroundColor(viewModel.translatedText.isEmpty ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
-                    .textSelection(.enabled)
+                if viewModel.isTranslating {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("翻译中...")
+                            .oneBoardFont(.caption)
+                            .foregroundColor(OneBoardColors.textSecondary)
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
+                } else {
+                    Text(translationText)
+                        .oneBoardFont(.body)
+                        .foregroundColor(viewModel.translatedText.isEmpty ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                }
             }
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.78))
+            .background(OneBoardColors.background)
             .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
             .overlay(
                 RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                    .stroke(OneBoardColors.textPrimary.opacity(0.10), lineWidth: 1)
+                    .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
             )
+            .frame(minHeight: 120)
             .frame(height: 132)
         }
     }
 
     private var translationText: String {
-        if viewModel.isTranslating {
-            return "翻译中..."
-        }
-        return viewModel.translatedText.isEmpty ? "译文会显示在这里" : viewModel.translatedText
+        viewModel.translatedText.isEmpty ? "译文会显示在这里" : viewModel.translatedText
     }
 
     private var statusBar: some View {
@@ -199,7 +150,7 @@ struct TranslationPanelView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 0, alignment: .topLeading)
     }
 
     private var serviceStatusText: String {
@@ -215,21 +166,59 @@ struct TranslationPanelView: View {
 
     private var actionBar: some View {
         HStack(spacing: 8) {
+            Picker("源语言", selection: $viewModel.sourceLanguage) {
+                ForEach(TranslationLanguage.sourceOptions) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .disabled(viewModel.isTranslating)
+            .frame(width: 100)
+
+            Button {
+                viewModel.swapLanguages()
+            } label: {
+                Image(systemName: "arrow.left.arrow.right")
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.borderless)
+            .disabled(viewModel.sourceLanguage == .auto || viewModel.translatedText.isEmpty || viewModel.isTranslating)
+            .help("交换语言")
+
+            Picker("目标语言", selection: $viewModel.targetLanguage) {
+                ForEach(TranslationLanguage.targetOptions) { language in
+                    Text(language.displayName).tag(language)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .disabled(viewModel.isTranslating)
+
+            Spacer()
+
             Button(action: onTranslate) {
                 Label("重新翻译", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.borderedProminent)
+            .oneBoardPrimaryButton()
             .disabled(viewModel.isTranslating || !hasSourceText)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(viewModel.sourceText, forType: .string)
+            } label: {
+                Label("复制原文", systemImage: "doc.on.doc")
+            }
+            .oneBoardSecondaryButton()
+            .disabled(viewModel.sourceText.isEmpty || viewModel.isTranslating)
 
             Button {
                 viewModel.copyTranslatedText()
             } label: {
-                Label("复制译文", systemImage: "doc.on.doc")
+                Label("复制译文", systemImage: "doc.on.clipboard")
             }
-            .buttonStyle(.bordered)
+            .oneBoardSecondaryButton()
             .disabled(viewModel.translatedText.isEmpty || viewModel.isTranslating)
-
-            Spacer()
         }
     }
 

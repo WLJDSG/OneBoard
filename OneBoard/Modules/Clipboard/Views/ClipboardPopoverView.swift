@@ -21,8 +21,18 @@ struct ClipboardPopoverView: View {
             ClipboardListView(viewModel: viewModel)
         }
         .frame(minWidth: Constants.popoverWidth - 50, minHeight: 250)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
+        .overlay(
+            RoundedRectangle(cornerRadius: OneBoardRadius.xl)
+                .stroke(OneBoardColors.accent.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(
+            color: OneBoardShadow.lg.color,
+            radius: OneBoardShadow.lg.radius,
+            x: 0,
+            y: OneBoardShadow.lg.y
+        )
         .task {
             await viewModel.loadEntries()
         }

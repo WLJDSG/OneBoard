@@ -131,7 +131,6 @@ struct SettingsView: View {
         }
         .frame(width: 780, height: 620)
         .onAppear { systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
-        .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in systemCapabilities.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in systemCapabilities.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .systemCapabilityStatusDidChange)) { _ in systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
     }
@@ -179,14 +178,14 @@ struct SettingsView: View {
     private var authorizationSettings: some View {
         Form {
             Section {
-                permissionToggle(title: "辅助功能", description: "用于自动粘贴、读取选中文字、全局交互", isOn: Binding(get: { systemCapabilities.accessibilityGranted }, set: { systemCapabilities.setAccessibilityEnabled($0) }), isGranted: systemCapabilities.accessibilityGranted)
-                permissionToggle(title: "屏幕录制", description: "用于截图、OCR 和截图翻译", isOn: Binding(get: { systemCapabilities.screenRecordingGranted }, set: { systemCapabilities.setScreenRecordingEnabled($0) }), isGranted: systemCapabilities.screenRecordingGranted)
-                permissionToggle(title: "输入监控", description: "用于文件拖拽摇晃检测等全局输入监听", isOn: Binding(get: { systemCapabilities.inputMonitoringGranted }, set: { systemCapabilities.setInputMonitoringEnabled($0) }), isGranted: systemCapabilities.inputMonitoringGranted)
-                permissionToggle(title: "通知", description: "用于待办事项到期提醒", isOn: Binding(get: { systemCapabilities.notificationGranted }, set: { newValue in todoShowNotifications = newValue; systemCapabilities.setNotificationEnabled(newValue) }), isGranted: systemCapabilities.notificationGranted)
+                permissionRow(title: "辅助功能", description: "用于自动粘贴、读取选中文字、全局交互", isGranted: systemCapabilities.accessibilityGranted, isRequesting: systemCapabilities.permissionRequestingKind == .accessibility, onRequest: { systemCapabilities.setAccessibilityEnabled(true) }, onRevoke: { systemCapabilities.setAccessibilityEnabled(false) })
+                permissionRow(title: "屏幕录制", description: "用于截图、OCR 和截图翻译", isGranted: systemCapabilities.screenRecordingGranted, isRequesting: systemCapabilities.permissionRequestingKind == .screenRecording, onRequest: { systemCapabilities.setScreenRecordingEnabled(true) }, onRevoke: { systemCapabilities.setScreenRecordingEnabled(false) })
+                permissionRow(title: "输入监控", description: "用于文件拖拽摇晃检测等全局输入监听", isGranted: systemCapabilities.inputMonitoringGranted, isRequesting: systemCapabilities.permissionRequestingKind == .inputMonitoring, onRequest: { systemCapabilities.setInputMonitoringEnabled(true) }, onRevoke: { systemCapabilities.setInputMonitoringEnabled(false) })
+                permissionRow(title: "通知", description: "用于待办事项到期提醒", isGranted: systemCapabilities.notificationGranted, isRequesting: systemCapabilities.permissionRequestingKind == .notifications, onRequest: { todoShowNotifications = true; systemCapabilities.setNotificationEnabled(true) }, onRevoke: { todoShowNotifications = false; systemCapabilities.setNotificationEnabled(false) })
             } header: { Text("隐私权限") }
 
             Section {
-                capabilityToggle(title: "网关免密 Helper", description: "用于网关切换时避免反复输入管理员密码", isOn: systemCapabilities.gatewayHelperInstalled, enable: { systemCapabilities.setGatewayHelperEnabled(true) }, disable: { systemCapabilities.setGatewayHelperEnabled(false) })
+                capabilityRow(title: "网关免密 Helper", description: "用于网关切换时避免反复输入管理员密码", isGranted: systemCapabilities.gatewayHelperInstalled, onEnable: { systemCapabilities.setGatewayHelperEnabled(true) }, onDisable: { systemCapabilities.setGatewayHelperEnabled(false) })
                 Toggle("开机自启", isOn: Binding(get: { systemCapabilities.launchAtLoginEnabled }, set: { systemCapabilities.setLaunchAtLoginEnabled($0) }))
             } header: { Text("系统能力") }
 
@@ -204,23 +203,71 @@ struct SettingsView: View {
         }.formStyle(.grouped).padding()
     }
 
-    private func permissionToggle(title: String, description: String, isOn: Binding<Bool>, isGranted: Bool) -> some View {
+    /// 按钮式权限行：状态 + 操作 分离
+    private func permissionRow(title: String, description: String, isGranted: Bool, isRequesting: Bool, onRequest: @escaping () -> Void, onRevoke: @escaping () -> Void) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Toggle("", isOn: isOn).toggleStyle(.switch).labelsHidden()
+            Image(systemName: isGranted ? "checkmark.circle.fill" : (isRequesting ? "hourglass" : "lock.fill"))
+                .font(.system(size: 18))
+                .foregroundColor(isGranted ? OneBoardColors.success : (isRequesting ? OneBoardColors.accent : OneBoardColors.textTertiary))
+                .frame(width: 22)
+
             VStack(alignment: .leading, spacing: 4) {
-                HStack { Text(title); Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.caption).foregroundColor(isGranted ? OneBoardColors.success : OneBoardColors.warning) }
+                HStack(spacing: 6) {
+                    Text(title).fontWeight(.medium)
+                    statusBadge(isGranted: isGranted, isRequesting: isRequesting)
+                }
                 Text(description).font(.caption).foregroundColor(OneBoardColors.textSecondary)
+            }
+
+            Spacer()
+
+            if isGranted {
+                Button("撤销") { onRevoke() }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .foregroundColor(OneBoardColors.textTertiary)
+            } else {
+                Button(isRequesting ? "请求中..." : "去开启") { onRequest() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(isRequesting)
             }
         }.padding(.vertical, 4)
     }
 
-    private func capabilityToggle(title: String, description: String, isOn: Bool, enable: @escaping () -> Void, disable: @escaping () -> Void) -> some View {
+    private func statusBadge(isGranted: Bool, isRequesting: Bool) -> some View {
+        Text(isGranted ? "已授权" : (isRequesting ? "请求中..." : "未授权"))
+            .font(.system(size: 10, weight: .medium))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isGranted ? OneBoardColors.success.opacity(0.12) : (isRequesting ? OneBoardColors.accent.opacity(0.12) : OneBoardColors.warning.opacity(0.12)))
+            )
+            .foregroundColor(isGranted ? OneBoardColors.success : (isRequesting ? OneBoardColors.accent : OneBoardColors.warning))
+    }
+
+    /// 系统能力行
+    private func capabilityRow(title: String, description: String, isGranted: Bool, onEnable: @escaping () -> Void, onDisable: @escaping () -> Void) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Toggle("", isOn: Binding(get: { isOn }, set: { $0 ? enable() : disable() })).toggleStyle(.switch).labelsHidden()
+            Image(systemName: isGranted ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 18))
+                .foregroundColor(isGranted ? OneBoardColors.success : OneBoardColors.textTertiary)
+                .frame(width: 22)
+
             VStack(alignment: .leading, spacing: 4) {
-                HStack { Text(title); Label(isOn ? "已启用" : "未启用", systemImage: isOn ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.caption).foregroundColor(isOn ? OneBoardColors.success : OneBoardColors.warning) }
+                HStack(spacing: 6) {
+                    Text(title).fontWeight(.medium)
+                    statusBadge(isGranted: isGranted, isRequesting: false)
+                }
                 Text(description).font(.caption).foregroundColor(OneBoardColors.textSecondary)
             }
+
+            Spacer()
+
+            Button(isGranted ? "卸载..." : "安装") { isGranted ? onDisable() : onEnable() }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .foregroundColor(isGranted ? OneBoardColors.textTertiary : OneBoardColors.accent)
         }.padding(.vertical, 4)
     }
 

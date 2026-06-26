@@ -36,11 +36,15 @@ struct ClipboardSearchBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                .fill(OneBoardColors.primary.opacity(0.08))
+                .fill(OneBoardColors.accent.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                .stroke(isFocused ? OneBoardColors.accent.opacity(0.10) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {

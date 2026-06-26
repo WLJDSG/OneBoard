@@ -118,10 +118,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if defaults.object(forKey: keys.maxClipboardItems) == nil { defaults.set(Constants.defaultMaxClipboardItems, forKey: keys.maxClipboardItems) }
         if defaults.object(forKey: keys.retentionDays) == nil { defaults.set(Constants.defaultRetentionDays, forKey: keys.retentionDays) }
         if defaults.object(forKey: keys.ocrServiceType) == nil { defaults.set("apple", forKey: keys.ocrServiceType) }
-        if defaults.object(forKey: keys.translationServiceType) == nil { defaults.set("third_party", forKey: keys.translationServiceType) }
+        if defaults.object(forKey: keys.translationServiceType) == nil { defaults.set("google", forKey: keys.translationServiceType) }
         if defaults.object(forKey: keys.ocrLanguage) == nil { defaults.set("zh-Hans", forKey: keys.ocrLanguage) }
         if defaults.object(forKey: keys.translationSourceLanguage) == nil { defaults.set("", forKey: keys.translationSourceLanguage) }
-        if defaults.object(forKey: keys.translationTargetLanguage) == nil { defaults.set("en", forKey: keys.translationTargetLanguage) }
+        if defaults.object(forKey: keys.translationTargetLanguage) == nil { defaults.set("zh-Hans", forKey: keys.translationTargetLanguage) }
         defaults.set(PermissionManager.shared.hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
         defaults.set(PermissionManager.shared.hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
         defaults.set(PermissionManager.shared.hasInputMonitoringPermission, forKey: keys.inputMonitoringPermissionEnabled)
