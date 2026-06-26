@@ -8,11 +8,11 @@ import SwiftUI
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .oneBoardFont(.headline)
-            .padding(.horizontal, OneBoardSpacing.md)
-            .padding(.vertical, OneBoardSpacing.xs)
+            .font(.system(size: 13, weight: .medium))
+            .padding(.horizontal, OneBoardSpacing.lg)
+            .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                RoundedRectangle(cornerRadius: OneBoardRadius.pill)
                     .fill(OneBoardColors.accent)
                     .opacity(configuration.isPressed ? 0.8 : 1.0)
             )
@@ -63,8 +63,7 @@ struct CardStyleModifier: ViewModifier {
 struct OneBoardPanelStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
             .shadow(
                 color: OneBoardShadow.lg.color,
                 radius: OneBoardShadow.lg.radius,

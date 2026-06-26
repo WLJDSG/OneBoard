@@ -8,25 +8,23 @@ enum OneBoardColors {
 
     // MARK: 品牌暖色
 
-    /// 主强调色 — 暖琥珀 #D4792E
-    static let accent = Color(red: 0.831, green: 0.475, blue: 0.180)
+    /// 主强调色 — 天空蓝 #4A9EF7
+    static let accent = Color(red: 0.290, green: 0.620, blue: 0.969)
 
     /// 浅色变体 — hover 背景、选中行
     static let accentLight = accent.opacity(0.10)
 
     /// 深色变体 — 按下态
-    static let accentDark = Color(red: 0.710, green: 0.396, blue: 0.122)
+    static let accentDark = Color(red: 0.220, green: 0.530, blue: 0.880)
 
     // MARK: 语义色
 
-    /// 成功 — 暖绿
-    static let success = Color(red: 0.420, green: 0.620, blue: 0.427)
-
+    /// 成功
+    static let success = Color(nsColor: .systemGreen)
     /// 警告
-    static let warning = Color(red: 0.831, green: 0.627, blue: 0.235)
-
-    /// 错误 / 删除 — 暖红
-    static let destructive = Color(red: 0.788, green: 0.353, blue: 0.290)
+    static let warning = Color(nsColor: .systemOrange)
+    /// 错误 / 删除
+    static let destructive = Color(nsColor: .systemRed)
 
     // MARK: 中性色（系统自适应 → 自动支持深色模式）
 
@@ -57,9 +55,9 @@ enum OneBoardColors {
 
     // MARK: NSColor 版本（AppKit 桥接）
 
-    static let nsAccent = NSColor(red: 0.831, green: 0.475, blue: 0.180, alpha: 1.0)
+    static let nsAccent = NSColor(red: 0.290, green: 0.620, blue: 0.969, alpha: 1.0)
     static let nsAccentLight = nsAccent.withAlphaComponent(0.10)
-    static let nsAccentDark = NSColor(red: 0.710, green: 0.396, blue: 0.122, alpha: 1.0)
+    static let nsAccentDark = NSColor(red: 0.220, green: 0.530, blue: 0.880, alpha: 1.0)
 
     static let nsPrimary = nsAccent
     static let nsPrimaryLight = nsAccentLight
@@ -90,15 +88,17 @@ enum OneBoardSpacing {
 // MARK: - 圆角系统
 
 enum OneBoardRadius {
-    /// 6pt — 按钮、标签、行
-    static let sm: CGFloat = 6
-    /// 8pt — 卡片、输入框、搜索栏
+    /// 4pt — 标签、小徽章
+    static let sm: CGFloat = 4
+    /// 8pt — 浮动面板、卡片、输入框（统一）
     static let md: CGFloat = 8
-    /// 12pt — 浮动面板
-    static let lg: CGFloat = 12
+    /// 14pt — 大面板（备选）
+    static let lg: CGFloat = 14
+    /// 20pt — 胶囊按钮
+    static let pill: CGFloat = 20
     /// 旧版兼容
-    static let xl: CGFloat = 12
-    static let twoXL: CGFloat = 16
+    static let xl: CGFloat = 8
+    static let twoXL: CGFloat = 14
 }
 
 // MARK: - 阴影系统（暖灰，非纯黑）

@@ -11,9 +11,9 @@ struct OneBoardPrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .padding(.horizontal, OneBoardSpacing.lg)
-            .padding(.vertical, OneBoardSpacing.sm)
+            .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+                RoundedRectangle(cornerRadius: OneBoardRadius.pill)
                     .fill(OneBoardColors.accent)
                     .opacity(configuration.isPressed ? 0.8 : (isEnabled ? 1.0 : 0.5))
             )
@@ -28,9 +28,9 @@ struct OneBoardSecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .padding(.horizontal, OneBoardSpacing.lg)
-            .padding(.vertical, OneBoardSpacing.sm)
+            .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+                RoundedRectangle(cornerRadius: OneBoardRadius.pill)
                     .fill(OneBoardColors.accent.opacity(configuration.isPressed ? 0.15 : 0.10))
             )
             .foregroundColor(OneBoardColors.accent)
@@ -61,8 +61,7 @@ struct OneBoardIconButtonStyle: ButtonStyle {
 struct OneBoardPanelModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
             .shadow(
                 color: OneBoardShadow.lg.color,
                 radius: OneBoardShadow.lg.radius,
