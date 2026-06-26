@@ -183,7 +183,7 @@ final class ScreenshotOverlayContentView: NSView {
         ctx.fill(bounds)
 
         if let rect = selectionRect, rect.width > 1, rect.height > 1 {
-            NSColor.systemBlue.setStroke()
+            OneBoardColors.nsAccent.setStroke()
             let border = NSBezierPath(rect: rect)
             border.lineWidth = 2
             border.stroke()
@@ -286,7 +286,7 @@ final class ScreenshotOverlayContentView: NSView {
             height: textSize.height + 6
         )
 
-        NSColor.systemBlue.setFill()
+        OneBoardColors.nsAccent.setFill()
         NSBezierPath(roundedRect: labelRect, xRadius: 5, yRadius: 5).fill()
         (text as NSString).draw(
             at: NSPoint(x: labelRect.minX + 6, y: labelRect.minY + 3),

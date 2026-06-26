@@ -30,7 +30,7 @@ struct ClipboardRowView: View {
 
             // 时间
             Text(entry.createdAt.timeAgoDescription)
-                .font(.system(size: 10))
+                .oneBoardFont(.captionSmall)
                 .foregroundColor(OneBoardColors.textSecondary)
                 .frame(width: 55, alignment: .trailing)
         }
@@ -61,14 +61,14 @@ struct ClipboardRowView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.sm))
         } else {
             ZStack {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                     .fill(OneBoardColors.primary.opacity(0.15))
 
                 Image(systemName: entry.contentTypeEnum?.iconName ?? "doc")
-                    .font(.system(size: 12))
+                    .oneBoardFont(.callout)
                     .foregroundColor(OneBoardColors.primary)
             }
             .frame(width: 28, height: 28)
@@ -82,10 +82,10 @@ struct ClipboardRowView: View {
             if entry.isPinned {
                 HStack(spacing: 4) {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: 8))
+                        .oneBoardFont(.captionSmall)
                         .foregroundColor(OneBoardColors.primary)
                     Text(entry.previewText)
-                        .font(.system(size: 12))
+                        .oneBoardFont(.callout)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundColor(OneBoardColors.textPrimary)
@@ -94,7 +94,7 @@ struct ClipboardRowView: View {
                 .clipped()
             } else {
                 Text(entry.previewText)
-                    .font(.system(size: 12))
+                    .oneBoardFont(.callout)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundColor(OneBoardColors.textPrimary)
@@ -104,7 +104,7 @@ struct ClipboardRowView: View {
 
             if let sourceApp = entry.sourceAppBundleId {
                 Text(sourceApp)
-                    .font(.system(size: 9))
+                    .oneBoardFont(.captionSmall)
                     .foregroundColor(OneBoardColors.textSecondary.opacity(0.7))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -117,7 +117,7 @@ struct ClipboardRowView: View {
     // MARK: - Row Background
 
     private var rowBackground: some View {
-        RoundedRectangle(cornerRadius: 6)
+        RoundedRectangle(cornerRadius: OneBoardRadius.md)
             .fill(backgroundColor)
     }
 
@@ -138,7 +138,7 @@ struct ClipboardRowView: View {
             // 置顶按钮
             Button(action: onPin) {
                 Image(systemName: entry.isPinned ? "pin.slash" : "pin")
-                    .font(.system(size: 11))
+                    .oneBoardFont(.caption)
                     .foregroundColor(entry.isPinned ? OneBoardColors.primary : OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
@@ -147,7 +147,7 @@ struct ClipboardRowView: View {
             // 删除按钮
             Button(action: onDelete) {
                 Image(systemName: "trash")
-                    .font(.system(size: 11))
+                    .oneBoardFont(.caption)
                     .foregroundColor(OneBoardColors.destructive.opacity(0.7))
             }
             .buttonStyle(.plain)

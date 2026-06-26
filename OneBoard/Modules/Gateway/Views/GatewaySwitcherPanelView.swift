@@ -23,11 +23,11 @@ struct GatewaySwitcherPanelView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: profile.symbolName)
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.accentColor)
+                                    .foregroundColor(OneBoardColors.accent)
                                     .frame(width: 22)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(profile.title)
-                                        .font(.system(size: 13, weight: .medium))
+                                        .oneBoardFont(.body)
                                     Text(summary(for: profile))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -36,7 +36,7 @@ struct GatewaySwitcherPanelView: View {
                                 Spacer()
                                 if viewModel.activeProfile?.id == profile.id {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
+                                        .foregroundColor(OneBoardColors.success)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -76,12 +76,12 @@ struct GatewaySwitcherPanelView: View {
     private var header: some View {
         HStack {
             Image(systemName: "network")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .oneBoardFont(.headline)
+                .foregroundColor(OneBoardColors.accent)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
                 Text(viewModel.displayGateway)
-                    .font(.system(size: 14, weight: .semibold))
+                    .oneBoardFont(.headline)
                 Text(viewModel.displayService.isEmpty ? "未检测到当前网络服务" : viewModel.displayService)
                     .font(.caption)
                     .foregroundColor(.secondary)

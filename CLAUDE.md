@@ -106,6 +106,17 @@ ONEBOARD_CODESIGN_IDENTITY=- bash script/package_app.sh
 - **第三阶段**（文件暂存模块）：待开始
 - **第四阶段**（收尾打磨）：待开始
 
+## 开发工作流（重要）
+
+**每次修完 bug 或写完新特性后，必须执行以下流程让用户看到效果：**
+
+1. 先卸载旧版 App（App 菜单 → 「彻底卸载并清理残留...」或 `bash script/uninstall.sh`）
+2. 构建最新版 app bundle：`ONEBOARD_BUNDLE_ID_SUFFIX=.dev bash script/build_app_bundle.sh`
+3. 打开最新版 app：`open build/OneBoard.app`
+4. 告知用户 app 已启动，请用户验证效果
+
+> **原因**：直接覆盖安装旧版 app 可能导致 Bundle ID 缓存问题，菜单栏图标不可见。
+
 ## 工作说明
 
 1. 每次修改代码前，先阅读相关文档了解需求和设计规范

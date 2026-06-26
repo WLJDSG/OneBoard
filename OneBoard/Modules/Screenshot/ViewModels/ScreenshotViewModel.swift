@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ApplicationServices
 
 /// 截图标注面板需要真正成为 key window，否则 SwiftUI TextField 会出现“看起来聚焦但无法输入”的问题。
 private final class AnnotationPanel: NSPanel {
@@ -368,14 +369,61 @@ final class ScreenshotViewModel: ObservableObject {
         translationResult = ""
         defer { isProcessing = false }
 
+        // 1. 先尝试通过模拟 Cmd+C 获取选中文字
         let selectedText = await SelectedTextReader.readSelectedText()
-        guard !selectedText.isEmpty else {
-            translationResult = "没有检测到选中的文字"
-            AnnotationResultWindowManager.shared.show(title: "翻译", text: translationResult)
+        if !selectedText.isEmpty {
+            TranslationPanelWindowManager.shared.show(sourceText: selectedText)
             return
         }
 
-        TranslationPanelWindowManager.shared.show(sourceText: selectedText)
+        // 2. Cmd+C 失败，尝试通过辅助功能 API 获取选中文字
+        if PermissionManager.shared.hasAccessibilityPermission,
+           let axText = await readSelectedTextViaAccessibility(),
+           !axText.isEmpty {
+            TranslationPanelWindowManager.shared.show(sourceText: axText)
+            return
+        }
+
+        // 3. 所有方式都失败，根据权限状态给出明确提示
+        if !PermissionManager.shared.hasAccessibilityPermission {
+            translationResult = "需要辅助功能权限才能读取选中文字\n请在系统设置 → 隐私与安全性 → 辅助功能 中开启 OneBoard"
+            AnnotationResultWindowManager.shared.show(title: "翻译失败", text: translationResult)
+            PermissionManager.shared.promptAccessibilityPermission()
+        } else {
+            translationResult = "未检测到选中的文字\n请确保在前台应用中选中了文字后再试"
+            AnnotationResultWindowManager.shared.show(title: "翻译", text: translationResult)
+        }
+    }
+
+    /// 通过辅助功能 API 读取前台应用选中的文字
+    private func readSelectedTextViaAccessibility() async -> String? {
+        await withCheckedContinuation { continuation in
+            let systemWide = AXUIElementCreateSystemWide()
+            var focusedApp: CFTypeRef?
+            AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp)
+
+            guard let app = focusedApp else {
+                continuation.resume(returning: nil)
+                return
+            }
+
+            var focusedElement: CFTypeRef?
+            AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedElement)
+
+            guard let element = focusedElement else {
+                continuation.resume(returning: nil)
+                return
+            }
+
+            var selectedText: CFTypeRef?
+            let result = AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, &selectedText)
+
+            if result == .success, let text = selectedText as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                continuation.resume(returning: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            } else {
+                continuation.resume(returning: nil)
+            }
+        }
     }
 
     private func resetRecognitionState() {

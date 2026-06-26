@@ -12,12 +12,12 @@ struct ClipboardSearchBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
+                .oneBoardFont(.callout)
                 .foregroundColor(OneBoardColors.textSecondary)
 
             TextField("搜索剪贴板历史...", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .oneBoardFont(.body)
                 .focused($isFocused)
                 .onSubmit { onSearch() }
                 .onChange(of: searchText) { _, _ in
@@ -30,7 +30,7 @@ struct ClipboardSearchBar: View {
                     onClear()
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
+                        .oneBoardFont(.callout)
                         .foregroundColor(OneBoardColors.textSecondary)
                 }
                 .buttonStyle(.plain)
@@ -39,7 +39,7 @@ struct ClipboardSearchBar: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: OneBoardRadius.lg)
                 .fill(OneBoardColors.primary.opacity(0.08))
         )
         .contentShape(Rectangle())

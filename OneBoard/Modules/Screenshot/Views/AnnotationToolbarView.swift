@@ -37,9 +37,9 @@ struct AnnotationToolbarView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.black.opacity(0.08), lineWidth: 1))
-        .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.xl))
+        .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.xl).stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1))
+        .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
         .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
             colorPickerPopover
         }
@@ -54,7 +54,7 @@ struct AnnotationToolbarView: View {
             }
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
+        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
     }
 
     // MARK: - 样式组
@@ -69,19 +69,19 @@ struct AnnotationToolbarView: View {
 
             Button(action: { annotationService.decrementStyleValue() }) {
                 Image(systemName: "minus")
-                    .font(.system(size: 11, weight: .semibold))
+                    .oneBoardFont(.caption)
                     .frame(width: 24, height: 28)
             }
             .buttonStyle(.plain)
             .help("减小样式")
 
             Text(styleValueText)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .oneBoardFont(.monoCaption)
                 .frame(minWidth: 34)
 
             Button(action: { annotationService.incrementStyleValue() }) {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
+                    .oneBoardFont(.caption)
                     .frame(width: 24, height: 28)
             }
             .buttonStyle(.plain)
@@ -89,17 +89,17 @@ struct AnnotationToolbarView: View {
 
             Button(action: { showColorPicker.toggle() }) {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .bold))
+                    .oneBoardFont(.body).bold()
                     .frame(width: 28, height: 28)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.06)))
-                    .foregroundColor(Color.black.opacity(0.74))
+                    .background(RoundedRectangle(cornerRadius: OneBoardRadius.lg).fill(OneBoardColors.accent.opacity(0.10)))
+                    .foregroundColor(OneBoardColors.textPrimary)
             }
             .buttonStyle(.plain)
             .help("更多颜色")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
+        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
     }
 
     private var styleValueText: String {
@@ -132,7 +132,7 @@ struct AnnotationToolbarView: View {
             .disabled(!annotationService.canRedo)
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
+        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
     }
 
     // MARK: - 输出操作组
@@ -172,7 +172,7 @@ struct AnnotationToolbarView: View {
             }
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.045)))
+        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
     }
 
     // MARK: - 工具按钮
@@ -182,17 +182,17 @@ struct AnnotationToolbarView: View {
             annotationService.selectedTool = tool
         }) {
             Image(systemName: tool.iconName)
-                .font(.system(size: 13))
+                .oneBoardFont(.body)
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 5).fill(
+                    RoundedRectangle(cornerRadius: OneBoardRadius.sm).fill(
                         annotationService.selectedTool == tool
-                            ? Color.black.opacity(0.1)
+                            ? OneBoardColors.accent.opacity(0.15)
                             : Color.clear
                     )
                 )
                 .foregroundColor(
-                    annotationService.selectedTool == tool ? Color.black : Color.black.opacity(0.76)
+                    annotationService.selectedTool == tool ? OneBoardColors.accent : OneBoardColors.textPrimary
                 )
         }
         .buttonStyle(.plain)
@@ -209,7 +209,7 @@ struct AnnotationToolbarView: View {
                 .overlay(
                     Circle().stroke(Color.white, lineWidth: 1.5)
                 )
-                .shadow(color: .black.opacity(0.15), radius: 1)
+                .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, x: 0, y: OneBoardShadow.sm.y)
         }
         .buttonStyle(.plain)
         .help("选择颜色")
@@ -226,9 +226,9 @@ struct AnnotationToolbarView: View {
                 )
                 .overlay(
                     Circle()
-                        .stroke(Color.black.opacity(color == .white ? 0.22 : 0.08), lineWidth: 1)
+                        .stroke(color == .white ? OneBoardColors.border : OneBoardColors.borderSubtle, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.12), radius: 1)
+                .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, x: 0, y: OneBoardShadow.sm.y)
         }
         .buttonStyle(.plain)
         .help("选择颜色")
@@ -243,14 +243,14 @@ struct AnnotationToolbarView: View {
                     Button(action: {
                         annotationService.selectedColor = color
                     }) {
-                        RoundedRectangle(cornerRadius: 5)
+                        RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                             .fill(Color(nsColor: color))
                             .frame(width: 28, height: 28)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 5)
+                                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                                     .stroke(Color.white, lineWidth: annotationService.selectedColor == color ? 2 : 0)
                             )
-                            .shadow(color: .black.opacity(0.12), radius: 1)
+                            .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, x: 0, y: OneBoardShadow.sm.y)
                     }
                     .buttonStyle(.plain)
                 }
@@ -263,7 +263,7 @@ struct AnnotationToolbarView: View {
                 showSystemColorPanel()
             }) {
                 Label("更多颜色…", systemImage: "paintpalette")
-                    .font(.system(size: 12))
+                    .oneBoardFont(.callout)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
@@ -306,13 +306,13 @@ struct AnnotationToolbarView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: prominent ? 14 : 12, weight: prominent ? .bold : .regular))
+                .font(prominent ? OneBoardFont.headline : OneBoardFont.callout)
                 .frame(width: prominent ? 34 : 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: prominent ? 9 : 8)
+                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
                         .fill(buttonBackgroundColor(prominent: prominent, muted: muted))
                 )
-                .foregroundColor(prominent ? .white : Color.black.opacity(muted ? 0.55 : 0.78))
+                .foregroundColor(prominent ? .white : OneBoardColors.textPrimary.opacity(muted ? 0.55 : 0.78))
         }
         .buttonStyle(.plain)
         .help(label)
@@ -320,9 +320,9 @@ struct AnnotationToolbarView: View {
 
     private func buttonBackgroundColor(prominent: Bool, muted: Bool) -> Color {
         if prominent {
-            return Color(nsColor: .systemGreen)
+            return OneBoardColors.success
         }
-        return Color.black.opacity(muted ? 0.03 : 0.06)
+        return OneBoardColors.accent.opacity(muted ? 0.06 : 0.10)
     }
 }
 
@@ -398,18 +398,18 @@ private struct AnnotationResultView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .oneBoardFont(.headline)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.black.opacity(0.55))
+                        .foregroundColor(OneBoardColors.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
 
             ScrollView {
                 Text(text)
-                    .font(.system(size: 13))
+                    .oneBoardFont(.body)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -417,10 +417,10 @@ private struct AnnotationResultView: View {
         .padding(14)
         .frame(width: 320, height: 260)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                .stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1)
         )
     }
 }

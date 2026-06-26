@@ -21,17 +21,17 @@ struct FileStagingView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 24)
+                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
+                    .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
             )
         }
         .frame(width: 348)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
+        .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)
             return true
@@ -53,13 +53,13 @@ struct FileStagingView: View {
     private func circleButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.black.opacity(0.62))
+                .oneBoardFont(.callout)
+                .foregroundColor(OneBoardColors.textSecondary)
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Color.white.opacity(0.58)))
+                .background(Circle().fill(OneBoardColors.background))
                 .overlay(
                     Circle()
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -69,11 +69,11 @@ struct FileStagingView: View {
         VStack(spacing: 8) {
             Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "doc.badge.plus")
                 .font(.system(size: 34))
-                .foregroundColor(isDropTargeted ? OneBoardColors.primary : .black.opacity(0.38))
+                .foregroundColor(isDropTargeted ? OneBoardColors.primary : OneBoardColors.textTertiary)
 
             Text(isDropTargeted ? "松开放入" : "拖到这里")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isDropTargeted ? OneBoardColors.primary : .black.opacity(0.45))
+                .oneBoardFont(.callout)
+                .foregroundColor(isDropTargeted ? OneBoardColors.primary : OneBoardColors.textSecondary)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 124)
@@ -107,11 +107,11 @@ struct FileStagingView: View {
                     }
 
                 Text(file.fileName)
-                    .font(.system(size: 10, weight: .medium))
+                    .oneBoardFont(.captionSmall)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(width: 92)
-                    .foregroundColor(.black.opacity(0.78))
+                    .foregroundColor(OneBoardColors.textPrimary)
             }
             .frame(width: 96, height: 116)
 
@@ -136,7 +136,7 @@ struct FileStagingView: View {
         }
         .frame(width: 72, height: 78)
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.52)))
+        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.background))
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
@@ -165,12 +165,13 @@ private struct StagedFileDeleteButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .font(.system(size: 10, weight: .bold))
+                .oneBoardFont(.captionSmall)
+                .bold()
                 .foregroundColor(isActive ? .white : OneBoardColors.destructive.opacity(0.68))
                 .frame(width: 24, height: 24)
                 .background(
                     Circle()
-                        .fill(isActive ? OneBoardColors.destructive.opacity(0.92) : Color.white.opacity(0.78))
+                        .fill(isActive ? OneBoardColors.destructive.opacity(0.92) : OneBoardColors.background)
                 )
                 .overlay(
                     Circle()
@@ -180,7 +181,7 @@ private struct StagedFileDeleteButton: View {
                         )
                 )
                 .clipShape(Circle())
-                .shadow(color: isActive ? OneBoardColors.destructive.opacity(0.18) : .black.opacity(0.08), radius: isActive ? 4 : 2, x: 0, y: 1)
+                .shadow(color: isActive ? OneBoardColors.destructive.opacity(0.18) : OneBoardShadow.sm.color, radius: isActive ? 4 : 2, x: 0, y: 1)
         }
         .buttonStyle(.plain)
         .focused($isFocused)

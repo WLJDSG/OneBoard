@@ -49,7 +49,7 @@ struct TodoSettingsView: View {
                     Toggle("", isOn: $txtEnabled).toggleStyle(.switch).labelsHidden()
                     VStack(alignment: .leading, spacing: 4) {
                         Text("纯文本文档 (.txt)")
-                        Text("创建 UTF-8 编码的空白文本文件").font(.caption).foregroundColor(.secondary)
+                        Text("创建 UTF-8 编码的空白文本文件").font(.caption).foregroundColor(OneBoardColors.textSecondary)
                     }
                 }.padding(.vertical, 4)
 
@@ -57,7 +57,7 @@ struct TodoSettingsView: View {
                     Toggle("", isOn: $docxEnabled).toggleStyle(.switch).labelsHidden()
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Word 文档 (.docx)")
-                        Text("创建空白 Word 文档").font(.caption).foregroundColor(.secondary)
+                        Text("创建空白 Word 文档").font(.caption).foregroundColor(OneBoardColors.textSecondary)
                     }
                 }.padding(.vertical, 4)
 
@@ -65,13 +65,13 @@ struct TodoSettingsView: View {
                     Toggle("", isOn: $xlsxEnabled).toggleStyle(.switch).labelsHidden()
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Excel 表格 (.xlsx)")
-                        Text("创建空白 Excel 表格").font(.caption).foregroundColor(.secondary)
+                        Text("创建空白 Excel 表格").font(.caption).foregroundColor(OneBoardColors.textSecondary)
                     }
                 }.padding(.vertical, 4)
 
             } header: { Text("Finder 右键新建文件类型") } footer: {
                 Text("启用 Finder 扩展后，右键文件夹可选择新建的文件类型。需在 系统设置 > 扩展 > Finder 扩展 中启用 OneBoard。")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundColor(OneBoardColors.textSecondary)
             }
 
         }

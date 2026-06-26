@@ -162,12 +162,12 @@ private struct OCRBubbleView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("提取文字")
-                    .font(.system(size: 15, weight: .semibold))
+                    .oneBoardFont(.title)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .oneBoardFont(.headline)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -177,13 +177,13 @@ private struct OCRBubbleView: View {
             Group {
                 if isEditing {
                     TextEditor(text: $editableText)
-                        .font(.system(size: 17, weight: .medium))
+                        .oneBoardFont(.title)
                         .scrollContentBackground(.hidden)
                         .background(Color.clear)
                 } else {
                     ScrollView {
                         Text(editableText)
-                            .font(.system(size: 17, weight: .medium))
+                            .oneBoardFont(.title)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -209,11 +209,11 @@ private struct OCRBubbleView: View {
         .frame(width: panelSize.width, height: panelSize.height)
         .background(
             BubbleShape(pointerHeight: pointerHeight)
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(OneBoardColors.background)
         )
         .overlay(
             BubbleShape(pointerHeight: pointerHeight)
-                .stroke(Color.black.opacity(0.12), lineWidth: 1)
+                .stroke(OneBoardShadow.md.color, lineWidth: 1)
         )
     }
 }
@@ -223,7 +223,7 @@ private struct BubbleShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let corner: CGFloat = 14
+        let corner: CGFloat = OneBoardRadius.xl
         let pointerWidth: CGFloat = 20
         let body = rect.insetBy(dx: 0, dy: pointerHeight).offsetBy(dx: 0, dy: pointerHeight)
 

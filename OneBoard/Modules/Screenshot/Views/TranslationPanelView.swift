@@ -34,12 +34,12 @@ struct TranslationPanelView: View {
             TranslationPanelDragHandle()
             HStack {
                 Image(systemName: serviceIconName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.accentColor)
+                    .oneBoardFont(.headline)
+                    .foregroundColor(OneBoardColors.accent)
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("翻译工作台")
-                        .font(.system(size: 14, weight: .semibold))
+                        .oneBoardFont(.headline)
                     Text(viewModel.translationServiceType.displayName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -47,7 +47,7 @@ struct TranslationPanelView: View {
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
+                        .oneBoardFont(.headline)
                         .foregroundStyle(.secondary)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
@@ -118,7 +118,7 @@ struct TranslationPanelView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .oneBoardFont(.captionSmall)
                 .foregroundStyle(.secondary)
             Picker(title, selection: selection) {
                 ForEach(options) { language in
@@ -136,7 +136,7 @@ struct TranslationPanelView: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text("原文")
-                    .font(.system(size: 11, weight: .semibold))
+                    .oneBoardFont(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
@@ -149,13 +149,13 @@ struct TranslationPanelView: View {
                 .help("清空原文")
             }
             TextEditor(text: $viewModel.sourceText)
-                .font(.system(size: 13))
+                .oneBoardFont(.body)
                 .scrollContentBackground(.hidden)
                 .background(Color(nsColor: .textBackgroundColor).opacity(0.78))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                        .stroke(OneBoardColors.textPrimary.opacity(0.10), lineWidth: 1)
                 )
                 .frame(height: 128)
         }
@@ -164,21 +164,21 @@ struct TranslationPanelView: View {
     private var translationSection: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text("译文")
-                .font(.system(size: 11, weight: .semibold))
+                .oneBoardFont(.caption)
                 .foregroundStyle(.secondary)
             ScrollView {
                 Text(translationText)
-                    .font(.system(size: 13))
-                    .foregroundColor(viewModel.translatedText.isEmpty ? Color.secondary : Color.primary)
+                    .oneBoardFont(.body)
+                    .foregroundColor(viewModel.translatedText.isEmpty ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
             }
             .background(Color(nsColor: .textBackgroundColor).opacity(0.78))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                    .stroke(OneBoardColors.textPrimary.opacity(0.10), lineWidth: 1)
             )
             .frame(height: 132)
         }
@@ -194,8 +194,8 @@ struct TranslationPanelView: View {
     private var statusBar: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(viewModel.errorMessage ?? serviceStatusText)
-                .font(.system(size: 11))
-                .foregroundColor(viewModel.errorMessage == nil ? .secondary : .red)
+                .oneBoardFont(.caption)
+                .foregroundColor(viewModel.errorMessage == nil ? OneBoardColors.textSecondary : OneBoardColors.destructive)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }

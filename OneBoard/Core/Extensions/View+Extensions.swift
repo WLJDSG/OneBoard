@@ -1,23 +1,26 @@
 import SwiftUI
 
-// MARK: - 淡蓝色主题按钮样式
+// MARK: - 统一按钮 / 列表 / 卡片修饰符
+// 注意：新版组件在 ComponentLibrary.swift 中，此文件保留旧版兼容别名
+
+// MARK: 主按钮（兼容别名 → 新组件）
 
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .oneBoardFont(.headline)
+            .padding(.horizontal, OneBoardSpacing.md)
+            .padding(.vertical, OneBoardSpacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(OneBoardColors.primary)
+                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                    .fill(OneBoardColors.accent)
                     .opacity(configuration.isPressed ? 0.8 : 1.0)
             )
             .foregroundColor(.white)
-            .font(.system(size: 13, weight: .medium))
     }
 }
 
-// MARK: - 列表行悬停效果
+// MARK: 列表行悬停效果（兼容别名）
 
 struct HoverEffectModifier: ViewModifier {
     @State private var isHovered = false
@@ -25,8 +28,8 @@ struct HoverEffectModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? OneBoardColors.primary.opacity(0.1) : Color.clear)
+                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                    .fill(isHovered ? OneBoardColors.accent.opacity(0.08) : Color.clear)
             )
             .onHover { hovering in
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -36,61 +39,46 @@ struct HoverEffectModifier: ViewModifier {
     }
 }
 
-// MARK: - 卡片样式
+// MARK: 卡片样式（兼容别名）
 
 struct CardStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(12)
+            .padding(OneBoardSpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: OneBoardRadius.lg)
                     .fill(OneBoardColors.background)
-                    .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 2)
+                    .shadow(
+                        color: OneBoardShadow.sm.color,
+                        radius: OneBoardShadow.sm.radius,
+                        x: 0,
+                        y: OneBoardShadow.sm.y
+                    )
             )
     }
 }
 
-// MARK: - 面板样式
+// MARK: 面板样式（兼容别名）
 
 struct OneBoardPanelStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
+                    .stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.14), radius: 14, x: 0, y: 6)
-    }
-}
-
-struct OneBoardPanelHeaderModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.62))
-            .overlay(Divider(), alignment: .bottom)
-    }
-}
-
-struct OneBoardListRowModifier: ViewModifier {
-    @State private var isHovered = false
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(isHovered ? Color.accentColor.opacity(0.08) : Color.clear)
+            .shadow(
+                color: OneBoardShadow.lg.color,
+                radius: OneBoardShadow.lg.radius,
+                x: 0,
+                y: OneBoardShadow.lg.y
             )
-            .onHover { isHovered = $0 }
     }
 }
 
-// MARK: - View 扩展
+// MARK: - View 扩展（兼容别名）
 
 extension View {
     /// 淡蓝色主题按钮样式
@@ -108,15 +96,8 @@ extension View {
         self.modifier(CardStyleModifier())
     }
 
+    /// 面板样式
     func oneBoardPanelStyle() -> some View {
         self.modifier(OneBoardPanelStyleModifier())
-    }
-
-    func oneBoardPanelHeader() -> some View {
-        self.modifier(OneBoardPanelHeaderModifier())
-    }
-
-    func oneBoardListRow() -> some View {
-        self.modifier(OneBoardListRowModifier())
     }
 }

@@ -28,12 +28,12 @@ struct GatewaySettingsView: View {
                                 Text(profile.title)
                                 Text(summary(for: profile))
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(OneBoardColors.textSecondary)
                             }
                             Spacer()
                             if viewModel.activeProfile?.id == profile.id {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
+                                    .foregroundColor(OneBoardColors.success)
                             }
                             Button("切换") { viewModel.switchGateway(to: profile) }
                                 .disabled(viewModel.isSwitching)
@@ -61,7 +61,7 @@ struct GatewaySettingsView: View {
             if let statusMessage = viewModel.statusMessage {
                 Text(statusMessage)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OneBoardColors.textSecondary)
                     .padding(.horizontal)
             }
         }

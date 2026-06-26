@@ -45,12 +45,12 @@ struct TodoSlidePanelView: View {
         }
         .frame(width: 320)
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: OneBoardRadius.xl)
+                .stroke(OneBoardColors.textPrimary.opacity(0.1), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
+        .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
         .onChange(of: viewModel.manualAddRequestID) { _ in
             beginAddingTodo()
         }
@@ -59,8 +59,8 @@ struct TodoSlidePanelView: View {
     // MARK: - 拖拽手柄
 
     private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 2)
-            .fill(Color.secondary.opacity(0.3))
+        RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+            .fill(OneBoardColors.textSecondary.opacity(0.3))
             .frame(width: 32, height: 4)
             .padding(.top, 8)
             .padding(.bottom, 4)
@@ -71,11 +71,11 @@ struct TodoSlidePanelView: View {
     private var headerView: some View {
         HStack {
             Image(systemName: "checklist")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .oneBoardFont(.headline)
+                .foregroundColor(OneBoardColors.accent)
 
             Text("待办事项")
-                .font(.system(size: 14, weight: .semibold))
+                .oneBoardFont(.headline)
 
             Spacer()
 
@@ -83,11 +83,11 @@ struct TodoSlidePanelView: View {
             let count = viewModel.activeItems.filter { !viewModel.fadingOutIds.contains($0.id ?? 0) }.count
             if count > 0 {
                 Text("\(count)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.caption)
+                    .foregroundColor(OneBoardColors.textSecondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                    .background(Capsule().fill(OneBoardColors.textSecondary.opacity(0.15)))
             }
 
             // 添加按钮
@@ -99,8 +99,8 @@ struct TodoSlidePanelView: View {
                 }
             }) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.accentColor)
+                    .oneBoardFont(.title)
+                    .foregroundColor(OneBoardColors.accent)
             }
             .buttonStyle(.plain)
             .help("手动添加待办")
@@ -110,8 +110,8 @@ struct TodoSlidePanelView: View {
                 TodoSlidePanelWindowManager.shared.setPinned(isPinned)
             }) {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 14))
-                    .foregroundColor(isPinned ? .accentColor : .secondary)
+                    .oneBoardFont(.headline)
+                    .foregroundColor(isPinned ? OneBoardColors.accent : OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
             .help(isPinned ? "取消固定" : "固定在屏幕上")
@@ -119,8 +119,8 @@ struct TodoSlidePanelView: View {
             // 关闭按钮
             Button(action: { TodoSlidePanelWindowManager.shared.hide() }) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.headline)
+                    .foregroundColor(OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
         }
@@ -133,11 +133,11 @@ struct TodoSlidePanelView: View {
     private var searchBar: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.caption)
+                .foregroundColor(OneBoardColors.textSecondary)
             TextField("搜索待办...", text: $viewModel.searchQuery)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .oneBoardFont(.callout)
                 .onChange(of: viewModel.searchQuery) { _ in
                     viewModel.performSearch()
                 }
@@ -148,15 +148,15 @@ struct TodoSlidePanelView: View {
                     Task { await viewModel.loadActive() }
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .oneBoardFont(.caption)
+                        .foregroundColor(OneBoardColors.textSecondary)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color.accentColor.opacity(0.06))
+        .background(OneBoardColors.accent.opacity(0.06))
     }
 
     // MARK: - 列表
@@ -172,7 +172,7 @@ struct TodoSlidePanelView: View {
                     // 高优先级（未过期）
                     let highActive = items.filter { $0.priority == .high && !$0.isOverdue }
                     if !highActive.isEmpty {
-                        sectionHeader("高优先级", color: .red)
+                        sectionHeader("高优先级", color: OneBoardColors.destructive)
                         ForEach(highActive) { item in
                             todoRow(item)
                             Divider().padding(.leading, 44)
@@ -182,7 +182,7 @@ struct TodoSlidePanelView: View {
                     // 过期项
                     let overdue = items.filter { $0.isOverdue }
                     if !overdue.isEmpty {
-                        sectionHeader("已过期", color: .red)
+                        sectionHeader("已过期", color: OneBoardColors.destructive)
                         ForEach(overdue) { item in
                             todoRow(item)
                             Divider().padding(.leading, 44)
@@ -192,7 +192,7 @@ struct TodoSlidePanelView: View {
                     // 中优先级（未过期）
                     let medActive = items.filter { $0.priority == .medium && !$0.isOverdue }
                     if !medActive.isEmpty {
-                        sectionHeader("中优先级", color: .orange)
+                        sectionHeader("中优先级", color: OneBoardColors.warning)
                         ForEach(medActive) { item in
                             todoRow(item)
                             Divider().padding(.leading, 44)
@@ -202,7 +202,7 @@ struct TodoSlidePanelView: View {
                     // 低优先级 + 无截止日期（未过期）
                     let lowActive = items.filter { ($0.priority == .low || $0.dueDate == nil) && !$0.isOverdue && $0.priority != .high && $0.priority != .medium }
                     if !lowActive.isEmpty {
-                        sectionHeader("其他", color: .gray)
+                        sectionHeader("其他", color: OneBoardColors.textTertiary)
                         ForEach(lowActive) { item in
                             todoRow(item)
                             Divider().padding(.leading, 44)
@@ -219,8 +219,8 @@ struct TodoSlidePanelView: View {
         HStack {
             Circle().fill(color).frame(width: 6, height: 6)
             Text(title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.captionSmall)
+                .foregroundColor(OneBoardColors.textSecondary)
             Spacer()
         }
         .padding(.horizontal, 14)
@@ -242,14 +242,14 @@ struct TodoSlidePanelView: View {
         VStack(spacing: 8) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 36))
-                .foregroundColor(.secondary.opacity(0.4))
+                .foregroundColor(OneBoardColors.textSecondary.opacity(0.4))
             Text(viewModel.isSearching ? "未找到匹配的待办" : "暂无待办事项")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.callout)
+                .foregroundColor(OneBoardColors.textSecondary)
             if !viewModel.isSearching {
                 Text("选中文字后按 Cmd+Shift+Option+T 添加")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .oneBoardFont(.caption)
+                    .foregroundColor(OneBoardColors.textSecondary.opacity(0.6))
             }
         }
         .padding(.vertical, 60)
@@ -263,11 +263,11 @@ struct TodoSlidePanelView: View {
             Button(action: { showHistory = true }) {
                 HStack(spacing: 4) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 11))
+                        .oneBoardFont(.caption)
                     Text("历史")
-                        .font(.system(size: 11))
+                        .oneBoardFont(.caption)
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
 
@@ -278,11 +278,11 @@ struct TodoSlidePanelView: View {
             if overdueCount > 0 {
                 HStack(spacing: 2) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 9))
+                        .oneBoardFont(.captionSmall)
                     Text("\(overdueCount) 项已过期")
-                        .font(.system(size: 10))
+                        .oneBoardFont(.captionSmall)
                 }
-                .foregroundColor(.red.opacity(0.7))
+                .foregroundColor(OneBoardColors.destructive.opacity(0.7))
             }
         }
         .padding(.horizontal, 14)
@@ -297,17 +297,17 @@ struct TodoSlidePanelView: View {
     private var inlineAddView: some View {
         VStack(alignment: .leading, spacing: 10) {
             TextEditor(text: $newTodoText)
-                .font(.system(size: 12))
+                .oneBoardFont(.callout)
                 .frame(height: 76)
                 .padding(6)
                 .focused($isNewTodoFocused)
                 .onChange(of: isNewTodoFocused) { focused in
                     TodoSlidePanelWindowManager.shared.setEditing(focused || isAddingTodo)
                 }
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor).opacity(0.75)))
+                .background(RoundedRectangle(cornerRadius: OneBoardRadius.md).fill(OneBoardColors.background.opacity(0.75)))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                        .stroke(OneBoardColors.textSecondary.opacity(0.25), lineWidth: 1)
                 )
 
             HStack(spacing: 8) {
@@ -322,7 +322,7 @@ struct TodoSlidePanelView: View {
 
                 Toggle("截止", isOn: $newTodoHasDueDate)
                     .toggleStyle(.checkbox)
-                    .font(.system(size: 11))
+                    .oneBoardFont(.caption)
 
                 Spacer()
 
@@ -340,28 +340,28 @@ struct TodoSlidePanelView: View {
 
             if newTodoHasDueDate {
                 DatePicker("到期", selection: $newTodoDueDate, displayedComponents: [.date, .hourAndMinute])
-                    .font(.system(size: 11))
+                    .oneBoardFont(.caption)
                     .controlSize(.small)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.accentColor.opacity(0.04))
+        .background(OneBoardColors.accent.opacity(0.04))
     }
 
     private func feedbackView(_ message: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "info.circle.fill")
-                .font(.system(size: 11))
+                .oneBoardFont(.caption)
             Text(message)
-                .font(.system(size: 11))
+                .oneBoardFont(.caption)
                 .lineLimit(2)
             Spacer()
         }
-        .foregroundColor(.secondary)
+        .foregroundColor(OneBoardColors.textSecondary)
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
-        .background(Color.accentColor.opacity(0.05))
+        .background(OneBoardColors.accent.opacity(0.05))
     }
 
     private func beginAddingTodo() {

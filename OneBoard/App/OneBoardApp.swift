@@ -198,7 +198,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let m = systemCapabilities.errorMessage ?? systemCapabilities.statusMessage ?? gatewayViewModel.statusMessage { Text(m) }
                     Text("Finder 右键新建文件需要先启用 OneBoard Finder 扩展。启用后，在桌面或 Finder 文件夹空白处右键，选择“新建文件”。")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.caption).foregroundColor(OneBoardColors.textSecondary)
                 }
             }
         }.formStyle(.grouped).padding()
@@ -208,8 +208,8 @@ struct SettingsView: View {
         HStack(alignment: .top, spacing: 12) {
             Toggle("", isOn: isOn).toggleStyle(.switch).labelsHidden()
             VStack(alignment: .leading, spacing: 4) {
-                HStack { Text(title); Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.caption).foregroundColor(isGranted ? .green : .orange) }
-                Text(description).font(.caption).foregroundColor(.secondary)
+                HStack { Text(title); Label(isGranted ? "已授权" : "未授权", systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.caption).foregroundColor(isGranted ? OneBoardColors.success : OneBoardColors.warning) }
+                Text(description).font(.caption).foregroundColor(OneBoardColors.textSecondary)
             }
         }.padding(.vertical, 4)
     }
@@ -218,8 +218,8 @@ struct SettingsView: View {
         HStack(alignment: .top, spacing: 12) {
             Toggle("", isOn: Binding(get: { isOn }, set: { $0 ? enable() : disable() })).toggleStyle(.switch).labelsHidden()
             VStack(alignment: .leading, spacing: 4) {
-                HStack { Text(title); Label(isOn ? "已启用" : "未启用", systemImage: isOn ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.caption).foregroundColor(isOn ? .green : .orange) }
-                Text(description).font(.caption).foregroundColor(.secondary)
+                HStack { Text(title); Label(isOn ? "已启用" : "未启用", systemImage: isOn ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").font(.caption).foregroundColor(isOn ? OneBoardColors.success : OneBoardColors.warning) }
+                Text(description).font(.caption).foregroundColor(OneBoardColors.textSecondary)
             }
         }.padding(.vertical, 4)
     }
@@ -261,7 +261,7 @@ struct SettingsView: View {
     private var aboutView: some View {
         VStack(spacing: 16) {
             Spacer()
-            Image(systemName: "square.on.square").font(.system(size: 48)).foregroundColor(OneBoardColors.primary)
+            Image(systemName: "square.on.square").font(.system(size: 48)).foregroundColor(OneBoardColors.accent)
             Text(Constants.appName).font(.title).fontWeight(.semibold)
             Text("截图 · 剪贴板 · 文件暂存").font(.subheadline).foregroundColor(OneBoardColors.textSecondary)
             Text("版本 1.0.0").font(.caption).foregroundColor(OneBoardColors.textSecondary.opacity(0.6))

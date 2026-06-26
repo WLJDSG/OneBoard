@@ -31,7 +31,7 @@ struct AnnotationCanvasView: View {
             VStack {
                 HStack {
                     Text(AnnotationService.pixelSizeDescription(for: baseImage))
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .oneBoardFont(.monoCaption)
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -170,13 +170,13 @@ struct AnnotationCanvasView: View {
 
             // 打字时显示虚线边框
             if isTextFieldFocused {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                     .stroke(color.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                     .allowsHitTesting(false)
             }
 
             // 拖拽移动区域（覆盖整个输入框）
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                 .fill(Color.clear)
                 .contentShape(Rectangle())
                 .gesture(
@@ -280,26 +280,26 @@ struct AnnotationCanvasView: View {
                     HStack(spacing: 12) {
                         Button("取消") { viewModel.cancelEditText() }
                             .buttonStyle(.plain)
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                            .oneBoardFont(.callout)
+                            .foregroundColor(OneBoardColors.textSecondary)
                         Button("确定") {
                             viewModel.commitEditText(layer.text ?? "")
                         }
                         .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.accentColor)
+                        .oneBoardFont(.callout)
+                        .foregroundColor(OneBoardColors.accent)
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
                         .fill(.ultraThinMaterial)
-                        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                        .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, y: OneBoardShadow.sm.y)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                        .stroke(OneBoardColors.accent.opacity(0.08), lineWidth: 1)
                 )
                 .position(x: layer.rect.midX, y: layer.rect.minY - 44)
             }
@@ -503,7 +503,7 @@ struct AnnotationLayerView: View {
                 )
                 .allowsHitTesting(false)
             } else if isHoveringText {
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                     .stroke(Color(nsColor: layer.color).opacity(0.35), lineWidth: 1)
                     .allowsHitTesting(false)
             }
@@ -546,7 +546,7 @@ private struct TextControlFrame: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                 .stroke(color.opacity(0.8), lineWidth: 1.5)
 
             if showsHandles {

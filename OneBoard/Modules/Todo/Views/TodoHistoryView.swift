@@ -10,14 +10,14 @@ struct TodoHistoryView: View {
             // 头部
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 14, weight: .semibold))
+                    .oneBoardFont(.headline)
                 Text("待办历史")
-                    .font(.system(size: 14, weight: .semibold))
+                    .oneBoardFont(.headline)
                 Spacer()
                 Button("关闭") { dismiss() }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.callout)
+                    .foregroundColor(OneBoardColors.textSecondary)
             }
             .padding()
 
@@ -53,30 +53,30 @@ struct TodoHistoryView: View {
     private var overviewSection: some View {
         VStack(spacing: 8) {
             Text("总览")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.caption)
+                .foregroundColor(OneBoardColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 0) {
-                statItem(title: "总待办", value: "\(viewModel.totalCount)", color: .primary)
+                statItem(title: "总待办", value: "\(viewModel.totalCount)", color: OneBoardColors.textPrimary)
                 Divider().frame(height: 30)
-                statItem(title: "已完成", value: "\(viewModel.totalCompleted)", color: .green)
+                statItem(title: "已完成", value: "\(viewModel.totalCompleted)", color: OneBoardColors.success)
                 Divider().frame(height: 30)
-                statItem(title: "完成率", value: viewModel.completionRateText, color: .accentColor)
+                statItem(title: "完成率", value: viewModel.completionRateText, color: OneBoardColors.accent)
             }
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.03)))
+            .background(RoundedRectangle(cornerRadius: OneBoardRadius.lg).fill(OneBoardColors.textPrimary.opacity(0.03)))
         }
     }
 
     private func statItem(title: String, value: String, color: Color) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 18, weight: .bold))
+                .oneBoardFont(.titleLarge)
                 .foregroundColor(color)
             Text(title)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.captionSmall)
+                .foregroundColor(OneBoardColors.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -86,14 +86,14 @@ struct TodoHistoryView: View {
     private var dailyChartSection: some View {
         VStack(spacing: 8) {
             Text("每日完成趋势（近30天）")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.caption)
+                .foregroundColor(OneBoardColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if viewModel.dailyCounts.isEmpty {
                 Text("暂无数据")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.callout)
+                    .foregroundColor(OneBoardColors.textSecondary)
                     .padding(.vertical, 20)
                     .frame(maxWidth: .infinity)
             } else {
@@ -104,16 +104,16 @@ struct TodoHistoryView: View {
                             VStack(spacing: 2) {
                                 Text("\(entry.count)")
                                     .font(.system(size: 8))
-                                    .foregroundColor(entry.count > 0 ? .accentColor : .clear)
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(entry.count > 0 ? Color.accentColor : Color.secondary.opacity(0.1))
+                                    .foregroundColor(entry.count > 0 ? OneBoardColors.accent : .clear)
+                                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+                                    .fill(entry.count > 0 ? OneBoardColors.accent : OneBoardColors.textSecondary.opacity(0.1))
                                     .frame(
                                         width: 8,
                                         height: max(4, CGFloat(entry.count) / CGFloat(max(maxCount, 1)) * 60)
                                     )
                                 Text(String(entry.date.suffix(5)))  // MM-DD
                                     .font(.system(size: 7))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(OneBoardColors.textSecondary)
                             }
                         }
                     }
@@ -128,14 +128,14 @@ struct TodoHistoryView: View {
     private var sourceAppSection: some View {
         VStack(spacing: 8) {
             Text("来源应用分布")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
+                .oneBoardFont(.caption)
+                .foregroundColor(OneBoardColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if viewModel.sourceAppStats.isEmpty {
                 Text("暂无数据")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.callout)
+                    .foregroundColor(OneBoardColors.textSecondary)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity)
             } else {
@@ -144,20 +144,20 @@ struct TodoHistoryView: View {
                 ForEach(Array(stats.enumerated()), id: \.offset) { _, entry in
                     HStack(spacing: 8) {
                         Text(appName(for: entry.bundleId) ?? "未知来源")
-                            .font(.system(size: 12))
+                            .oneBoardFont(.callout)
                             .frame(width: 80, alignment: .leading)
                             .lineLimit(1)
 
                         GeometryReader { geo in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.accentColor.opacity(0.6))
+                            RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+                                .fill(OneBoardColors.accent.opacity(0.6))
                                 .frame(width: max(10, CGFloat(entry.count) / CGFloat(maxCount) * geo.size.width))
                         }
                         .frame(height: 12)
 
                         Text("\(entry.count)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .oneBoardFont(.caption)
+                            .foregroundColor(OneBoardColors.textSecondary)
                             .frame(width: 30, alignment: .trailing)
                     }
                 }

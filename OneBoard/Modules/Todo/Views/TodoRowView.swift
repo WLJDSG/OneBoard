@@ -17,8 +17,8 @@ struct TodoRowView: View {
             // 勾选框
             Button(action: onToggleComplete) {
                 Image(systemName: isVisuallyCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(isVisuallyCompleted ? .green : .secondary)
+                    .oneBoardFont(.title)
+                    .foregroundColor(isVisuallyCompleted ? OneBoardColors.success : OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
 
@@ -34,10 +34,10 @@ struct TodoRowView: View {
             // 文字内容
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.text)
-                    .font(.system(size: 13))
+                    .oneBoardFont(.body)
                     .lineLimit(2)
                     .strikethrough(isVisuallyCompleted)
-                    .foregroundColor(isVisuallyCompleted ? .secondary : .primary)
+                    .foregroundColor(isVisuallyCompleted ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
 
                 // 元信息行
                 HStack(spacing: 6) {
@@ -45,22 +45,22 @@ struct TodoRowView: View {
                     if let appName = item.sourceAppName {
                         HStack(spacing: 2) {
                             Image(systemName: "app.badge")
-                                .font(.system(size: 9))
+                                .oneBoardFont(.captionSmall)
                             Text(appName)
-                                .font(.system(size: 10))
+                                .oneBoardFont(.captionSmall)
                         }
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OneBoardColors.textSecondary)
                     }
 
                     // 截止日期
                     if let dueDate = item.dueDate {
                         HStack(spacing: 2) {
                             Image(systemName: item.isOverdue ? "exclamationmark.triangle.fill" : "calendar")
-                                .font(.system(size: 9))
-                                .foregroundColor(item.isOverdue ? .red : .secondary)
+                                .oneBoardFont(.captionSmall)
+                                .foregroundColor(item.isOverdue ? OneBoardColors.destructive : OneBoardColors.textSecondary)
                             Text(formatDueDate(dueDate))
-                                .font(.system(size: 10))
-                                .foregroundColor(item.isOverdue ? .red : .secondary)
+                                .oneBoardFont(.captionSmall)
+                                .foregroundColor(item.isOverdue ? OneBoardColors.destructive : OneBoardColors.textSecondary)
                         }
                         .onTapGesture { showDueDatePicker = true }
                     }
@@ -72,8 +72,8 @@ struct TodoRowView: View {
             // 删除按钮
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .oneBoardFont(.callout)
+                    .foregroundColor(OneBoardColors.textSecondary)
             }
             .buttonStyle(.plain)
             .opacity(0.6)
@@ -81,8 +81,8 @@ struct TodoRowView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(item.isOverdue ? Color.red.opacity(0.08) : Color.clear)
+            RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                .fill(item.isOverdue ? OneBoardColors.destructive.opacity(0.08) : Color.clear)
         )
         .opacity(isFadingOut ? 0 : 1)
         .animation(.easeOut(duration: 2.5), value: isFadingOut)
@@ -102,11 +102,11 @@ struct TodoRowView: View {
                     HStack {
                         Circle().fill(p.color).frame(width: 8, height: 8)
                         Text(p.displayName)
-                            .font(.system(size: 12))
+                            .oneBoardFont(.callout)
                         Spacer()
                         if item.priority == p {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 11))
+                                .oneBoardFont(.caption)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -137,12 +137,12 @@ struct TodoRowView: View {
                     TodoListViewModel.shared.setDueDate(item, dueDate: nil)
                     showDueDatePicker = false
                 }
-                .font(.system(size: 12))
-                .foregroundColor(.red)
+                .oneBoardFont(.callout)
+                .foregroundColor(OneBoardColors.destructive)
             }
 
             Button("完成") { showDueDatePicker = false }
-                .font(.system(size: 12))
+                .oneBoardFont(.callout)
         }
         .padding()
     }
