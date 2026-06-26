@@ -8,30 +8,22 @@ struct FileStagingView: View {
     @State private var isDropTargeted: Bool = false
 
     var body: some View {
-        ZStack {
-            // 内容层（有 rounded corner 裁剪，避免直角底色）
-            VStack(spacing: 8) {
-                headerView
+        VStack(spacing: 0) {
+            // Header
+            header
 
-                if viewModel.stagedFiles.isEmpty {
-                    dropPromptView
-                } else {
-                    stagedPreview
-                }
+            Divider()
+
+            // Content
+            if viewModel.stagedFiles.isEmpty {
+                dropPrompt
+                    .frame(maxHeight: .infinity)
+            } else {
+                fileGrid
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                    .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
-            )
         }
-        .frame(width: 348)
-        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
-        .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
+        .frame(width: 320)
+        .oneBoardPanelStyle()
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)
             return true
@@ -41,88 +33,107 @@ struct FileStagingView: View {
         }
     }
 
-    private var headerView: some View {
-        HStack {
-            circleButton("xmark", action: onClose)
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "tray.full")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(OneBoardColors.accent)
+            Text("暂存架")
+                .font(.system(size: 14, weight: .semibold))
             Spacer()
+            if !viewModel.stagedFiles.isEmpty {
+                Text("\(viewModel.stagedFiles.count)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(OneBoardColors.textSecondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+                            .fill(OneBoardColors.textSecondary.opacity(0.12))
+                    )
+            }
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 28, height: 28)
+                    .foregroundColor(OneBoardColors.textSecondary)
+            }
+            .buttonStyle(.borderless)
         }
-        .frame(height: 32)
-        .background(WindowDragArea())
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(OneBoardColors.surface.opacity(0.5))
     }
 
-    private func circleButton(_ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .oneBoardFont(.callout)
-                .foregroundColor(OneBoardColors.textSecondary)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(OneBoardColors.background))
-                .overlay(
-                    Circle()
-                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-    }
+    // MARK: - Drop Prompt
 
-    private var dropPromptView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "doc.badge.plus")
-                .font(.system(size: 34))
-                .foregroundColor(isDropTargeted ? OneBoardColors.primary : OneBoardColors.textTertiary)
-
-            Text(isDropTargeted ? "松开放入" : "拖到这里")
-                .oneBoardFont(.callout)
-                .foregroundColor(isDropTargeted ? OneBoardColors.primary : OneBoardColors.textSecondary)
+    private var dropPrompt: some View {
+        VStack(spacing: 12) {
+            Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "tray")
+                .font(.system(size: 36))
+                .foregroundColor(isDropTargeted ? OneBoardColors.accent : OneBoardColors.textTertiary.opacity(0.5))
+            Text(isDropTargeted ? "松开放入" : "拖放文件到此处")
+                .font(.system(size: 13))
+                .foregroundColor(isDropTargeted ? OneBoardColors.accent : OneBoardColors.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 124)
-        .background(WindowDragArea())
+        .frame(height: 160)
     }
 
-    private var stagedPreview: some View {
-        let columns = [
-            GridItem(.adaptive(minimum: 92), spacing: 14)
-        ]
+    // MARK: - File Grid
 
-        return ScrollView {
-            LazyVGrid(columns: columns, spacing: 14) {
+    private var fileGrid: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 88), spacing: 12)],
+                spacing: 12
+            ) {
                 ForEach(viewModel.stagedFiles) { file in
-                    stagedFileTile(file)
+                    fileTile(file)
                 }
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(12)
         }
-        .frame(maxHeight: 366)
+        .frame(maxHeight: 340)
     }
 
-    private func stagedFileTile(_ file: StagedFile) -> some View {
+    private func fileTile(_ file: StagedFile) -> some View {
         ZStack(alignment: .topTrailing) {
-            VStack(spacing: 8) {
-                filePreview(file)
+            VStack(spacing: 6) {
+                thumbnail(for: file)
                     .onDrag {
                         let url = URL(fileURLWithPath: file.fileURL)
                         return NSItemProvider(contentsOf: url) ?? NSItemProvider(object: file.fileName as NSString)
                     }
 
                 Text(file.fileName)
-                    .oneBoardFont(.captionSmall)
+                    .font(.system(size: 10))
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(width: 92)
+                    .truncationMode(.middle)
+                    .frame(width: 80)
                     .foregroundColor(OneBoardColors.textPrimary)
             }
-            .frame(width: 96, height: 116)
+            .frame(width: 88, height: 100)
+            .background(
+                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                    .fill(OneBoardColors.accent.opacity(0.04))
+            )
 
-            StagedFileDeleteButton {
+            Button {
                 Task { await viewModel.removeFile(file) }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(OneBoardColors.textTertiary)
             }
-            .offset(x: -2, y: 2)
+            .buttonStyle(.plain)
+            .offset(x: 4, y: -4)
         }
     }
 
-    private func filePreview(_ file: StagedFile) -> some View {
+    private func thumbnail(for file: StagedFile) -> some View {
         Group {
             if let data = file.thumbnailData, let image = NSImage(data: data) {
                 Image(nsImage: image)
@@ -134,9 +145,7 @@ struct FileStagingView: View {
                     .aspectRatio(contentMode: .fit)
             }
         }
-        .frame(width: 72, height: 78)
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.background))
+        .frame(width: 56, height: 56)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
@@ -148,64 +157,6 @@ struct FileStagingView: View {
                     viewModel.addFile(url: url)
                 }
             }
-        }
-    }
-}
-
-private struct StagedFileDeleteButton: View {
-    let action: () -> Void
-
-    @State private var isHovered = false
-    @FocusState private var isFocused: Bool
-
-    private var isActive: Bool {
-        isHovered || isFocused
-    }
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark")
-                .oneBoardFont(.captionSmall)
-                .bold()
-                .foregroundColor(isActive ? .white : OneBoardColors.destructive.opacity(0.68))
-                .frame(width: 24, height: 24)
-                .background(
-                    Circle()
-                        .fill(isActive ? OneBoardColors.destructive.opacity(0.92) : OneBoardColors.background)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(
-                            isActive ? OneBoardColors.destructive.opacity(0.95) : OneBoardColors.destructive.opacity(0.18),
-                            lineWidth: 1
-                        )
-                )
-                .clipShape(Circle())
-                .shadow(color: isActive ? OneBoardColors.destructive.opacity(0.18) : OneBoardShadow.sm.color, radius: isActive ? 4 : 2, x: 0, y: 1)
-        }
-        .buttonStyle(.plain)
-        .focused($isFocused)
-        .contentShape(Circle())
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
-    }
-}
-
-private struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> DragView {
-        DragView()
-    }
-
-    func updateNSView(_ nsView: DragView, context: Context) {}
-
-    final class DragView: NSView {
-        override var acceptsFirstResponder: Bool { false }
-
-        override func mouseDown(with event: NSEvent) {
-            window?.performDrag(with: event)
         }
     }
 }
