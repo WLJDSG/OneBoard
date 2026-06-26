@@ -10,185 +10,104 @@ struct TranslationPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            titleBar
+            // Header — 可拖拽
+            header
+
+            Divider()
+
+            // 内容区
             VStack(alignment: .leading, spacing: 12) {
+                languageBar
                 sourceSection
                 translationSection
                 statusBar
                 actionBar
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 16)
+            .padding(16)
         }
         .translationTask(viewModel.appleTranslationConfiguration) { session in
             await viewModel.translateWithAppleSession(session)
         }
-        .frame(minWidth: 520, maxWidth: 520, minHeight: 400, maxHeight: 700)
+        .frame(minWidth: 480, maxWidth: 560, minHeight: 420, maxHeight: 700)
         .oneBoardPanelStyle()
     }
 
-    private var titleBar: some View {
-        ZStack {
-            TranslationPanelDragHandle()
-            HStack {
-                Image(systemName: serviceIconName)
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "globe")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(OneBoardColors.accent)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("翻译")
                     .oneBoardFont(.headline)
-                    .foregroundColor(OneBoardColors.accent)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("翻译工作台")
-                        .oneBoardFont(.headline)
-                    Text(viewModel.translationServiceType.displayName)
-                        .font(.system(size: 11))
-                        .foregroundColor(OneBoardColors.textSecondary)
-                }
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 28, height: 28)
-                        .foregroundColor(OneBoardColors.textSecondary)
-                }
-                .buttonStyle(.borderless)
-                .help("关闭")
-            }
-            .padding(.leading, 16)
-            .padding(.trailing, 8)
-            .padding(.top, 6)
-        }
-        .frame(height: 44)
-        .oneBoardPanelHeader()
-    }
-
-    private var serviceIconName: String {
-        switch viewModel.translationServiceType {
-        case .apple:
-            return "apple.logo"
-        case .google:
-            return "globe"
-        case .deepSeek:
-            return "sparkles"
-        }
-    }
-
-    private var sourceSection: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("原文")
-                    .oneBoardFont(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
-                Spacer()
-                Button {
-                    viewModel.clearSourceText()
-                } label: {
-                    Image(systemName: "xmark.circle")
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.sourceText.isEmpty)
-                .help("清空原文")
-            }
-            TextEditor(text: $viewModel.sourceText)
-                .oneBoardFont(.body)
-                .scrollContentBackground(.hidden)
-                .background(OneBoardColors.background)
-                .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
-                )
-                .frame(minHeight: 120)
-                .frame(height: 132)
-        }
-    }
-
-    private var translationSection: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("译文")
-                .oneBoardFont(.caption)
-                .foregroundColor(OneBoardColors.textSecondary)
-            ScrollView {
-                if viewModel.isTranslating {
-                    HStack {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("翻译中...")
-                            .oneBoardFont(.caption)
-                            .foregroundColor(OneBoardColors.textSecondary)
+                Picker("", selection: Binding(
+                    get: { viewModel.translationServiceType },
+                    set: { onSelectService($0) }
+                )) {
+                    ForEach(TranslationServiceType.allCases) { type in
+                        Text(type.displayName).tag(type)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                } else {
-                    Text(translationText)
-                        .oneBoardFont(.body)
-                        .foregroundColor(viewModel.translatedText.isEmpty ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+                .frame(width: 100)
             }
-            .background(OneBoardColors.background)
-            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                    .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
-            )
-            .frame(minHeight: 120)
-            .frame(height: 132)
+
+            Spacer()
+
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 28, height: 28)
+                    .foregroundColor(OneBoardColors.textSecondary)
+            }
+            .buttonStyle(.borderless)
+            .help("关闭 (Esc)")
         }
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .frame(height: 44)
+        .background(TranslationPanelDragHandle())
+        .background(OneBoardColors.background.opacity(0.62))
     }
 
-    private var translationText: String {
-        viewModel.translatedText.isEmpty ? "译文会显示在这里" : viewModel.translatedText
-    }
+    // MARK: - Language Bar
 
-    private var statusBar: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(viewModel.errorMessage ?? serviceStatusText)
-                .oneBoardFont(.caption)
-                .foregroundColor(viewModel.errorMessage == nil ? OneBoardColors.textSecondary : OneBoardColors.destructive)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, minHeight: 0, alignment: .topLeading)
-    }
-
-    private var serviceStatusText: String {
-        switch viewModel.translationServiceType {
-        case .apple:
-            return "Apple 使用系统 Translation，可离线能力取决于系统支持。"
-        case .google:
-            return "Google 使用免费 Web 接口，不需要 API Key。"
-        case .deepSeek:
-            return "DeepSeek 需要在设置中填写 API Key。"
-        }
-    }
-
-    private var actionBar: some View {
+    private var languageBar: some View {
         HStack(spacing: 8) {
             Picker("源语言", selection: $viewModel.sourceLanguage) {
-                ForEach(TranslationLanguage.sourceOptions) { language in
-                    Text(language.displayName).tag(language)
+                ForEach(TranslationLanguage.sourceOptions) { lang in
+                    Text(lang.displayName).tag(lang)
                 }
             }
             .labelsHidden()
             .controlSize(.small)
             .disabled(viewModel.isTranslating)
-            .frame(width: 100)
 
             Button {
                 viewModel.swapLanguages()
             } label: {
                 Image(systemName: "arrow.left.arrow.right")
-                    .frame(width: 28, height: 28)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 24, height: 24)
             }
             .buttonStyle(.borderless)
-            .disabled(viewModel.sourceLanguage == .auto || viewModel.translatedText.isEmpty || viewModel.isTranslating)
+            .disabled(viewModel.sourceLanguage == .auto || viewModel.isTranslating)
             .help("交换语言")
 
+            Image(systemName: "arrow.right")
+                .font(.system(size: 10))
+                .foregroundColor(OneBoardColors.textTertiary)
+
             Picker("目标语言", selection: $viewModel.targetLanguage) {
-                ForEach(TranslationLanguage.targetOptions) { language in
-                    Text(language.displayName).tag(language)
+                ForEach(TranslationLanguage.targetOptions) { lang in
+                    Text(lang.displayName).tag(lang)
                 }
             }
             .labelsHidden()
@@ -196,12 +115,124 @@ struct TranslationPanelView: View {
             .disabled(viewModel.isTranslating)
 
             Spacer()
+        }
+    }
 
+    // MARK: - Source
+
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("原文")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(OneBoardColors.textTertiary)
+                    .textCase(.uppercase)
+                Spacer()
+                if !viewModel.sourceText.isEmpty {
+                    Button("清空") { viewModel.clearSourceText() }
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 10))
+                        .foregroundColor(OneBoardColors.textTertiary)
+                }
+            }
+            TextEditor(text: $viewModel.sourceText)
+                .font(.system(size: 14))
+                .scrollContentBackground(.hidden)
+                .background(OneBoardColors.background)
+                .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
+                )
+                .frame(minHeight: 100)
+        }
+    }
+
+    // MARK: - Translation
+
+    private var translationSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("译文")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(OneBoardColors.textTertiary)
+                .textCase(.uppercase)
+
+            if viewModel.isTranslating {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                    Text("正在翻译...")
+                        .font(.system(size: 13))
+                        .foregroundColor(OneBoardColors.textSecondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 100, alignment: .center)
+                .background(OneBoardColors.background)
+                .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
+                )
+            } else {
+                ScrollView {
+                    Text(displayedTranslation)
+                        .font(.system(size: 14))
+                        .foregroundColor(viewModel.translatedText.isEmpty ? OneBoardColors.textTertiary : OneBoardColors.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                }
+                .background(OneBoardColors.background)
+                .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                        .stroke(OneBoardColors.borderSubtle, lineWidth: 1)
+                )
+                .frame(minHeight: 100)
+            }
+        }
+    }
+
+    private var displayedTranslation: String {
+        viewModel.translatedText.isEmpty ? "翻译结果将显示在这里" : viewModel.translatedText
+    }
+
+    // MARK: - Status
+
+    private var statusBar: some View {
+        Group {
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundColor(OneBoardColors.destructive)
+                    .lineLimit(2)
+            } else {
+                Text(serviceHint)
+                    .font(.system(size: 10))
+                    .foregroundColor(OneBoardColors.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var serviceHint: String {
+        switch viewModel.translationServiceType {
+        case .apple: return "使用系统翻译 · 支持离线"
+        case .google: return "Google 翻译 · 免费、无需 API Key"
+        case .deepSeek: return "DeepSeek · 需填写 API Key"
+        }
+    }
+
+    // MARK: - Actions
+
+    private var actionBar: some View {
+        HStack(spacing: 8) {
             Button(action: onTranslate) {
-                Label("重新翻译", systemImage: "arrow.clockwise")
+                Label("翻译", systemImage: "arrow.clockwise")
             }
             .oneBoardPrimaryButton()
             .disabled(viewModel.isTranslating || !hasSourceText)
+
+            Spacer()
 
             Button {
                 NSPasteboard.general.clearContents()
@@ -210,7 +241,7 @@ struct TranslationPanelView: View {
                 Label("复制原文", systemImage: "doc.on.doc")
             }
             .oneBoardSecondaryButton()
-            .disabled(viewModel.sourceText.isEmpty || viewModel.isTranslating)
+            .disabled(viewModel.sourceText.isEmpty)
 
             Button {
                 viewModel.copyTranslatedText()
@@ -218,7 +249,7 @@ struct TranslationPanelView: View {
                 Label("复制译文", systemImage: "doc.on.clipboard")
             }
             .oneBoardSecondaryButton()
-            .disabled(viewModel.translatedText.isEmpty || viewModel.isTranslating)
+            .disabled(viewModel.translatedText.isEmpty)
         }
     }
 
