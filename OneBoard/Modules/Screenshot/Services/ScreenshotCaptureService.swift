@@ -1,47 +1,100 @@
 import AppKit
 import SwiftUI
 
-/// 截图捕获服务 — 使用系统原生截图工具 screencapture -i
+/// 截图捕获服务 — 自定义全屏遮罩 + 框选区域
 @MainActor
 final class ScreenshotCaptureService: NSObject {
 
-    /// 捕获屏幕截图（调用系统原生交互式截图工具）
-    func captureRegion() async -> ScreenshotResult? {
-        print("[Screenshot] 启动 screencapture -i ...")
-        let tmpPath = NSTemporaryDirectory() + "oneboard_\(UUID().uuidString).png"
+    private var overlayWindow: NSWindow?
 
-        // 在后台线程执行 Process，避免阻塞主线程 run loop
-        let exitCode: Int32 = await Task.detached(priority: .userInitiated) {
+    /// 捕获屏幕截图（静默全屏截图 → 自定义遮罩框选）
+    func captureRegion() async -> ScreenshotResult? {
+        // 1. 静默截取全屏（后台线程）
+        guard let fullScreenImage = await captureFullScreenCG() else {
+            print("[Screenshot] 全屏截图失败")
+            return nil
+        }
+        print("[Screenshot] 全屏截图完成, size=\(fullScreenImage.size)")
+
+        // 2. 显示自定义遮罩，等待用户框选
+        return await withCheckedContinuation { continuation in
+            var didResume = false
+            let finish: (ScreenshotResult?) -> Void = { [weak self] result in
+                guard !didResume else { return }
+                didResume = true
+                Task { [weak self] in
+                    self?.overlayWindow?.close()
+                    self?.overlayWindow = nil
+                    continuation.resume(returning: result)
+                }
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else {
+                    finish(nil)
+                    return
+                }
+
+                guard let screen = NSScreen.main else {
+                    finish(nil)
+                    return
+                }
+
+                let eventManager = OverlayEventManager()
+
+                let overlayView = ScreenshotOverlayContentView(
+                    screenshot: fullScreenImage,
+                    eventManager: eventManager
+                )
+                overlayView.onConfirm = { [weak eventManager] croppedImage, selectionRect in
+                    eventManager?.cleanup()
+                    finish(ScreenshotResult(image: croppedImage, selectionRect: selectionRect))
+                }
+                overlayView.onCancel = { [weak eventManager] in
+                    eventManager?.cleanup()
+                    finish(nil)
+                }
+
+                let window = NSWindow(
+                    contentRect: screen.frame,
+                    styleMask: .borderless,
+                    backing: .buffered,
+                    defer: false
+                )
+                window.level = .screenSaver
+                window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+                window.isOpaque = false
+                window.backgroundColor = .clear
+                window.hasShadow = false
+                overlayView.frame = NSRect(origin: .zero, size: screen.frame.size)
+                overlayView.autoresizingMask = [.width, .height]
+                window.contentView = overlayView
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+
+                self.overlayWindow = window
+            }
+        }
+    }
+
+    /// 在后台线程使用 screencapture 静默截取全屏
+    private func captureFullScreenCG() async -> NSImage? {
+        let tmpPath = NSTemporaryDirectory() + "oneboard_fullscreen_\(UUID().uuidString).png"
+        let exitCode = await Task.detached(priority: .userInitiated) {
             let task = Process()
             task.launchPath = "/usr/sbin/screencapture"
-            task.arguments = ["-i", "-x", "-t", "png", tmpPath]
+            task.arguments = ["-x", "-t", "png", tmpPath]
             task.launch()
             task.waitUntilExit()
             return task.terminationStatus
         }.value
-
-        if exitCode != 0 {
-            print("[Screenshot] screencapture -i 退出码=\(exitCode)（0=成功, 1=用户取消）")
-            try? FileManager.default.removeItem(atPath: tmpPath)
+        defer { try? FileManager.default.removeItem(atPath: tmpPath) }
+        guard exitCode == 0,
+              let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
+            print("[Screenshot] screencapture 失败, exitCode=\(exitCode)")
             return nil
         }
-
-        guard let image = NSImage(contentsOf: URL(fileURLWithPath: tmpPath)) else {
-            print("[Screenshot] 无法读取截图文件")
-            try? FileManager.default.removeItem(atPath: tmpPath)
-            return nil
-        }
-        try? FileManager.default.removeItem(atPath: tmpPath)
-        print("[Screenshot] 截图成功, size=\(image.size)")
-
-        // 以图片尺寸居中定位标注窗口
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let rect = CGRect(
-            x: screenFrame.midX - image.size.width / 2,
-            y: screenFrame.midY - image.size.height / 2,
-            width: image.size.width,
-            height: image.size.height
-        )
-        return ScreenshotResult(image: image, selectionRect: rect)
+        print("[Screenshot] 全屏截图完成, pixelSize=\(AnnotationService.pixelSize(for: image))")
+        return image
     }
 }

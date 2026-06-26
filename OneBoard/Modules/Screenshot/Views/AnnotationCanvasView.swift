@@ -3,6 +3,7 @@ import SwiftUI
 /// 标注画布视图（仅含截图和标注层，工具栏已分离为独立悬浮窗）
 struct AnnotationCanvasView: View {
     let baseImage: NSImage
+    let displaySize: CGSize
     @ObservedObject var annotationService: AnnotationService
     @ObservedObject var viewModel: AnnotationViewModel
 
@@ -14,6 +15,8 @@ struct AnnotationCanvasView: View {
     let onClose: () -> Void
 
     @State private var keyMonitor: Any?
+    @State private var canvasWindow: NSWindow?
+    @State private var pressedOptionKeyCodes: Set<UInt16> = []
     @State private var textFieldValue: String = ""
     @State private var textInputResizeStartRect: CGRect?
     @State private var textInputResizeHandle: CanvasResizeHandle?
@@ -23,6 +26,23 @@ struct AnnotationCanvasView: View {
     var body: some View {
         ZStack {
             imageCanvas
+
+            // 像素尺寸显示
+            VStack {
+                HStack {
+                    Text(AnnotationService.pixelSizeDescription(for: baseImage))
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(8)
+            .allowsHitTesting(false)
+
 
             // 文字标注输入浮层（新增文字）
             if viewModel.isTextInput {
@@ -34,6 +54,9 @@ struct AnnotationCanvasView: View {
                 textEditOverlay
             }
         }
+        .background(WindowAccessor { window in
+            canvasWindow = window
+        })
         .onAppear {
             viewModel.setTextInputCommitHandler {
                 viewModel.commitText(textFieldValue)
@@ -41,23 +64,8 @@ struct AnnotationCanvasView: View {
                 isTextFieldFocused = false
             }
 
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if event.keyCode == 53 { // Esc
-                    if viewModel.isTextInput {
-                        viewModel.cancelTextInput()
-                    } else if viewModel.editingTextLayerID != nil {
-                        viewModel.cancelEditText()
-                    } else {
-                        onClose()
-                    }
-                    return nil
-                }
-                // Delete 键删除选中的文字标注
-                if event.keyCode == 51, viewModel.selectedTextLayerID != nil {
-                    viewModel.deleteSelectedTextLayer()
-                    return nil
-                }
-                return event
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
+                handleKeyboardEvent(event)
             }
         }
         .onDisappear {
@@ -117,20 +125,23 @@ struct AnnotationCanvasView: View {
         }
     }
 
-    // MARK: - 文字输入浮层
+    // MARK: - 文字输入浮层 (微信风格)
 
     private var textInputOverlay: some View {
         let rect = viewModel.textInputRect
+        let fontSize = annotationService.fontSize
+        let color = Color(nsColor: annotationService.selectedColor)
 
-        return ZStack(alignment: .bottomTrailing) {
+        return ZStack {
+            // 透明背景 TextField，直接显示在图片上
             TextField("输入文字…", text: $textFieldValue)
                 .textFieldStyle(.plain)
-                .font(.system(size: 18))
-                .foregroundColor(Color(nsColor: annotationService.selectedColor))
+                .font(.system(size: fontSize))
+                .foregroundColor(color)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .frame(width: rect.width, height: rect.height, alignment: .topLeading)
-                .background(Color.white.opacity(0.001))
+                .background(Color.white.opacity(0.0001))
                 .focused($isTextFieldFocused)
                 .onSubmit {
                     viewModel.commitText(textFieldValue)
@@ -142,7 +153,14 @@ struct AnnotationCanvasView: View {
                         isTextFieldFocused = true
                     }
                 }
-                // 焦点丢失时自动提交文字（光标在截图外激活 → 文字保留在图片上）
+                .onChange(of: annotationService.fontSize) { _, newSize in
+                    // 字体变化时调整输入框大小
+                    if !isResizingTextInput {
+                        let newWidth = max(newSize * 8, 120)
+                        let newHeight = max(newSize * 1.8, 30)
+                        viewModel.textInputRect.size = CGSize(width: newWidth, height: newHeight)
+                    }
+                }
                 .onChange(of: isTextFieldFocused) { _, focused in
                     if !focused, !isResizingTextInput {
                         viewModel.commitText(textFieldValue)
@@ -150,18 +168,19 @@ struct AnnotationCanvasView: View {
                     }
                 }
 
-            TextControlFrame(
-                rect: CGRect(origin: .zero, size: rect.size),
-                color: Color(nsColor: annotationService.selectedColor),
-                showsHandles: true
-            )
-            .allowsHitTesting(false)
+            // 打字时显示虚线边框
+            if isTextFieldFocused {
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(color.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    .allowsHitTesting(false)
+            }
 
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.clear, lineWidth: 10)
+            // 拖拽移动区域（覆盖整个输入框）
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.clear)
                 .contentShape(Rectangle())
                 .gesture(
-                    DragGesture(minimumDistance: 2)
+                    DragGesture(minimumDistance: 3)
                         .onChanged { value in
                             isResizingTextInput = true
                             if textInputResizeStartRect == nil {
@@ -182,12 +201,13 @@ struct AnnotationCanvasView: View {
                         }
                 )
 
+            // 缩放手柄
             ForEach(CanvasResizeHandle.allCases, id: \.self) { handle in
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 18, height: 18)
+                Circle()
+                    .fill(color)
+                    .frame(width: 6, height: 6)
                     .position(handle.position(in: CGRect(origin: .zero, size: rect.size)))
-                    .contentShape(Rectangle())
+                    .contentShape(Rectangle().size(width: 20, height: 20))
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
@@ -219,13 +239,13 @@ struct AnnotationCanvasView: View {
         .position(x: rect.midX, y: rect.midY)
     }
 
-    // MARK: - 文字编辑浮层
+    // MARK: - 文字编辑浮层 (微信风格)
 
     private var textEditOverlay: some View {
         Group {
             if let layerID = viewModel.editingTextLayerID,
                let layer = annotationService.layers.first(where: { $0.id == layerID }) {
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     TextField("编辑文字…", text: Binding(
                         get: { layer.text ?? "" },
                         set: { newValue in
@@ -238,8 +258,12 @@ struct AnnotationCanvasView: View {
                     .font(.system(size: layer.fontSize))
                     .foregroundColor(Color(nsColor: layer.color))
                     .frame(minWidth: 120, minHeight: 28)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.001))
+                    )
                     .focused($isTextFieldFocused)
                     .onSubmit {
                         viewModel.commitEditText(layer.text ?? "")
@@ -249,18 +273,35 @@ struct AnnotationCanvasView: View {
                             isTextFieldFocused = true
                         }
                     }
+                    .onChange(of: annotationService.fontSize) { _, _ in
+                        // 字体大小变化时同步
+                    }
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: 12) {
                         Button("取消") { viewModel.cancelEditText() }
-                            .buttonStyle(.plain).font(.system(size: 11))
-                        Button("确定") { viewModel.commitEditText(layer.text ?? "") }
-                            .buttonStyle(.plain).font(.system(size: 11, weight: .semibold))
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Button("确定") {
+                            viewModel.commitEditText(layer.text ?? "")
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.accentColor)
                     }
                 }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.black.opacity(0.1), lineWidth: 1))
-                .position(x: layer.rect.midX, y: layer.rect.minY - 40)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                )
+                .position(x: layer.rect.midX, y: layer.rect.minY - 44)
             }
         }
     }
@@ -278,6 +319,106 @@ struct AnnotationCanvasView: View {
             width: width,
             height: height
         )
+    }
+
+    private func handleKeyboardEvent(_ event: NSEvent) -> NSEvent? {
+        guard event.window === canvasWindow else { return event }
+
+        if viewModel.isTextInput || viewModel.editingTextLayerID != nil {
+            if event.type == .keyDown, event.keyCode == 53 {
+                if viewModel.isTextInput {
+                    viewModel.cancelTextInput()
+                } else {
+                    viewModel.cancelEditText()
+                }
+                return nil
+            }
+            return event
+        }
+
+        if event.type == .flagsChanged {
+            return handleFlagsChanged(event)
+        }
+
+        guard event.type == .keyDown else { return event }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let isCommand = flags.contains(.command)
+        let isShift = flags.contains(.shift)
+
+        if isCommand, event.keyCode == 6 {
+            if isShift {
+                viewModel.redo()
+            } else {
+                viewModel.undo()
+            }
+            return nil
+        }
+
+        if isCommand, event.keyCode == 1 {
+            onSave(renderedImage())
+            return nil
+        }
+
+        switch event.keyCode {
+        case 36, 76:
+            onCopy(renderedImage())
+            onClose()
+            return nil
+        case 53:
+            onClose()
+            return nil
+        case 51, 117:
+            guard viewModel.selectedTextLayerID != nil else { return event }
+            viewModel.deleteSelectedTextLayer()
+            return nil
+        default:
+            if viewModel.selectTool(forNumberKey: event.keyCode) {
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func handleFlagsChanged(_ event: NSEvent) -> NSEvent? {
+        guard event.keyCode == 58 || event.keyCode == 61 else { return event }
+
+        if pressedOptionKeyCodes.contains(event.keyCode) {
+            pressedOptionKeyCodes.remove(event.keyCode)
+            return nil
+        }
+
+        guard event.modifierFlags.contains(.option) else { return event }
+        pressedOptionKeyCodes.insert(event.keyCode)
+
+        if event.keyCode == 58 {
+            viewModel.cycleColorBackward()
+        } else {
+            viewModel.incrementStyleValue()
+        }
+        return nil
+    }
+
+    private func renderedImage() -> NSImage {
+        annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
+    }
+}
+
+private struct WindowAccessor: NSViewRepresentable {
+    let onResolve: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            onResolve(view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            onResolve(nsView.window)
+        }
     }
 }
 
@@ -334,6 +475,8 @@ struct AnnotationLayerView: View {
             .allowsHitTesting(false)
         case .text:
             textLayerView
+        case .number:
+            numberLayerView
         case .mosaic:
             MosaicPreview()
                 .frame(width: layer.rect.width, height: layer.rect.height)
@@ -371,6 +514,28 @@ struct AnnotationLayerView: View {
         .onHover { hovering in
             isHoveringText = hovering
         }
+    }
+
+    private var numberLayerView: some View {
+        let textColor = readableTextColor(for: layer.color)
+        return ZStack {
+            Circle()
+                .fill(Color(nsColor: layer.color))
+            Circle()
+                .stroke(Color.white.opacity(0.85), lineWidth: max(1, layer.lineWidth))
+            Text("\(layer.numberValue ?? 0)")
+                .font(.system(size: layer.fontSize, weight: .bold))
+                .foregroundColor(textColor)
+        }
+        .frame(width: layer.rect.width, height: layer.rect.height)
+        .position(x: layer.rect.midX, y: layer.rect.midY)
+        .allowsHitTesting(false)
+    }
+
+    private func readableTextColor(for color: NSColor) -> Color {
+        guard let rgb = color.usingColorSpace(.deviceRGB) else { return .white }
+        let luminance = 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
+        return luminance > 0.62 ? .black : .white
     }
 }
 

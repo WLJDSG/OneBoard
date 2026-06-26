@@ -8,6 +8,7 @@ enum AnnotationTool: String, CaseIterable {
     case arrow
     case line
     case text        // 文字标注，替换原来的高亮笔
+    case number
     case mosaic
 
     var displayName: String {
@@ -18,6 +19,7 @@ enum AnnotationTool: String, CaseIterable {
         case .arrow: return "箭头"
         case .line: return "直线"
         case .text: return "文字"
+        case .number: return "编号"
         case .mosaic: return "打码"
         }
     }
@@ -30,6 +32,7 @@ enum AnnotationTool: String, CaseIterable {
         case .arrow: return "arrow.up.right"
         case .line: return "line.diagonal"
         case .text: return "character.textbox"
+        case .number: return "1.circle"
         case .mosaic: return "checkerboard.rectangle"
         }
     }
@@ -42,6 +45,7 @@ struct AnnotationLayer: Identifiable {
     var rect: CGRect
     var color: NSColor
     var text: String?
+    var numberValue: Int?
     var fontSize: CGFloat
     var lineWidth: CGFloat
     var startPoint: CGPoint?
@@ -52,6 +56,7 @@ struct AnnotationLayer: Identifiable {
         rect: CGRect,
         color: NSColor = .systemRed,
         text: String? = nil,
+        numberValue: Int? = nil,
         fontSize: CGFloat = 18,
         lineWidth: CGFloat = 2.0,
         startPoint: CGPoint? = nil,
@@ -61,6 +66,7 @@ struct AnnotationLayer: Identifiable {
         self.rect = rect
         self.color = color
         self.text = text
+        self.numberValue = numberValue
         self.fontSize = fontSize
         self.lineWidth = lineWidth
         self.startPoint = startPoint

@@ -124,9 +124,17 @@ final class AnnotationViewModel: ObservableObject {
             }
         } else if annotationService.selectedTool == .text {
             textInputPoint = point
-            textInputRect = CGRect(x: point.x, y: point.y, width: 140, height: 42)
+            let fs = annotationService.fontSize
+            // 初始输入框大小随字体缩放
+            let initialWidth: CGFloat = max(fs * 8, 120)
+            let initialHeight: CGFloat = max(fs * 1.8, 30)
+            textInputRect = CGRect(x: point.x, y: point.y, width: initialWidth, height: initialHeight)
             isTextInput = true
             isDrawing = false
+        } else if annotationService.selectedTool == .number {
+            annotationService.addNumber(at: point)
+            isDrawing = false
+            return
         }
     }
 
@@ -247,7 +255,7 @@ final class AnnotationViewModel: ObservableObject {
         let rect = createRect(from: startPoint, to: currentPoint)
 
         switch annotationService.selectedTool {
-        case .cursor, .text:
+        case .cursor, .text, .number:
             annotationService.currentDrawingLayer = nil
         case .rectangle:
             annotationService.currentDrawingLayer = AnnotationLayer(
@@ -284,7 +292,7 @@ final class AnnotationViewModel: ObservableObject {
         guard rect.width > 3 || rect.height > 3 else { return }
 
         switch annotationService.selectedTool {
-        case .cursor, .text: break
+        case .cursor, .text, .number: break
         case .rectangle: annotationService.addRectangle(rect)
         case .ellipse: annotationService.addEllipse(rect)
         case .line: annotationService.addLine(from: startPoint, to: currentPoint)
@@ -297,6 +305,34 @@ final class AnnotationViewModel: ObservableObject {
 
     func undo() {
         annotationService.undo()
+    }
+
+    func redo() {
+        annotationService.redo()
+    }
+
+    func selectTool(forNumberKey key: UInt16) -> Bool {
+        let mapping: [UInt16: AnnotationTool] = [
+            18: .cursor,
+            19: .rectangle,
+            20: .ellipse,
+            21: .arrow,
+            23: .line,
+            22: .text,
+            26: .number,
+            28: .mosaic,
+        ]
+        guard let tool = mapping[key] else { return false }
+        annotationService.selectedTool = tool
+        return true
+    }
+
+    func cycleColorBackward() {
+        annotationService.cyclePresetColorBackward()
+    }
+
+    func incrementStyleValue() {
+        annotationService.incrementStyleValue()
     }
 
     private func createRect(from: CGPoint, to: CGPoint) -> CGRect {

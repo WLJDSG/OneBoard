@@ -39,6 +39,19 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 **状态：已完成（已修复非文件拖拽误触发）**
 
 1. ✅ 实现 DragDetector（全局鼠标监控 + 文件拖拽摇动检测算法）
+
+### 第七阶段：截图标注工具栏升级 ✅
+
+**状态：已完成**
+
+1. ✅ 扩展标注图层模型，新增编号标注（`.number`）
+2. ✅ 实现撤销/重做历史（`redoLayers`、`canUndo`/`canRedo`）
+3. ✅ 渲染编号标注（彩色圆形 + 数字文字）
+4. ✅ 新增工具感知的样式控制（`presetColors`、`incrementStyleValue` 等）
+5. ✅ 鼠标点击 + 键盘快捷键路由（数字键切换工具、Option 键颜色/样式）
+6. ✅ 重构标注工具栏为四组：工具组 / 样式组 / 历史组 / 输出组
+7. ✅ 桌面直存（一键保存 PNG 到 ~/Desktop）+ 画布像素尺寸显示
+
 2. ✅ V2 迁移（staged_files 表，已在 Phase 1 创建）
 3. ✅ 实现 DropZoneWindowController（右上角弹出、接受拖放、注册 NSDraggingDestination）
 4. ✅ 实现 FileStagingRepository
@@ -115,6 +128,28 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 6. ✅ Cmd+Q 修复（setupHiddenMainMenu，仅应用活跃时响应）
 7. ✅ 主应用 entitlements 新增 app-group 权限
 8. ✅ 授权设置页新增 Finder 扩展启用提示
+
+
+
+### 第八阶段：截图模块深度优化 ✅
+
+**状态：已完成（2026-06-15）**
+
+1. ✅ 粗细循环调整：`incrementStyleValue`/`decrementStyleValue` 到达边界后 wrap 回另一端
+2. ✅ 修复贴字漂移 bug：渲染管线重构，文字标注直接算像素坐标，消除双重 Y 翻转导致的坐标偏移
+3. ✅ 自定义全屏遮罩截图：`ScreenshotOverlayView` 替换系统 `screencapture -i`
+   - 半透明暗色遮罩 + 框选区域挖空显示原图
+   - `screencapture -x` 后台线程静默全屏截图
+   - 修复 `NSImage.draw` 触发 `NSCoreDragCapture → SIGABRT` 闪退，改用 `CGContext.draw`
+4. ✅ 像素尺寸预览：选区右上角实时显示 W×H 蓝色标签
+5. ✅ 方向键微调选区：方向键 1px 调整，Shift+方向键 10px 步进
+6. ✅ 智能窗口截图：鼠标悬浮自动高亮窗口轮廓（`CGWindowListCopyWindowInfo`），单击直接截取整窗
+7. ✅ OCR 弹窗弹性尺寸：根据文字内容自适应高度（200~520pt），智能定位优先下方→上方→右侧→左侧
+8. ✅ 贴字 UI 微信风格重做：
+   - 打字时虚线框 + 无背景，字体跟随工具栏 ± 按钮
+   - 缩放手柄改为 6px 彩色圆点
+   - 编辑弹窗 `ultraThinMaterial` + 阴影
+   - 漂移 bug 修复（见第 2 项）
 
 ## 验证方案
 

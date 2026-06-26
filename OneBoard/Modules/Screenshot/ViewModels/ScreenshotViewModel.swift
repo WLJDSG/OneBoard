@@ -76,10 +76,11 @@ final class ScreenshotViewModel: ObservableObject {
         let hostingView = NSHostingView(
             rootView: AnnotationCanvasView(
                 baseImage: image,
+                displaySize: CGSize(width: imageWinWidth, height: imageWinHeight),
                 annotationService: annotationService,
                 viewModel: viewModel,
                 onCopy: { [weak self] img in self?.copyToClipboard(img) },
-                onSave: { [weak self] img in self?.saveToFile(img) },
+                onSave: { [weak self] img in self?.saveRenderedImageToDesktop(img) },
                 onPin: { [weak self] img in self?.pinToScreen(img, preferredFrame: self?.annotationWindow?.frame) },
                 onOCR: { [weak self] img in
                     Task { await self?.performOCR(on: img) }
@@ -130,7 +131,7 @@ final class ScreenshotViewModel: ObservableObject {
                     self?.copyToClipboard(img)
                     self?.closeActiveScreenshotSession()
                 },
-                onSave: { [weak self] img in self?.saveToFile(img) },
+                onSave: { [weak self] img in self?.saveRenderedImageToDesktop(img) },
                 onPin: { [weak self] img in self?.pinToScreen(img, preferredFrame: self?.annotationWindow?.frame) },
                 onOCR: { [weak self] img in
                     Task { await self?.performOCR(on: img) }
@@ -251,6 +252,27 @@ final class ScreenshotViewModel: ObservableObject {
         }
     }
 
+
+    func saveRenderedImageToDesktop(_ image: NSImage, date: Date = Date()) {
+        guard let data = image.pngData else {
+            print("[ScreenshotViewModel] PNG 数据生成失败")
+            return
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        let fileName = "OneBoard Screenshot \(formatter.string(from: date)).png"
+        let desktopURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Desktop", isDirectory: true)
+        let fileURL = desktopURL.appendingPathComponent(fileName)
+
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            print("[ScreenshotViewModel] 截图已保存到桌面: \(fileURL.path)")
+        } catch {
+            print("[ScreenshotViewModel] 保存到桌面失败: \(error)")
+            saveToFile(image)
+        }
+    }
     func pinToScreen(_ image: NSImage, preferredFrame: NSRect? = nil) {
         let frame = preferredFrame ?? NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
         let panel = NSPanel(

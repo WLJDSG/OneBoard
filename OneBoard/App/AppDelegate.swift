@@ -6,12 +6,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var shouldAllowTermination = false
 
+    public func applicationWillFinishLaunching(_ notification: Notification) {
+        // 尽早设置 activation policy，避免 SwiftUI App 初始化覆盖
+        NSApp.setActivationPolicy(.accessory)
+    }
+
     override public init() {
         super.init()
         Self.shared = self
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        // 确保菜单栏应用激活策略已设置（applicationWillFinishLaunching 已设置）
+        NSApp.setActivationPolicy(.accessory)
+
         do {
             try DatabaseManager.shared.initialize()
             print("[AppDelegate] 数据库初始化成功")
