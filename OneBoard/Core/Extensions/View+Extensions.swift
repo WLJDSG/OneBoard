@@ -8,68 +8,35 @@ import SwiftUI
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .padding(.horizontal, OneBoardSpacing.lg)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.pill)
-                    .fill(OneBoardColors.accent)
-                    .opacity(configuration.isPressed ? 0.8 : 1.0)
-            )
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 6).fill(OneBoardColors.accent).opacity(configuration.isPressed ? 0.8 : 1.0))
             .foregroundColor(.white)
     }
 }
 
-// MARK: 列表行悬停效果（兼容别名）
-
 struct HoverEffectModifier: ViewModifier {
     @State private var isHovered = false
-
     func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                    .fill(isHovered ? OneBoardColors.accent.opacity(0.08) : Color.clear)
-            )
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isHovered = hovering
-                }
-            }
+        content.background(isHovered ? OneBoardColors.hoverBg : Color.clear)
+            .onHover { h in withAnimation(.easeInOut(duration: 0.15)) { isHovered = h } }
     }
 }
-
-// MARK: 卡片样式（兼容别名）
 
 struct CardStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .padding(OneBoardSpacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                    .fill(OneBoardColors.background)
-                    .shadow(
-                        color: OneBoardShadow.sm.color,
-                        radius: OneBoardShadow.sm.radius,
-                        x: 0,
-                        y: OneBoardShadow.sm.y
-                    )
-            )
+        content.padding(OneBoardSpacing.sm).background(RoundedRectangle(cornerRadius: OneBoardRadius.md).fill(OneBoardColors.surface))
     }
 }
-
-// MARK: 面板样式（兼容别名）
 
 struct OneBoardPanelStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
-            .shadow(
-                color: OneBoardShadow.lg.color,
-                radius: OneBoardShadow.lg.radius,
-                x: 0,
-                y: OneBoardShadow.lg.y
-            )
+            .background(OneBoardColors.panelBg)
+            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.md))
+            .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.md).stroke(OneBoardColors.headerBorder, lineWidth: 1))
+            .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
     }
 }
 

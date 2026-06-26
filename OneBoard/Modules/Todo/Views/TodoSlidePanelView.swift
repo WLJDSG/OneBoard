@@ -21,8 +21,6 @@ struct TodoSlidePanelView: View {
             // 头部
             header
 
-            Divider()
-
             // 搜索 + 添加
             searchAndAddBar
 
@@ -44,37 +42,28 @@ struct TodoSlidePanelView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: OneBoardSpacing.xs) {
+        HStack(spacing: 8) {
             Image(systemName: "checklist")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(OneBoardColors.accent)
             Text("待办")
-                .oneBoardFont(.headline)
+                .font(.system(size: 13, weight: .semibold))
 
             if !viewModel.activeItems.isEmpty {
                 Text("\(viewModel.activeItems.count)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(OneBoardColors.textSecondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                            .fill(OneBoardColors.textSecondary.opacity(0.12))
-                    )
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: OneBoardRadius.sm).fill(OneBoardColors.textSecondary.opacity(0.12)))
             }
 
             Spacer()
 
-            Button(action: { TodoSlidePanelWindowManager.shared.hide() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 28, height: 28)
-                    .foregroundColor(OneBoardColors.textSecondary)
-            }
-            .buttonStyle(.borderless)
+            OneBoardCloseButton { TodoSlidePanelWindowManager.shared.hide() }
         }
-        .padding(.horizontal, OneBoardSpacing.sm)
-        .padding(.vertical, OneBoardSpacing.xs)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
     }
 
     // MARK: - 搜索 + 添加

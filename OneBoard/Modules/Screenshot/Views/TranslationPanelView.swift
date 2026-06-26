@@ -35,46 +35,19 @@ struct TranslationPanelView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: "globe")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(OneBoardColors.accent)
-                .frame(width: 20)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("翻译")
-                    .oneBoardFont(.headline)
-                Picker("", selection: Binding(
-                    get: { viewModel.translationServiceType },
-                    set: { onSelectService($0) }
-                )) {
-                    ForEach(TranslationServiceType.allCases) { type in
-                        Text(type.displayName).tag(type)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .frame(width: 100)
-            }
-
+            Text("翻译")
+                .font(.system(size: 13, weight: .semibold))
             Spacer()
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 28, height: 28)
-                    .foregroundColor(OneBoardColors.textSecondary)
-            }
-            .buttonStyle(.borderless)
-            .help("关闭 (Esc)")
+            OneBoardCloseButton(action: onClose)
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 8)
-        .padding(.vertical, 8)
-        .frame(height: 44)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
         .background(TranslationPanelDragHandle())
-        .background(OneBoardColors.background.opacity(0.62))
     }
 
     // MARK: - Language Bar

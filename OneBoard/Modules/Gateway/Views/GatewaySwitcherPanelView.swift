@@ -100,41 +100,30 @@ struct GatewaySwitcherPanelView: View {
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 8) {
             Image(systemName: "network")
-                .oneBoardFont(.headline)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(OneBoardColors.accent)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(viewModel.displayGateway)
-                    .oneBoardFont(.headline)
-                Text(viewModel.displayService.isEmpty ? "未检测到当前网络服务" : viewModel.displayService)
-                    .oneBoardFont(.caption)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(viewModel.displayService.isEmpty ? "当前网络" : viewModel.displayService)
+                    .font(.system(size: 10))
                     .foregroundColor(OneBoardColors.textSecondary)
             }
             Spacer()
-            HStack(spacing: 8) {
-                Button {
-                    viewModel.refresh()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .rotationEffect(.degrees(viewModel.isRefreshing ? 360 : 0))
-                        .animation(
-                            viewModel.isRefreshing
-                                ? .linear(duration: 1).repeatForever(autoreverses: false)
-                                : nil,
-                            value: viewModel.isRefreshing
-                        )
-                }
-                .buttonStyle(.borderless)
-                .help("刷新")
-
-                OneBoardCloseButton {
-                    MenuBarManager.shared.closeGatewaySwitcherPanel()
-                }
+            Button { viewModel.refresh() } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11))
+                    .rotationEffect(.degrees(viewModel.isRefreshing ? 360 : 0))
+                    .animation(viewModel.isRefreshing ? .linear(duration:1).repeatForever(autoreverses:false) : nil, value: viewModel.isRefreshing)
             }
+            .buttonStyle(.borderless)
+            OneBoardCloseButton { MenuBarManager.shared.closeGatewaySwitcherPanel() }
         }
-        .oneBoardPanelHeader()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
     }
 
     private func summary(for profile: GatewayProfile) -> String {

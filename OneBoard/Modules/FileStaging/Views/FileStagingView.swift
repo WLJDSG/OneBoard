@@ -38,33 +38,23 @@ struct FileStagingView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "tray.full")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(OneBoardColors.accent)
             Text("暂存架")
-                .font(.system(size: 14, weight: .semibold))
-            Spacer()
+                .font(.system(size: 13, weight: .semibold))
             if !viewModel.stagedFiles.isEmpty {
                 Text("\(viewModel.stagedFiles.count)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(OneBoardColors.textSecondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                            .fill(OneBoardColors.textSecondary.opacity(0.12))
-                    )
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: OneBoardRadius.sm).fill(OneBoardColors.textSecondary.opacity(0.12)))
             }
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 28, height: 28)
-                    .foregroundColor(OneBoardColors.textSecondary)
-            }
-            .buttonStyle(.borderless)
+            Spacer()
+            OneBoardCloseButton(action: onClose)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(OneBoardColors.surface.opacity(0.5))
+        .padding(.vertical, 10)
+        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
     }
 
     // MARK: - Drop Prompt
