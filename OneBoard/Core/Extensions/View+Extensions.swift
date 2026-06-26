@@ -64,11 +64,7 @@ struct OneBoardPanelStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
-            .overlay(
-                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                    .stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
             .shadow(
                 color: OneBoardShadow.lg.color,
                 radius: OneBoardShadow.lg.radius,

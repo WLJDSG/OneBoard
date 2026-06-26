@@ -35,18 +35,7 @@ struct TodoSlidePanelView: View {
             bottomBar
         }
         .frame(width: 320)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
-        .overlay(
-            RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                .stroke(OneBoardColors.accent.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(
-            color: OneBoardShadow.lg.color,
-            radius: OneBoardShadow.lg.radius,
-            x: 0,
-            y: OneBoardShadow.lg.y
-        )
+        .oneBoardPanelStyle()
         .onChange(of: viewModel.manualAddRequestID) { _ in
             beginAddingTodo()
         }

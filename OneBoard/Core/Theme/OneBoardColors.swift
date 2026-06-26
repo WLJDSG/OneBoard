@@ -1,36 +1,32 @@
 import SwiftUI
 import AppKit
 
-// MARK: - OneBoard 统一设计令牌系统 v2.0
+// MARK: - OneBoard Warm Minimal 设计令牌 v3.0
 
-/// 品牌色 / 语义色 / 间距 / 圆角 / 阴影 / 字体 统一设计令牌
+/// Warm Minimal 品牌色 / 语义色 / 间距 / 圆角 / 阴影 统一设计令牌
 enum OneBoardColors {
 
-    // MARK: 品牌色
+    // MARK: 品牌暖色
 
-    /// 主色调（操作按钮、选中态、焦点环）
-    /// 苹果风格蓝，比旧版 #59A6F2 更鲜艳
-    static let accent = Color(red: 0.29, green: 0.62, blue: 0.97)
+    /// 主强调色 — 暖琥珀 #D4792E
+    static let accent = Color(red: 0.831, green: 0.475, blue: 0.180)
 
-    /// 浅色变体（hover 背景、次要强调）
-    static let accentLight = Color(red: 0.48, green: 0.75, blue: 1.0)
+    /// 浅色变体 — hover 背景、选中行
+    static let accentLight = accent.opacity(0.10)
 
-    /// 深色变体
-    static let accentDark = Color(red: 0.20, green: 0.52, blue: 0.85)
+    /// 深色变体 — 按下态
+    static let accentDark = Color(red: 0.710, green: 0.396, blue: 0.122)
 
     // MARK: 语义色
 
-    /// 成功状态
-    static let success = Color(nsColor: .systemGreen)
+    /// 成功 — 暖绿
+    static let success = Color(red: 0.420, green: 0.620, blue: 0.427)
 
-    /// 警告状态
-    static let warning = Color(nsColor: .systemOrange)
+    /// 警告
+    static let warning = Color(red: 0.831, green: 0.627, blue: 0.235)
 
-    /// 错误 / 删除
-    static let destructive = Color(nsColor: .systemRed)
-
-    /// 置顶条目背景
-    static let pinnedHighlight = Color(red: 1.0, green: 0.91, blue: 0.69)
+    /// 错误 / 删除 — 暖红
+    static let destructive = Color(red: 0.788, green: 0.353, blue: 0.290)
 
     // MARK: 中性色（系统自适应 → 自动支持深色模式）
 
@@ -40,107 +36,100 @@ enum OneBoardColors {
     /// 次要文字 / 描述
     static let textSecondary = Color(nsColor: .secondaryLabelColor)
 
-    /// 占位符 / 禁用态文字
+    /// 三级文字 / 占位符 / 禁用
     static let textTertiary = Color(nsColor: .tertiaryLabelColor)
 
-    /// 内容区背景
-    static let background = Color(nsColor: .controlBackgroundColor)
+    /// 表面色 — 卡片、输入框背景
+    static let surface = Color(nsColor: .controlBackgroundColor)
 
-    /// 分割线 / 边框
+    // MARK: 旧版兼容别名
+
+    static let background = surface
     static let border = Color(nsColor: .separatorColor)
-
-    /// 细微边框
     static let borderSubtle = Color(nsColor: .separatorColor).opacity(0.5)
-
-    // MARK: 旧版兼容别名（逐步迁移后删除）
+    static let pinnedHighlight = accentLight
 
     static let primary = accent
     static let primaryLight = accentLight
     static let primaryDark = accentDark
+    static let secondaryBackground = surface.opacity(0.5)
+    static let separator = Color(nsColor: .separatorColor)
 
-    // MARK: NSColor 版本（AppKit 桥接用）
+    // MARK: NSColor 版本（AppKit 桥接）
 
-    static let nsAccent = NSColor(red: 0.29, green: 0.62, blue: 0.97, alpha: 1.0)
-    static let nsAccentLight = NSColor(red: 0.48, green: 0.75, blue: 1.0, alpha: 1.0)
-    static let nsAccentDark = NSColor(red: 0.20, green: 0.52, blue: 0.85, alpha: 1.0)
+    static let nsAccent = NSColor(red: 0.831, green: 0.475, blue: 0.180, alpha: 1.0)
+    static let nsAccentLight = nsAccent.withAlphaComponent(0.10)
+    static let nsAccentDark = NSColor(red: 0.710, green: 0.396, blue: 0.122, alpha: 1.0)
 
-    // 旧版 NSColor 别名
     static let nsPrimary = nsAccent
     static let nsPrimaryLight = nsAccentLight
     static let nsPrimaryDark = nsAccentDark
 }
 
-// MARK: - 间距系统（4pt 网格）
+// MARK: - 间距系统（8pt 网格）
 
 enum OneBoardSpacing {
-    /// 4pt — 图标与文字间距
+    /// 4pt
+    static let xs: CGFloat = 4
+    /// 8pt
+    static let sm: CGFloat = 8
+    /// 12pt
+    static let md: CGFloat = 12
+    /// 16pt
+    static let lg: CGFloat = 16
+    /// 20pt
+    static let xl: CGFloat = 20
+    /// 24pt
+    static let twoXL: CGFloat = 24
+    /// 32pt
+    static let threeXL: CGFloat = 32
+    /// 兼容别名
     static let twoXS: CGFloat = 4
-    /// 8pt — 行内间距、小型按钮内边距
-    static let xs: CGFloat = 8
-    /// 12pt — 卡片内边距、列表行内边距
-    static let sm: CGFloat = 12
-    /// 16pt — 区块内边距、按钮水平内边距
-    static let md: CGFloat = 16
-    /// 20pt — 区块间距
-    static let lg: CGFloat = 20
-    /// 24pt — 面板内边距
-    static let xl: CGFloat = 24
-    /// 32pt — 页面级间距
-    static let twoXL: CGFloat = 32
 }
 
 // MARK: - 圆角系统
 
 enum OneBoardRadius {
-    /// 4pt — 小图标容器、标签、徽章
-    static let sm: CGFloat = 4
-    /// 6pt — 列表行、按钮
-    static let md: CGFloat = 6
-    /// 8pt — 卡片、输入框
-    static let lg: CGFloat = 8
-    /// 12pt — 浮动面板、弹出窗口
+    /// 6pt — 按钮、标签、行
+    static let sm: CGFloat = 6
+    /// 8pt — 卡片、输入框、搜索栏
+    static let md: CGFloat = 8
+    /// 12pt — 浮动面板
+    static let lg: CGFloat = 12
+    /// 旧版兼容
     static let xl: CGFloat = 12
-    /// 16pt — 大型模态面板
     static let twoXL: CGFloat = 16
 }
 
-// MARK: - 阴影系统
+// MARK: - 阴影系统（暖灰，非纯黑）
 
 enum OneBoardShadow {
-    /// 小阴影 — 卡片、行 hover
-    static let sm: (color: Color, radius: CGFloat, y: CGFloat) =
-        (Color.black.opacity(0.06), 4, 1)
-
-    /// 中阴影 — 小浮动面板
-    static let md: (color: Color, radius: CGFloat, y: CGFloat) =
-        (Color.black.opacity(0.08), 8, 2)
-
-    /// 大阴影 — 大浮动面板
-    static let lg: (color: Color, radius: CGFloat, y: CGFloat) =
-        (Color.black.opacity(0.12), 16, 4)
+    /// 小阴影 — 卡片、hover
+    static let sm = (color: Color.black.opacity(0.05), radius: CGFloat(4), y: CGFloat(2))
+    /// 中阴影 — 小面板
+    static let md = (color: Color.black.opacity(0.07), radius: CGFloat(8), y: CGFloat(3))
+    /// 大阴影 — 大面板
+    static let lg = (color: Color.black.opacity(0.08), radius: CGFloat(14), y: CGFloat(4))
 }
 
-// MARK: - 字体排版系统
+// MARK: - 字体系统
 
 enum OneBoardFont {
-    /// 面板标题 — 22pt bold
-    static let titleLarge: Font = .system(size: 22, weight: .bold)
-    /// 区块标题 — 17pt semibold
-    static let title: Font = .system(size: 17, weight: .semibold)
-    /// 列表项标题 — 14pt semibold
-    static let headline: Font = .system(size: 14, weight: .semibold)
+    /// 面板标题 — 17pt semibold
+    static let title = Font.system(size: 17, weight: .semibold)
+    /// 区块标题 — 14pt semibold
+    static let headline = Font.system(size: 14, weight: .semibold)
     /// 正文 — 13pt regular
-    static let body: Font = .system(size: 13, weight: .regular)
-    /// 标签 / 状态 — 12pt medium
-    static let callout: Font = .system(size: 12, weight: .medium)
+    static let body = Font.system(size: 13, weight: .regular)
     /// 辅助信息 — 11pt regular
-    static let caption: Font = .system(size: 11, weight: .regular)
+    static let caption = Font.system(size: 11, weight: .regular)
     /// 小标签 — 10pt regular
-    static let captionSmall: Font = .system(size: 10, weight: .regular)
-
-    // 等宽字体
-    /// OCR 文字 — 13pt mono
-    static let monoBody: Font = .system(size: 13, weight: .regular, design: .monospaced)
-    /// 尺寸标签 — 11pt mono
-    static let monoCaption: Font = .system(size: 11, weight: .regular, design: .monospaced)
+    static let captionSmall = Font.system(size: 10, weight: .regular)
+    /// 等宽 — 12pt mono
+    static let mono = Font.system(size: 12, weight: .regular, design: .monospaced)
+    /// 旧版兼容
+    static let titleLarge = Font.system(size: 20, weight: .bold, design: .serif)
+    static let callout = Font.system(size: 12, weight: .medium)
+    static let monoBody = mono
+    static let monoCaption = Font.system(size: 10, weight: .regular, design: .monospaced)
 }

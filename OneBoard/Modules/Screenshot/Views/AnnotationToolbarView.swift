@@ -37,8 +37,7 @@ struct AnnotationToolbarView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.xl))
-        .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.xl).stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.lg))
         .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
         .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
             colorPickerPopover
@@ -416,11 +415,7 @@ private struct AnnotationResultView: View {
         }
         .padding(14)
         .frame(width: 320, height: 260)
-        .background(.ultraThinMaterial)
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                .stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1)
-        )
     }
 }

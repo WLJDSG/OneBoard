@@ -9,11 +9,11 @@ struct OneBoardPrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .oneBoardFont(.headline)
-            .padding(.horizontal, OneBoardSpacing.md)
-            .padding(.vertical, OneBoardSpacing.xs)
+            .font(.system(size: 13, weight: .medium))
+            .padding(.horizontal, OneBoardSpacing.lg)
+            .padding(.vertical, OneBoardSpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                     .fill(OneBoardColors.accent)
                     .opacity(configuration.isPressed ? 0.8 : (isEnabled ? 1.0 : 0.5))
             )
@@ -26,11 +26,11 @@ struct OneBoardPrimaryButtonStyle: ButtonStyle {
 struct OneBoardSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .oneBoardFont(.headline)
-            .padding(.horizontal, OneBoardSpacing.md)
-            .padding(.vertical, OneBoardSpacing.xs)
+            .font(.system(size: 13, weight: .medium))
+            .padding(.horizontal, OneBoardSpacing.lg)
+            .padding(.vertical, OneBoardSpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.md)
+                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                     .fill(OneBoardColors.accent.opacity(configuration.isPressed ? 0.15 : 0.10))
             )
             .foregroundColor(OneBoardColors.accent)
@@ -62,11 +62,7 @@ struct OneBoardPanelModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
-            .overlay(
-                RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                    .stroke(OneBoardColors.accent.opacity(0.10), lineWidth: 1)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
             .shadow(
                 color: OneBoardShadow.lg.color,
                 radius: OneBoardShadow.lg.radius,
@@ -81,9 +77,9 @@ struct OneBoardPanelModifier: ViewModifier {
 struct OneBoardPanelHeaderModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(.horizontal, 14)
-            .padding(.vertical, OneBoardSpacing.xs)
-            .background(OneBoardColors.background.opacity(0.62))
+            .padding(.horizontal, OneBoardSpacing.lg)
+            .padding(.vertical, OneBoardSpacing.sm)
+            .background(OneBoardColors.surface.opacity(0.5))
             .overlay(Divider(), alignment: .bottom)
     }
 }
