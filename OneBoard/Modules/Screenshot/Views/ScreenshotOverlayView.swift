@@ -114,10 +114,17 @@ final class ScreenshotOverlayContentView: NSView {
     init(screenshot: NSImage, eventManager: OverlayEventManager) {
         self.screenshot = screenshot
         self.eventManager = eventManager
-        self.cachedCGImage = screenshot.cgImage(forProposedRect: nil, context: nil, hints: nil)
-        if let cg = cachedCGImage {
+        // 安全获取 CGImage：NSImage.cgImage 在部分显示器配置下可能崩溃
+        if let cg = screenshot.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            self.cachedCGImage = cg
+            self.imagePixelSize = CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
+        } else if let tiff = screenshot.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiff),
+                  let cg = bitmap.cgImage {
+            self.cachedCGImage = cg
             self.imagePixelSize = CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
         } else {
+            self.cachedCGImage = nil
             self.imagePixelSize = screenshot.size
         }
         super.init(frame: .zero)
