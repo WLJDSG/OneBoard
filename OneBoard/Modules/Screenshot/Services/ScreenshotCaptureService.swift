@@ -56,6 +56,8 @@ final class ScreenshotCaptureService: NSObject {
                 window.isOpaque = false
                 window.backgroundColor = .clear
                 window.hasShadow = false
+                // close() 后仍由 overlayWindow 统一持有和释放，避免 AppKit 与 ARC 重复释放。
+                window.isReleasedWhenClosed = false
                 overlayView.frame = NSRect(origin: .zero, size: screen.frame.size)
                 overlayView.autoresizingMask = [.width, .height]
                 window.contentView = overlayView
