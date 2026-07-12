@@ -185,11 +185,16 @@ final class ScreenshotOverlayContentView: NSView {
 
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
-        // 暗色遮罩保持恒定；框选时只画边框，不挖空、不让暗部随选区变化。
+        // 先覆盖全屏暗色遮罩，框选时再挖空选区露出底下的屏幕内容。
         ctx.setFillColor(NSColor.black.withAlphaComponent(0.45).cgColor)
         ctx.fill(bounds)
 
         if let rect = selectionRect, rect.width > 1, rect.height > 1 {
+            ctx.saveGState()
+            ctx.setBlendMode(.clear)
+            ctx.fill(rect)
+            ctx.restoreGState()
+
             OneBoardColors.nsAccent.setStroke()
             let border = NSBezierPath(rect: rect)
             border.lineWidth = 2
@@ -233,7 +238,8 @@ final class ScreenshotOverlayContentView: NSView {
             print("[ScreenshotOverlay] onConfirm 未设置，无法完成截图")
             return
         }
-        let result = NSImage(cgImage: cropped, size: crop.size)
+        // CGImage 保留 Retina 原始像素，NSImage 的逻辑尺寸使用框选的屏幕点尺寸。
+        let result = NSImage(cgImage: cropped, size: rect.size)
         confirm(result, ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screen.frame))
     }
 
