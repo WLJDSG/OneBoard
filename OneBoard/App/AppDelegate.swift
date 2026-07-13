@@ -4,8 +4,6 @@ import LaunchAtLogin
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     public static private(set) weak var shared: AppDelegate?
 
-    private var shouldAllowTermination = false
-
     public func applicationWillFinishLaunching(_ notification: Notification) {
         // 尽早设置 activation policy，避免 SwiftUI App 初始化覆盖
         NSApp.setActivationPolicy(.accessory)
@@ -65,12 +63,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func requestTermination() {
-        shouldAllowTermination = true
         NSApp.terminate(nil)
     }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        return shouldAllowTermination ? .terminateNow : .terminateCancel
+        // 系统权限弹窗的“退出并重新打开”不会经过 requestTermination()。
+        // 允许系统终止请求，macOS 才能退出并自动重新启动应用。
+        .terminateNow
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

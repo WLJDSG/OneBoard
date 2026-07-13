@@ -1,8 +1,14 @@
 import XCTest
-@testable import OneBoard
+@testable import OneBoardKit
 
 @MainActor
 final class SystemCapabilityViewModelTests: XCTestCase {
+    func testSystemRequestedTerminationIsAllowed() {
+        let delegate = AppDelegate()
+
+        XCTAssertEqual(delegate.applicationShouldTerminate(.shared), .terminateNow)
+    }
+
     func testRefreshReadsAllCapabilityStates() {
         let permissions = StubPermissionProvider(accessibility: true, screenRecording: false)
         let helper = StubGatewayHelperProvider(installed: true)

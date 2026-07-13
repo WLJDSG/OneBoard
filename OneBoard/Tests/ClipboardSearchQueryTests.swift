@@ -1,4 +1,4 @@
-@testable import OneBoard
+@testable import OneBoardKit
 import XCTest
 
 final class ClipboardSearchQueryTests: XCTestCase {

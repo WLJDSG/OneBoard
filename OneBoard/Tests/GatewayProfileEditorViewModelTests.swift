@@ -1,5 +1,5 @@
 import XCTest
-@testable import OneBoard
+@testable import OneBoardKit
 
 @MainActor
 final class GatewayProfileEditorViewModelTests: XCTestCase {

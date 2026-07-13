@@ -15,6 +15,8 @@ final class FileStagingViewModel: ObservableObject {
     private var shakeObserver: NSObjectProtocol?
     private var pendingFilePaths: Set<String> = []  // 正在处理的文件路径，防止重复添加
 
+    static let shelfSize = CGSize(width: 348, height: 434)
+
     private init() {
         shakeObserver = NotificationCenter.default.addObserver(
             forName: DragDetector.fileDragDetected,
@@ -137,22 +139,13 @@ final class FileStagingViewModel: ObservableObject {
         hostingView.layer?.cornerRadius = 24
         hostingView.layer?.masksToBounds = true
 
-        let width: CGFloat = 348
-        let rows = max(1, Int(ceil(Double(max(stagedFiles.count, 1)) / 3.0)))
-        let height = stagedFiles.isEmpty ? CGFloat(192) : min(CGFloat(rows) * 126 + 64, 434)
+        let size = Self.shelfSize
 
         if let existingWindow = floatingWindow {
             existingWindow.contentView = hostingView
-            var frame = existingWindow.frame
-            let topRight = NSPoint(x: frame.maxX, y: frame.maxY)
-            frame.size.width = width
-            frame.size.height = height
-            frame.origin.x = topRight.x - width
-            frame.origin.y = topRight.y - height
-            existingWindow.setFrame(frame, display: true, animate: false)
         } else {
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered,
                 defer: false

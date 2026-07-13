@@ -1,4 +1,4 @@
-@testable import OneBoard
+@testable import OneBoardKit
 
 final class RecordingGatewayCommandRunner: GatewayCommandRunning {
     var commands: [String] = []

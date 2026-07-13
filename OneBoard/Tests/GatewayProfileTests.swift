@@ -1,5 +1,5 @@
 import XCTest
-@testable import OneBoard
+@testable import OneBoardKit
 
 final class GatewayProfileTests: XCTestCase {
     func testDefaultProfilesMatchHomeGateways() {

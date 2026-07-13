@@ -29,13 +29,24 @@ chmod +x "$MACOS_DIR/OneBoard"
 
 # --- Finder Sync Extension ---
 echo "Building Finder Sync Extension..."
-swift build -c release --target OneBoardFinderSync --disable-sandbox
+FINDER_SYNC_BINARY="$BUILD_DIR/OneBoardFinderSync"
+BUILD_ARCH="$(uname -m)"
+CLANG_MODULE_CACHE_PATH="$ONEBOARD_MODULE_CACHE" xcrun swiftc \
+    -O \
+    -parse-as-library \
+    -target "${BUILD_ARCH}-apple-macosx14.0" \
+    "FinderSync/FinderSyncController.swift" \
+    -framework Cocoa \
+    -framework FinderSync \
+    -Xlinker -e \
+    -Xlinker _NSExtensionMain \
+    -o "$FINDER_SYNC_BINARY"
 
 PLUGINS_DIR="$CONTENTS_DIR/PlugIns"
 EXTENSION_DIR="$PLUGINS_DIR/OneBoardFinderSync.appex"
 mkdir -p "$EXTENSION_DIR/Contents/MacOS" "$EXTENSION_DIR/Contents/Resources"
 
-cp ".build/release/OneBoardFinderSync" "$EXTENSION_DIR/Contents/MacOS/OneBoardFinderSync"
+cp "$FINDER_SYNC_BINARY" "$EXTENSION_DIR/Contents/MacOS/OneBoardFinderSync"
 chmod +x "$EXTENSION_DIR/Contents/MacOS/OneBoardFinderSync"
 cp "FinderSync/Info.plist" "$EXTENSION_DIR/Contents/Info.plist"
 
@@ -92,7 +103,9 @@ if [ -d "$EXTENSION_DIR" ]; then
     /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "FinderSync/OneBoardFinderSync.entitlements" "$EXTENSION_DIR" || true
 fi
 /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPER_APP" || true
-/usr/bin/codesign --force --deep --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "Resources/OneBoard.entitlements" "$APP_DIR"
+# 嵌套扩展已经按各自 entitlement 签名；这里不能使用 --deep 重签，
+# 否则会剥掉 Finder 扩展的 app-sandbox entitlement，导致 PlugInKit 拒绝加载。
+/usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "Resources/OneBoard.entitlements" "$APP_DIR"
 
 echo "Validating app bundle..."
 /usr/bin/codesign --verify --deep --strict "$APP_DIR"

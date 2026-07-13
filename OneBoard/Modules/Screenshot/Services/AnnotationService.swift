@@ -219,13 +219,13 @@ final class AnnotationService: ObservableObject {
         case .cursor:
             break
         case .rectangle, .ellipse, .arrow, .line:
-            lineWidth = lineWidth >= 12 ? 1 : lineWidth + 1
+            lineWidth = min(12, lineWidth + 1)
         case .text:
-            fontSize = fontSize >= 48 ? 12 : fontSize + 2
+            fontSize = min(48, fontSize + 2)
         case .number:
-            numberBadgeSize = numberBadgeSize >= 48 ? 20 : numberBadgeSize + 2
+            numberBadgeSize = min(48, numberBadgeSize + 2)
         case .mosaic:
-            mosaicBlockSize = mosaicBlockSize >= 24 ? 4 : mosaicBlockSize + 2
+            mosaicBlockSize = min(24, mosaicBlockSize + 2)
         }
     }
 
@@ -234,13 +234,13 @@ final class AnnotationService: ObservableObject {
         case .cursor:
             break
         case .rectangle, .ellipse, .arrow, .line:
-            lineWidth = lineWidth <= 1 ? 12 : lineWidth - 1
+            lineWidth = max(1, lineWidth - 1)
         case .text:
-            fontSize = fontSize <= 12 ? 48 : fontSize - 2
+            fontSize = max(12, fontSize - 2)
         case .number:
-            numberBadgeSize = numberBadgeSize <= 20 ? 48 : numberBadgeSize - 2
+            numberBadgeSize = max(20, numberBadgeSize - 2)
         case .mosaic:
-            mosaicBlockSize = mosaicBlockSize <= 4 ? 24 : mosaicBlockSize - 2
+            mosaicBlockSize = max(4, mosaicBlockSize - 2)
         }
     }
 

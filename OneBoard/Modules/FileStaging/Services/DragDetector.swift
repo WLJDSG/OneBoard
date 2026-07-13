@@ -201,7 +201,9 @@ final class DragDetector {
         changeCount: Int,
         lastSeenChangeCount: Int
     ) -> Bool {
-        changeCount != lastSeenChangeCount && supportsDraggedFileTypes(types)
+        // Finder 在同一轮拖拽期间可能复用 drag pasteboard 的 changeCount。
+        // 鼠标已处于拖拽态时，文件 URL 类型本身足以确认本次文件拖拽。
+        supportsDraggedFileTypes(types)
     }
 
     // MARK: - 工具方法

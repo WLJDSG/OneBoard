@@ -8,6 +8,16 @@ private final class AnnotationPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 }
 
+enum ScreenshotPresentationLayout {
+    static func origin(selectionRect: CGRect, displayedSize: CGSize, scale: CGFloat) -> CGPoint {
+        guard scale != 1 else { return selectionRect.origin }
+        return CGPoint(
+            x: selectionRect.midX - displayedSize.width / 2,
+            y: selectionRect.midY - displayedSize.height / 2
+        )
+    }
+}
+
 /// 截图模块 ViewModel
 @MainActor
 final class ScreenshotViewModel: ObservableObject {
@@ -42,6 +52,10 @@ final class ScreenshotViewModel: ObservableObject {
         }
         resetRecognitionState()
         closeActiveScreenshotSession()
+        // WindowServer 合成是异步的。等待旧标注窗口真正离开屏幕后再抓取，
+        // 否则连续截图时全屏图里会残留上一张窗口的模糊帧。
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 80_000_000)
         guard let result = await captureService.captureRegion() else {
             print("[ScreenshotViewModel] 截图取消或失败")
             return
@@ -60,9 +74,13 @@ final class ScreenshotViewModel: ObservableObject {
         annotationService.selectedColor = .systemRed
         let viewModel = AnnotationViewModel(annotationService: annotationService)
 
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let maxWidth = screenFrame.width * 0.9
-        let maxHeight = screenFrame.height * 0.82
+        let screen = NSScreen.screens.first(where: { $0.frame.intersects(selectionRect) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        let screenFrame = screen?.frame ?? .zero
+        let visibleFrame = screen?.visibleFrame ?? screenFrame
+        let maxWidth = visibleFrame.width * 0.9
+        let maxHeight = visibleFrame.height * 0.82
 
         // 图片窗口：只包含图片和标注，不含工具栏
         let scale = min(maxWidth / image.size.width, maxHeight / image.size.height, 1.0)
@@ -113,11 +131,13 @@ final class ScreenshotViewModel: ObservableObject {
         viewModel.setWindow(imageWindow)
 
         // 定位图片窗口在框选区域
-        let winX = min(max(selectionRect.midX - imageWinWidth / 2, screenFrame.minX),
-                       screenFrame.maxX - imageWinWidth)
-        let winY = min(max(selectionRect.midY - imageWinHeight / 2, screenFrame.minY),
-                       screenFrame.maxY - imageWinHeight)
-        imageWindow.setFrameOrigin(NSPoint(x: winX, y: winY))
+        // 未缩放时严格复用框选区域的原点，避免完成截图的一瞬间图片跳动。
+        let imageOrigin = ScreenshotPresentationLayout.origin(
+            selectionRect: selectionRect,
+            displayedSize: CGSize(width: imageWinWidth, height: imageWinHeight),
+            scale: scale
+        )
+        imageWindow.setFrameOrigin(imageOrigin)
         NSApp.activate(ignoringOtherApps: true)
         imageWindow.makeKeyAndOrderFront(nil)
 

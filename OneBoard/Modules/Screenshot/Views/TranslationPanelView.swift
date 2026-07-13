@@ -28,7 +28,7 @@ struct TranslationPanelView: View {
         .translationTask(viewModel.appleTranslationConfiguration) { session in
             await viewModel.translateWithAppleSession(session)
         }
-        .frame(minWidth: 480, maxWidth: 560, minHeight: 420, maxHeight: 700)
+        .frame(minWidth: 520, maxWidth: 560, minHeight: 420, maxHeight: 700)
         .oneBoardPanelStyle()
     }
 
@@ -53,9 +53,12 @@ struct TranslationPanelView: View {
             .labelsHidden()
             .pickerStyle(.segmented)
             .controlSize(.small)
-            .frame(width: 140)
+            .frame(width: 140, height: 24)
+            .fixedSize()
             .disabled(viewModel.isTranslating)
             OneBoardCloseButton(action: onClose)
+                .frame(width: 24, height: 24)
+                .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

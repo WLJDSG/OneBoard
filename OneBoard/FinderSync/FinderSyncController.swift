@@ -1,15 +1,25 @@
 import FinderSync
 import Cocoa
+import Darwin
 
 /// Finder Sync 扩展主控制器
+@objc(FinderSyncController)
 final class FinderSyncController: FIFinderSync {
+    private static let actualHomeURL: URL = {
+        guard let user = getpwuid(getuid()), let home = user.pointee.pw_dir else {
+            return FileManager.default.homeDirectoryForCurrentUser
+        }
+        return URL(fileURLWithPath: String(cString: home), isDirectory: true)
+    }()
+
+    private static let actualDesktopURL = actualHomeURL.appendingPathComponent("Desktop", isDirectory: true)
+
+    private var currentMenuKind: FIMenuKind?
 
     override init() {
         super.init()
-        // 监控用户整个文件系统
-        FIFinderSyncController.default().directoryURLs = Set([
-            URL(fileURLWithPath: "/")
-        ])
+        // 明确注册用户目录和桌面；根目录“/”无法可靠覆盖桌面空白处菜单。
+        FIFinderSyncController.default().directoryURLs = [Self.actualHomeURL, Self.actualDesktopURL]
         print("[FinderSync] 扩展已初始化")
     }
 
@@ -23,6 +33,7 @@ final class FinderSyncController: FIFinderSync {
         default:
             return nil
         }
+        currentMenuKind = menuKind
 
         let menu = NSMenu(title: "")
 
@@ -166,7 +177,10 @@ final class FinderSyncController: FIFinderSync {
         }
 
         guard let selectedURL = controller.selectedItemURLs()?.first else {
-            return nil
+            // 桌面空白处右键时，Finder 可能不提供 targetedURL/selectedItemURLs。
+            // 仅容器菜单回退到桌面，避免工具栏操作误建到桌面。
+            guard currentMenuKind == .contextualMenuForContainer else { return nil }
+            return Self.actualDesktopURL
         }
 
         var isDirectory: ObjCBool = false

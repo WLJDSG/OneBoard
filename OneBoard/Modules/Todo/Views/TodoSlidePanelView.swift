@@ -33,7 +33,10 @@ struct TodoSlidePanelView: View {
             // 底部
             bottomBar
         }
-        .frame(width: 320)
+        .frame(
+            width: TodoSlidePanelWindowManager.panelSize.width,
+            height: TodoSlidePanelWindowManager.panelSize.height
+        )
         .oneBoardPanelStyle()
         .onChange(of: viewModel.manualAddRequestID) { _ in
             beginAddingTodo()
@@ -153,47 +156,52 @@ struct TodoSlidePanelView: View {
 
     @ViewBuilder
     private var todoList: some View {
-        if viewModel.activeItems.isEmpty {
-            VStack(spacing: OneBoardSpacing.sm) {
-                Image(systemName: "tray")
-                    .font(.system(size: 32))
-                    .foregroundColor(OneBoardColors.textSecondary.opacity(0.3))
-                Text(viewModel.isSearching ? "无匹配结果" : "暂无待办")
-                    .oneBoardFont(.body)
-                    .foregroundColor(OneBoardColors.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 48)
-        } else {
-            let items = sortedItems(viewModel.activeItems)
-            List {
-                ForEach(items) { item in
-                    TodoRowView(
-                        item: item,
-                        isFadingOut: viewModel.fadingOutIds.contains(item.id ?? 0),
-                        isCompleting: viewModel.fadingOutIds.contains(item.id ?? 0),
-                        onToggleComplete: { viewModel.toggleComplete(item) },
-                        onDelete: { viewModel.delete(item) },
-                        onPriorityChange: { viewModel.setPriority(item, priority: $0) }
-                    )
-                    .padding(.horizontal, OneBoardSpacing.sm)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
+        Group {
+            if viewModel.activeItems.isEmpty {
+                VStack(spacing: OneBoardSpacing.sm) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 32))
+                        .foregroundColor(OneBoardColors.textSecondary.opacity(0.3))
+                    Text(viewModel.isSearching ? "无匹配结果" : "暂无待办")
+                        .oneBoardFont(.body)
+                        .foregroundColor(OneBoardColors.textSecondary)
                 }
-                .onMove(perform: viewModel.moveItem)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .frame(maxHeight: 420)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 48)
+            } else {
+                let items = sortedItems(viewModel.activeItems)
+                VStack(spacing: 0) {
+                    List {
+                        ForEach(items) { item in
+                            TodoRowView(
+                                item: item,
+                                isFadingOut: viewModel.fadingOutIds.contains(item.id ?? 0),
+                                isCompleting: viewModel.fadingOutIds.contains(item.id ?? 0),
+                                onToggleComplete: { viewModel.toggleComplete(item) },
+                                onDelete: { viewModel.delete(item) },
+                                onPriorityChange: { viewModel.setPriority(item, priority: $0) }
+                            )
+                            .padding(.horizontal, OneBoardSpacing.sm)
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                        }
+                        .onMove(perform: viewModel.moveItem)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .frame(maxHeight: .infinity)
 
-            if let msg = viewModel.feedbackMessage {
-                Text(msg)
-                    .font(.system(size: 10))
-                    .foregroundColor(OneBoardColors.textSecondary)
-                    .padding(.horizontal, OneBoardSpacing.sm)
-                    .padding(.bottom, OneBoardSpacing.twoXS)
+                    if let msg = viewModel.feedbackMessage {
+                        Text(msg)
+                            .font(.system(size: 10))
+                            .foregroundColor(OneBoardColors.textSecondary)
+                            .padding(.horizontal, OneBoardSpacing.sm)
+                            .padding(.bottom, OneBoardSpacing.twoXS)
+                    }
+                }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func sortedItems(_ items: [TodoItem]) -> [TodoItem] {

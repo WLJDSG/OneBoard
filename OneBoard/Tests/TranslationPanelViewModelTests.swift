@@ -1,5 +1,5 @@
 import AppKit
-@testable import OneBoard
+@testable import OneBoardKit
 import XCTest
 
 @MainActor

@@ -1,5 +1,5 @@
 import AppKit
-@testable import OneBoard
+@testable import OneBoardKit
 import XCTest
 
 @MainActor
@@ -151,6 +151,16 @@ final class AnnotationServiceTests: XCTestCase {
         service.mosaicBlockSize = 6
         service.incrementStyleValue()
         XCTAssertEqual(service.mosaicBlockSize, 8)
+    }
+
+    func testDecrementingMinimumTextSizeDoesNotWrapToMaximum() {
+        let service = AnnotationService()
+        service.selectedTool = .text
+        service.fontSize = 12
+
+        service.decrementStyleValue()
+
+        XCTAssertEqual(service.fontSize, 12)
     }
 
     private func makeImage(points: CGSize, pixels: CGSize) -> NSImage {

@@ -1,4 +1,5 @@
 import AppKit
+import FinderSync
 import SwiftUI
 import IOKit.hid
 import UserNotifications
@@ -59,10 +60,7 @@ final class PermissionManager {
     }
 
     func openFinderExtensionSetting() {
-        let task = Process()
-        task.launchPath = "/usr/bin/open"
-        task.arguments = ["x-apple.systempreferences:com.apple.ExtensionsPreferences?extensionPointIdentifier=com.apple.FinderSync"]
-        task.launch()
+        FIFinderSyncController.showExtensionManagementInterface()
     }
 
     func resetPrivacyAuthorizations() throws {
@@ -134,7 +132,7 @@ final class PermissionManager {
     private func resetPrivacyAuthorizations(for bundleIDs: [String]) throws {
         var failures: [String] = []
         for bundleID in bundleIDs {
-            for service in ["All", "Accessibility", "ScreenCapture", "ListenEvent", "SystemPolicyAllFiles", "UserNotifications"] {
+            for service in Self.privacyServices {
                 do {
                     try resetPrivacyAuthorization(service: service, bundleID: bundleID)
                 } catch {
@@ -147,6 +145,12 @@ final class PermissionManager {
             throw PrivacyAuthorizationResetFailures(failures: failures)
         }
     }
+
+    static let privacyServices = [
+        "All", "Accessibility", "ScreenCapture", "ListenEvent",
+        "SystemPolicyAllFiles", "SystemPolicyDesktopFolder", "SystemPolicyDocumentsFolder",
+        "SystemPolicyDownloadsFolder", "AppleEvents", "UserNotifications",
+    ]
 }
 
 struct PrivacyAuthorizationResetError: LocalizedError {

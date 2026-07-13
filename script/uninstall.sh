@@ -11,7 +11,11 @@ BUNDLE_IDS=(
     "com.oneboard.mac.Findersync"
     "com.oneboard.mac.Findersync.dev"
     "com.oneboard.mac.Findersync.dev2"
+    "com.oneboard.mac-LaunchAtLoginHelper"
+    "com.oneboard.mac.dev-LaunchAtLoginHelper"
+    "com.oneboard.mac.dev2-LaunchAtLoginHelper"
 )
+TCC_SERVICES=(All Accessibility ScreenCapture ListenEvent SystemPolicyAllFiles SystemPolicyDesktopFolder SystemPolicyDocumentsFolder SystemPolicyDownloadsFolder AppleEvents UserNotifications)
 APP_PATH="/Applications/OneBoard.app"
 
 echo "🧹 OneBoard 卸载脚本"
@@ -27,6 +31,7 @@ fi
 
 # ---- 2. 删除应用 ----
 if [ -d "$APP_PATH" ]; then
+    pluginkit -r "$APP_PATH/Contents/PlugIns/OneBoardFinderSync.appex" 2>/dev/null || true
     echo "🗑  删除 $APP_PATH"
     rm -rf "$APP_PATH"
 fi
@@ -48,10 +53,9 @@ done
 echo "🧹 清理隐私权限..."
 for BID in "${BUNDLE_IDS[@]}"; do
     [ -z "$BID" ] && continue
-    tccutil reset All "$BID" 2>/dev/null || true
-    tccutil reset Accessibility "$BID" 2>/dev/null || true
-    tccutil reset ScreenCapture "$BID" 2>/dev/null || true
-    tccutil reset SystemPolicyAllFiles "$BID" 2>/dev/null || true
+    for SERVICE in "${TCC_SERVICES[@]}"; do
+        tccutil reset "$SERVICE" "$BID" 2>/dev/null || true
+    done
 done
 
 # ---- 5. 清理 Control Center 状态栏记录 ----
@@ -122,8 +126,11 @@ for BID in "${BUNDLE_IDS[@]}"; do
     rm -rf ~/Library/Application\ Support/"$BID" 2>/dev/null || true
     rm -rf ~/Library/Saved\ Application\ State/"$BID".savedState 2>/dev/null || true
     rm -rf ~/Library/HTTPStorages/"$BID" 2>/dev/null || true
+    rm -rf ~/Library/Containers/"$BID" 2>/dev/null || true
+    rm -f ~/Library/Preferences/"$BID".plist 2>/dev/null || true
 done
 rm -rf ~/Library/Group\ Containers/group.com.oneboard.mac 2>/dev/null || true
+rm -rf ~/Library/Application\ Scripts/group.com.oneboard.mac 2>/dev/null || true
 # 清理数据库目录（App 使用 Constants.appName 作为子目录名）
 rm -rf ~/Library/Application\ Support/OneBoard 2>/dev/null || true
 

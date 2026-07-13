@@ -114,7 +114,7 @@ struct GatewaySwitcherPanelView: View {
             }
             .padding(.vertical, 8)
         }
-        .frame(width: 330)
+        .frame(width: 380, height: 360)
         .oneBoardPanelStyle()
         .onAppear {
             viewModel.refresh()

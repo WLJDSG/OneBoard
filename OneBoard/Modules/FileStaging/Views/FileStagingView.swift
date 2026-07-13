@@ -22,7 +22,7 @@ struct FileStagingView: View {
                 fileGrid
             }
         }
-        .frame(width: 320)
+        .frame(width: FileStagingViewModel.shelfSize.width, height: FileStagingViewModel.shelfSize.height)
         .oneBoardPanelStyle()
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)

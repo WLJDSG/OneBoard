@@ -4,26 +4,40 @@
 <dict>
     <key>CFBundleDisplayName</key>
     <string>OneBoard Finder Extension</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>zh_CN</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleIdentifier</key>
     <string>com.oneboard.mac.Findersync</string>
     <key>CFBundleName</key>
     <string>OneBoardFinderSync</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>8</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>1.0.3</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
     <key>CFBundleExecutable</key>
     <string>OneBoardFinderSync</string>
-    <key>NSExtension</key>
-    <dict>
-        <key>NSExtensionPointIdentifier</key>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict/>
+		<key>NSExtensionPointIdentifier</key>
         <string>com.apple.FinderSync</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>OneBoardFinderSync.FinderSyncController</string>
+        <string>FinderSyncController</string>
     </dict>
-    <key>NSPrincipalClass</key>
-    <string></string>
 </dict>
 </plist>

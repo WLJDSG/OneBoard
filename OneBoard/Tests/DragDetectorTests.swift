@@ -1,5 +1,5 @@
 import AppKit
-@testable import OneBoard
+@testable import OneBoardKit
 import XCTest
 
 final class DragDetectorTests: XCTestCase {
@@ -12,10 +12,10 @@ final class DragDetectorTests: XCTestCase {
         XCTAssertFalse(DragDetector.supportsDraggedFileTypes([.string]))
     }
 
-    func testDragConfirmationRequiresNewDragPasteboardChange() {
+    func testDragConfirmationAcceptsFileTypeWhenPasteboardChangeCountIsStable() {
         let lastSeenChangeCount = 12
 
-        XCTAssertFalse(DragDetector.canConfirmFileDrag(
+        XCTAssertTrue(DragDetector.canConfirmFileDrag(
             types: [.fileURL],
             changeCount: lastSeenChangeCount,
             lastSeenChangeCount: lastSeenChangeCount

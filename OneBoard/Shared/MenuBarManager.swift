@@ -32,7 +32,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         button.image = createMenuBarIcon()
         button.imagePosition = .imageOnly
         button.title = ""
-        button.contentTintColor = .labelColor
+        button.contentTintColor = nil
         button.toolTip = Constants.appName
         button.setAccessibilityLabel(Constants.appName)
         button.target = self
@@ -172,22 +172,28 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
             "com.oneboard.mac.Findersync"
             "com.oneboard.mac.Findersync.dev"
             "com.oneboard.mac.Findersync.dev2"
+            "com.oneboard.mac-LaunchAtLoginHelper"
+            "com.oneboard.mac.dev-LaunchAtLoginHelper"
+            "com.oneboard.mac.dev2-LaunchAtLoginHelper"
         )
+        TCC_SERVICES=(All Accessibility ScreenCapture ListenEvent SystemPolicyAllFiles SystemPolicyDesktopFolder SystemPolicyDocumentsFolder SystemPolicyDownloadsFolder AppleEvents UserNotifications)
 
         for BID in "${BUNDLE_IDS[@]}"; do
             [ -z "$BID" ] && continue
-            /usr/bin/tccutil reset All "$BID" >/dev/null 2>&1
-            /usr/bin/tccutil reset Accessibility "$BID" >/dev/null 2>&1
-            /usr/bin/tccutil reset ScreenCapture "$BID" >/dev/null 2>&1
-            /usr/bin/tccutil reset SystemPolicyAllFiles "$BID" >/dev/null 2>&1
+            for SERVICE in "${TCC_SERVICES[@]}"; do
+                /usr/bin/tccutil reset "$SERVICE" "$BID" >/dev/null 2>&1
+            done
             /usr/bin/defaults delete "$BID" >/dev/null 2>&1
             /bin/rm -rf "$HOME/Library/Caches/$BID" >/dev/null 2>&1
             /bin/rm -rf "$HOME/Library/Application Support/$BID" >/dev/null 2>&1
             /bin/rm -rf "$HOME/Library/Saved Application State/$BID.savedState" >/dev/null 2>&1
             /bin/rm -rf "$HOME/Library/HTTPStorages/$BID" >/dev/null 2>&1
+            /bin/rm -rf "$HOME/Library/Containers/$BID" >/dev/null 2>&1
+            /bin/rm -f "$HOME/Library/Preferences/$BID.plist" >/dev/null 2>&1
         done
 
         /bin/rm -rf "$HOME/Library/Group Containers/group.com.oneboard.mac" >/dev/null 2>&1
+        /bin/rm -rf "$HOME/Library/Application Scripts/group.com.oneboard.mac" >/dev/null 2>&1
         /bin/rm -rf "$HOME/Library/Application Support/OneBoard" >/dev/null 2>&1
 
         # 清理网关 Helper
@@ -282,22 +288,23 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
     private func createMenuBarIcon() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            NSColor.black.setFill()
-            NSColor.black.setStroke()
+            let blue = NSColor(calibratedRed: 0.18, green: 0.55, blue: 1.0, alpha: 1)
+            let violet = NSColor(calibratedRed: 0.55, green: 0.35, blue: 0.98, alpha: 1)
 
             let rearPanel = NSBezierPath(
                 roundedRect: NSRect(x: 6.0, y: 6.0, width: 9.5, height: 9.0),
                 xRadius: 2.2,
                 yRadius: 2.2
             )
-            rearPanel.lineWidth = 1.5
-            rearPanel.stroke()
+            violet.setFill()
+            rearPanel.fill()
 
             let frontPanel = NSBezierPath(
                 roundedRect: NSRect(x: 2.5, y: 2.5, width: 11.5, height: 11.5),
                 xRadius: 2.6,
                 yRadius: 2.6
             )
+            blue.setFill()
             frontPanel.fill()
 
             if let context = NSGraphicsContext.current?.cgContext {
@@ -315,7 +322,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = false
         return image
     }
 
@@ -339,6 +346,8 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
         let hostingView = NSHostingView(rootView: GatewaySwitcherPanelView())
         hostingView.wantsLayer = true
+        hostingView.layer?.cornerRadius = OneBoardRadius.lg
+        hostingView.layer?.masksToBounds = true
 
         let panel = ClipboardPanel(
             contentRect: NSRect(x: 0, y: 0, width: 380, height: 360),
@@ -350,7 +359,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
-        panel.backgroundColor = .windowBackgroundColor
+        panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
         panel.contentView = hostingView

@@ -16,7 +16,7 @@ let package = Package(
             name: "OneBoard",
             dependencies: ["OneBoardKit"],
             path: ".",
-            exclude: ["Tests", "App", "Core", "Modules", "Shared"],
+            exclude: ["Tests", "App", "Core", "Modules", "Shared", "FinderSync", "Resources"],
             sources: ["App_minimal"]
         ),
         .target(
@@ -27,18 +27,12 @@ let package = Package(
                 .product(name: "LaunchAtLogin", package: "LaunchAtLogin"),
             ],
             path: ".",
-            exclude: ["Tests", "App_minimal"],
+            exclude: ["Tests", "App_minimal", "FinderSync", "Resources"],
             sources: ["App", "Core", "Modules", "Shared"]
-        ),
-        .executableTarget(
-            name: "OneBoardFinderSync",
-            dependencies: [],
-            path: "FinderSync",
-            sources: ["FinderSyncController.swift"]
         ),
         .testTarget(
             name: "OneBoardTests",
-            dependencies: ["OneBoard"],
+            dependencies: ["OneBoardKit"],
             path: "Tests"
         )
     ]

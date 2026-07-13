@@ -10,6 +10,7 @@ private final class TodoSlidePanel: NSPanel {
 @MainActor
 final class TodoSlidePanelWindowManager: NSObject {
     static let shared = TodoSlidePanelWindowManager()
+    static let panelSize = CGSize(width: 340, height: 540)
 
     private var triggerPanel: NSPanel?
     private var slidePanel: NSPanel?
@@ -38,8 +39,7 @@ final class TodoSlidePanelWindowManager: NSObject {
     func show() {
         guard slidePanel == nil || slidePanel?.isVisible == false else { return }
 
-        let panelWidth: CGFloat = 340
-        let panelHeight: CGFloat = min(560, (NSScreen.main?.visibleFrame.height ?? 800) - 40)
+        let panelSize = Self.panelSize
 
         // 使用自定义 hosting view 处理鼠标跟踪
         let trackingHostingView = SlidePanelTrackingHostingView(
@@ -57,7 +57,7 @@ final class TodoSlidePanelWindowManager: NSObject {
         slidePanelTrackingView = trackingHostingView
 
         let panel = TodoSlidePanel(
-            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
+            contentRect: NSRect(origin: .zero, size: panelSize),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -70,6 +70,7 @@ final class TodoSlidePanelWindowManager: NSObject {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.contentView = trackingHostingView
+        panel.isMovableByWindowBackground = true
 
         FloatingWindowManager.positionAtTopRight(panel, offset: 28)
 

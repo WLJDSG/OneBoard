@@ -1,5 +1,5 @@
 import CoreGraphics
-@testable import OneBoard
+@testable import OneBoardKit
 import XCTest
 
 final class ScreenshotOverlayCropTests: XCTestCase {
