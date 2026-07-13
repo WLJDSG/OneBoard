@@ -63,7 +63,8 @@ elif [ -f "$BUILD_DIR/AppIcon.icns" ]; then
 fi
 
 # 开发模式：通过环境变量追加后缀，避免污染正式 Bundle ID
-# 示例：ONEBOARD_BUNDLE_ID_SUFFIX=.dev → com.oneboard.mac.dev
+# 开发 ID 可轮换；当 macOS 记住某个状态项的隐藏状态时，切换到新后缀。
+# 示例：ONEBOARD_BUNDLE_ID_SUFFIX=.dev2 → com.oneboard.mac.dev2
 if [ -n "${ONEBOARD_BUNDLE_ID_SUFFIX:-}" ]; then
     CURRENT_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$CONTENTS_DIR/Info.plist")"
     NEW_ID="${CURRENT_ID}${ONEBOARD_BUNDLE_ID_SUFFIX}"

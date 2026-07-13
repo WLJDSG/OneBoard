@@ -19,6 +19,7 @@ final class GatewayViewModel: ObservableObject {
 
     private let service: GatewayService
     private let profileStore: GatewayProfileStore
+    private var refreshTimer: Timer?
 
     init(
         service: GatewayService = GatewayService(),
@@ -90,6 +91,22 @@ final class GatewayViewModel: ObservableObject {
                 self.isHelperInstalled = helperInstalled
             }
         }
+    }
+
+    /// 启动网关变化轮询（面板显示时调用）
+    func startPolling(interval: TimeInterval = 5.0) {
+        stopPolling()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refresh()
+            }
+        }
+    }
+
+    /// 停止网关变化轮询（面板关闭时调用）
+    func stopPolling() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 
     func switchGateway(to profile: GatewayProfile) {

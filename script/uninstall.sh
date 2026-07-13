@@ -7,8 +7,10 @@ BUNDLE_IDS=(
     "$BUNDLE_ID"
     "com.oneboard.mac"
     "com.oneboard.mac.dev"
+    "com.oneboard.mac.dev2"
     "com.oneboard.mac.Findersync"
     "com.oneboard.mac.Findersync.dev"
+    "com.oneboard.mac.Findersync.dev2"
 )
 APP_PATH="/Applications/OneBoard.app"
 
@@ -122,6 +124,14 @@ for BID in "${BUNDLE_IDS[@]}"; do
     rm -rf ~/Library/HTTPStorages/"$BID" 2>/dev/null || true
 done
 rm -rf ~/Library/Group\ Containers/group.com.oneboard.mac 2>/dev/null || true
+# 清理数据库目录（App 使用 Constants.appName 作为子目录名）
+rm -rf ~/Library/Application\ Support/OneBoard 2>/dev/null || true
+
+# ---- 8.5. 清理网关 Helper ----
+echo "🧹 清理网关 Helper..."
+sudo rm -f /usr/local/bin/oneboard-gateway-helper 2>/dev/null || true
+sudo rm -f /etc/sudoers.d/oneboard-gateway 2>/dev/null || true
+sudo rm -f /etc/oneboard-gateway-allowed-ips.conf 2>/dev/null || true
 
 # ---- 9. 重启系统服务 ----
 echo "🔄 重启系统服务..."

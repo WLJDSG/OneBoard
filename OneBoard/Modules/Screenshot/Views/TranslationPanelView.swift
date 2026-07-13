@@ -42,6 +42,19 @@ struct TranslationPanelView: View {
             Text("翻译")
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
+            Picker("翻译服务", selection: Binding(
+                get: { viewModel.translationServiceType },
+                set: { onSelectService($0) }
+            )) {
+                ForEach(TranslationServiceType.allCases) { service in
+                    Text(service.displayName).tag(service)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 140)
+            .disabled(viewModel.isTranslating)
             OneBoardCloseButton(action: onClose)
         }
         .padding(.horizontal, 14)

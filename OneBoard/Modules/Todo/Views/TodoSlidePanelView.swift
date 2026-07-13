@@ -7,6 +7,7 @@ struct TodoSlidePanelView: View {
     @State private var newTodoText = ""
     @State private var newTodoPriority: Priority = .medium
     @State private var showHistory = false
+    @State private var isPinned: Bool = TodoSlidePanelWindowManager.shared.pinned
     @FocusState private var isNewTodoFocused: Bool
 
     var body: some View {
@@ -37,6 +38,9 @@ struct TodoSlidePanelView: View {
         .onChange(of: viewModel.manualAddRequestID) { _ in
             beginAddingTodo()
         }
+        .onChange(of: showHistory) { newValue in
+            TodoSlidePanelWindowManager.shared.shouldSuppressRetract = newValue
+        }
     }
 
     // MARK: - Header
@@ -59,6 +63,13 @@ struct TodoSlidePanelView: View {
 
             Spacer()
 
+            OneBoardPinButton(
+                isPinned: isPinned,
+                action: {
+                    isPinned.toggle()
+                    TodoSlidePanelWindowManager.shared.setPinned(isPinned)
+                }
+            )
             OneBoardCloseButton { TodoSlidePanelWindowManager.shared.hide() }
         }
         .padding(.horizontal, 14)
@@ -142,55 +153,54 @@ struct TodoSlidePanelView: View {
 
     @ViewBuilder
     private var todoList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                if viewModel.activeItems.isEmpty {
-                    VStack(spacing: OneBoardSpacing.sm) {
-                        Image(systemName: "tray")
-                            .font(.system(size: 32))
-                            .foregroundColor(OneBoardColors.textSecondary.opacity(0.3))
-                        Text(viewModel.isSearching ? "无匹配结果" : "暂无待办")
-                            .oneBoardFont(.body)
-                            .foregroundColor(OneBoardColors.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 48)
-                } else {
-                    let items = sortedItems(viewModel.activeItems)
-                    ForEach(items) { item in
-                        TodoRowView(
-                            item: item,
-                            isFadingOut: viewModel.fadingOutIds.contains(item.id ?? 0),
-                            isCompleting: viewModel.fadingOutIds.contains(item.id ?? 0),
-                            onToggleComplete: { viewModel.toggleComplete(item) },
-                            onDelete: { viewModel.delete(item) },
-                            onPriorityChange: { viewModel.setPriority(item, priority: $0) }
-                        )
-                        .padding(.horizontal, OneBoardSpacing.sm)
-
-                        if item.id != items.last?.id {
-                            Divider().padding(.leading, 40)
-                        }
-                    }
-                }
+        if viewModel.activeItems.isEmpty {
+            VStack(spacing: OneBoardSpacing.sm) {
+                Image(systemName: "tray")
+                    .font(.system(size: 32))
+                    .foregroundColor(OneBoardColors.textSecondary.opacity(0.3))
+                Text(viewModel.isSearching ? "无匹配结果" : "暂无待办")
+                    .oneBoardFont(.body)
+                    .foregroundColor(OneBoardColors.textSecondary)
             }
-            .padding(.vertical, OneBoardSpacing.twoXS)
-        }
-        .frame(maxHeight: 420)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 48)
+        } else {
+            let items = sortedItems(viewModel.activeItems)
+            List {
+                ForEach(items) { item in
+                    TodoRowView(
+                        item: item,
+                        isFadingOut: viewModel.fadingOutIds.contains(item.id ?? 0),
+                        isCompleting: viewModel.fadingOutIds.contains(item.id ?? 0),
+                        onToggleComplete: { viewModel.toggleComplete(item) },
+                        onDelete: { viewModel.delete(item) },
+                        onPriorityChange: { viewModel.setPriority(item, priority: $0) }
+                    )
+                    .padding(.horizontal, OneBoardSpacing.sm)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                }
+                .onMove(perform: viewModel.moveItem)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .frame(maxHeight: 420)
 
-        if let msg = viewModel.feedbackMessage {
-            Text(msg)
-                .font(.system(size: 10))
-                .foregroundColor(OneBoardColors.textSecondary)
-                .padding(.horizontal, OneBoardSpacing.sm)
-                .padding(.bottom, OneBoardSpacing.twoXS)
+            if let msg = viewModel.feedbackMessage {
+                Text(msg)
+                    .font(.system(size: 10))
+                    .foregroundColor(OneBoardColors.textSecondary)
+                    .padding(.horizontal, OneBoardSpacing.sm)
+                    .padding(.bottom, OneBoardSpacing.twoXS)
+            }
         }
     }
 
     private func sortedItems(_ items: [TodoItem]) -> [TodoItem] {
         items.sorted { a, b in
             if a.isOverdue != b.isOverdue { return a.isOverdue }
-            return a.priority.sortOrder < b.priority.sortOrder
+            if a.priority.sortOrder != b.priority.sortOrder { return a.priority.sortOrder < b.priority.sortOrder }
+            return a.sortOrder < b.sortOrder
         }
     }
 
@@ -247,6 +257,7 @@ struct TodoSlidePanelView: View {
         newTodoPriority = .medium
         isAddingTodo = false
         isNewTodoFocused = false
+        TodoSlidePanelWindowManager.shared.suppressRetract(for: 3.0)
         TodoSlidePanelWindowManager.shared.setEditing(false)
     }
 

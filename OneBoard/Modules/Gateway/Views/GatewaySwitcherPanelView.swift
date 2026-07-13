@@ -3,6 +3,7 @@ import SwiftUI
 /// 网关切换面板 — Apple Notes 风格
 struct GatewaySwitcherPanelView: View {
     @StateObject private var viewModel = GatewayViewModel.shared
+    @State private var isAnimating = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,10 +14,10 @@ struct GatewaySwitcherPanelView: View {
                     .foregroundColor(OneBoardColors.accent)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("网关切换")
-                        .font(.system(size: 15, weight: .semibold))
+                        .oneBoardFont(.title)
                     if !viewModel.displayGateway.isEmpty {
                         Text(viewModel.displayGateway)
-                            .font(.system(size: 11))
+                            .oneBoardFont(.caption)
                             .foregroundColor(OneBoardColors.textSecondary)
                     }
                 }
@@ -25,8 +26,8 @@ struct GatewaySwitcherPanelView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
                         .foregroundColor(OneBoardColors.textTertiary)
-                        .rotationEffect(.degrees(viewModel.isRefreshing ? 360 : 0))
-                        .animation(viewModel.isRefreshing ? .linear(duration:1).repeatForever(autoreverses:false) : nil, value: viewModel.isRefreshing)
+                        .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                        .animation(isAnimating ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isAnimating)
                 }
                 .buttonStyle(.borderless)
                 OneBoardCloseButton { MenuBarManager.shared.closeGatewaySwitcherPanel() }
@@ -50,10 +51,11 @@ struct GatewaySwitcherPanelView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(profile.title)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .oneBoardFont(.body)
+                                    .fontWeight(.medium)
                                     .foregroundColor(OneBoardColors.textPrimary)
                                 Text(summary(for: profile))
-                                    .font(.system(size: 11))
+                                    .oneBoardFont(.caption)
                                     .foregroundColor(OneBoardColors.textSecondary)
                                     .lineLimit(1)
                             }
@@ -89,7 +91,7 @@ struct GatewaySwitcherPanelView: View {
                         .font(.system(size: 10))
                         .foregroundColor(OneBoardColors.textTertiary)
                     Text("DNS: \(viewModel.snapshot.dnsServers.joined(separator: ", "))")
-                        .font(.system(size: 10))
+                        .oneBoardFont(.captionSmall)
                         .foregroundColor(OneBoardColors.textSecondary)
                         .lineLimit(2)
                 }
@@ -104,7 +106,7 @@ struct GatewaySwitcherPanelView: View {
                     SettingsWindowManager.shared.show(selectedTab: .gateway)
                 } label: {
                     Text("管理配置...")
-                        .font(.system(size: 12))
+                        .oneBoardFont(.callout)
                         .foregroundColor(OneBoardColors.accent)
                 }
                 .buttonStyle(.borderless)
@@ -114,7 +116,16 @@ struct GatewaySwitcherPanelView: View {
         }
         .frame(width: 330)
         .oneBoardPanelStyle()
-        .onAppear { viewModel.refresh() }
+        .onAppear {
+            viewModel.refresh()
+            viewModel.startPolling()
+        }
+        .onDisappear {
+            viewModel.stopPolling()
+        }
+        .onChange(of: viewModel.isRefreshing) { newValue in
+            isAnimating = newValue
+        }
     }
 
     private func summary(for profile: GatewayProfile) -> String {

@@ -168,8 +168,10 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
             "$CURRENT_BUNDLE_ID"
             "com.oneboard.mac"
             "com.oneboard.mac.dev"
+            "com.oneboard.mac.dev2"
             "com.oneboard.mac.Findersync"
             "com.oneboard.mac.Findersync.dev"
+            "com.oneboard.mac.Findersync.dev2"
         )
 
         for BID in "${BUNDLE_IDS[@]}"; do
@@ -186,6 +188,10 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         done
 
         /bin/rm -rf "$HOME/Library/Group Containers/group.com.oneboard.mac" >/dev/null 2>&1
+        /bin/rm -rf "$HOME/Library/Application Support/OneBoard" >/dev/null 2>&1
+
+        # 清理网关 Helper
+        /usr/bin/osascript -e "do shell script \"/bin/rm -f /usr/local/bin/oneboard-gateway-helper /etc/sudoers.d/oneboard-gateway /etc/oneboard-gateway-allowed-ips.conf\" with administrator privileges" >/dev/null 2>&1
 
         /usr/bin/python3 - <<'PY' >/dev/null 2>&1
         import os
@@ -275,28 +281,37 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     // MARK: - 图标
 
     private func createMenuBarIcon() -> NSImage {
-        // 手绘图标确保精确居中对齐，避免 SF Symbol 的 baseline 偏移问题
-        let size = NSSize(width: 18, height: 18)
-        let image = NSImage(size: size, flipped: false) { rect in
-            // 前层方块
-            let frontPath = NSBezierPath(
-                roundedRect: NSRect(x: rect.minX + 6.2, y: rect.minY + 3.7, width: 9.0, height: 7.5),
-                xRadius: 1.8, yRadius: 1.8
-            )
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             NSColor.black.setFill()
             NSColor.black.setStroke()
-            frontPath.lineWidth = 1.5
-            frontPath.fill()
-            frontPath.stroke()
 
-            // 后层方块（描边）
-            let backPath = NSBezierPath(
-                roundedRect: NSRect(x: rect.minX + 3.0, y: rect.minY + 6.0, width: 9.0, height: 7.5),
-                xRadius: 1.8, yRadius: 1.8
+            let rearPanel = NSBezierPath(
+                roundedRect: NSRect(x: 6.0, y: 6.0, width: 9.5, height: 9.0),
+                xRadius: 2.2,
+                yRadius: 2.2
             )
-            NSColor.black.withAlphaComponent(0.5).setStroke()
-            backPath.lineWidth = 1.5
-            backPath.stroke()
+            rearPanel.lineWidth = 1.5
+            rearPanel.stroke()
+
+            let frontPanel = NSBezierPath(
+                roundedRect: NSRect(x: 2.5, y: 2.5, width: 11.5, height: 11.5),
+                xRadius: 2.6,
+                yRadius: 2.6
+            )
+            frontPanel.fill()
+
+            if let context = NSGraphicsContext.current?.cgContext {
+                context.saveGState()
+                context.setBlendMode(.clear)
+                context.setLineCap(.round)
+                context.setLineWidth(1.25)
+                context.move(to: CGPoint(x: 5.2, y: 9.1))
+                context.addLine(to: CGPoint(x: 11.0, y: 9.1))
+                context.move(to: CGPoint(x: 5.2, y: 6.4))
+                context.addLine(to: CGPoint(x: 9.2, y: 6.4))
+                context.strokePath()
+                context.restoreGState()
+            }
 
             return true
         }

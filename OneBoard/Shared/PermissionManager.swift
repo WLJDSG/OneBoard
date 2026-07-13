@@ -123,8 +123,10 @@ final class PermissionManager {
             current,
             "com.oneboard.mac",
             "com.oneboard.mac.dev",
+            "com.oneboard.mac.dev2",
             "com.oneboard.mac.Findersync",
             "com.oneboard.mac.Findersync.dev",
+            "com.oneboard.mac.Findersync.dev2",
         ]
         return Array(Set(known.compactMap { $0 })).sorted()
     }

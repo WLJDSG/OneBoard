@@ -35,6 +35,9 @@ final class DatabaseManager {
         migrator.registerMigration(V3_CreateTodoTable.identifier) { db in
             try V3_CreateTodoTable.migrate(db)
         }
+        migrator.registerMigration(V4_AddTodoSortOrder.identifier) { db in
+            try V4_AddTodoSortOrder.migrate(db)
+        }
 
         try migrator.migrate(queue)
         self.dbQueue = queue

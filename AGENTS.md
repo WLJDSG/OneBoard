@@ -34,7 +34,7 @@ OneBoard/                        # SPM 项目根目录
 
 ```bash
 # 开发测试（不污染正式 Bundle ID）
-ONEBOARD_BUNDLE_ID_SUFFIX=.dev bash script/build_app_bundle.sh
+ONEBOARD_BUNDLE_ID_SUFFIX=.dev2 bash script/build_app_bundle.sh
 
 # 正式打包
 ONEBOARD_CODESIGN_IDENTITY=- bash script/package_app.sh

@@ -17,6 +17,8 @@ final class TodoSlidePanelWindowManager: NSObject {
     private var retractTimer: Timer?
     private var isEditing: Bool = false
     private var isPinned: Bool = false
+    private var retractSuppressUntil: Date = .distantPast
+    var shouldSuppressRetract: Bool = false
 
     /// 是否正在显示
     var isVisible: Bool { slidePanel?.isVisible ?? false }
@@ -47,7 +49,7 @@ final class TodoSlidePanelWindowManager: NSObject {
                 self?.retractTimer = nil
             },
             onMouseExited: { [weak self] in
-                guard self?.isPinned == false else { return }
+                guard self?.isPinned == false, self?.shouldSuppressRetract == false else { return }
                 self?.scheduleRetract()
             }
         )
@@ -106,6 +108,8 @@ final class TodoSlidePanelWindowManager: NSObject {
                 self?.slidePanel = nil
                 self?.slidePanelTrackingView = nil
                 self?.isPinned = false
+                self?.retractSuppressUntil = .distantPast
+                self?.shouldSuppressRetract = false
             }
         }
     }
@@ -122,6 +126,8 @@ final class TodoSlidePanelWindowManager: NSObject {
 
     func scheduleRetract() {
         guard !isPinned else { return }
+        // 检查抑制时间 — 提交待办后短暂抑制自动收起
+        if Date() < retractSuppressUntil { return }
         retractTimer?.invalidate()
         let delay = UserDefaults.standard.double(forKey: Constants.UserDefaultsKeys.todoAutoRetractDelay)
         let seconds = delay > 0 ? delay : 1.0
@@ -131,6 +137,11 @@ final class TodoSlidePanelWindowManager: NSObject {
                 self.hide()
             }
         }
+    }
+
+    /// 在指定秒数内抑制自动收起（用于提交待办后让用户看到结果）
+    func suppressRetract(for seconds: TimeInterval = 3.0) {
+        retractSuppressUntil = Date().addingTimeInterval(seconds)
     }
 
     // MARK: - 编辑状态

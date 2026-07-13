@@ -11,11 +11,17 @@ final class TodoRepository {
 
     // MARK: - 插入
 
-    /// 插入一条待办事项，返回新 ID
+    /// 插入一条待办事项，返回新 ID（自动分配 sortOrder 使新项排在最前）
     func insert(_ item: TodoItem) async throws -> Int64 {
         let queue = try dbManager.queue
         return try await queue.write { db in
             var item = item
+            // 新项 sortOrder = 0，将其他项全部 +1
+            if item.sortOrder == 0 {
+                try db.execute(
+                    sql: "UPDATE todos SET sortOrder = sortOrder + 1 WHERE isCompleted = 0"
+                )
+            }
             try item.insert(db)
             let id = db.lastInsertedRowID
 
@@ -31,7 +37,7 @@ final class TodoRepository {
 
     // MARK: - 查询
 
-    /// 获取所有未完成的待办（优先级排序 + 过期优先 + 时间倒序）
+    /// 获取所有未完成的待办（优先级排序 + 用户自定义排序 + 过期优先 + 时间倒序）
     func fetchActive(limit: Int = 200) async throws -> [TodoItem] {
         let queue = try dbManager.queue
         return try await queue.read { db in
@@ -39,6 +45,7 @@ final class TodoRepository {
                 .filter(TodoItem.Columns.isCompleted == false)
                 .order(
                     TodoItem.Columns.priority == "high",
+                    TodoItem.Columns.sortOrder.asc,
                     TodoItem.Columns.dueDate.ascNullsLast,
                     TodoItem.Columns.createdAt.desc
                 )
@@ -125,6 +132,20 @@ final class TodoRepository {
                 sql: "UPDATE todos SET dueDate = ? WHERE id = ?",
                 arguments: [dueDate, id]
             )
+        }
+    }
+
+    /// 批量更新排序顺序（拖拽排序后调用）
+    func updateSortOrders(_ items: [TodoItem]) async throws {
+        let queue = try dbManager.queue
+        try await queue.write { db in
+            for (index, item) in items.enumerated() {
+                guard let id = item.id else { continue }
+                try db.execute(
+                    sql: "UPDATE todos SET sortOrder = ? WHERE id = ?",
+                    arguments: [index, id]
+                )
+            }
         }
     }
 

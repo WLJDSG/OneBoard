@@ -42,6 +42,7 @@ struct TodoItem: Codable, Identifiable {
     var text: String
     var isCompleted: Bool
     var priority: Priority
+    var sortOrder: Int
     var sourceAppBundleId: String?
     var dueDate: Date?
     var completedAt: Date?
@@ -83,6 +84,7 @@ struct TodoItem: Codable, Identifiable {
         text: String,
         isCompleted: Bool = false,
         priority: Priority = .medium,
+        sortOrder: Int = 0,
         sourceAppBundleId: String? = nil,
         dueDate: Date? = nil,
         completedAt: Date? = nil,
@@ -92,6 +94,7 @@ struct TodoItem: Codable, Identifiable {
         self.text = text
         self.isCompleted = isCompleted
         self.priority = priority
+        self.sortOrder = sortOrder
         self.sourceAppBundleId = sourceAppBundleId
         self.dueDate = dueDate
         self.completedAt = completedAt
@@ -109,6 +112,7 @@ extension TodoItem: FetchableRecord, PersistableRecord {
         static let text = Column(CodingKeys.text)
         static let isCompleted = Column(CodingKeys.isCompleted)
         static let priority = Column(CodingKeys.priority)
+        static let sortOrder = Column(CodingKeys.sortOrder)
         static let sourceAppBundleId = Column(CodingKeys.sourceAppBundleId)
         static let dueDate = Column(CodingKeys.dueDate)
         static let completedAt = Column(CodingKeys.completedAt)

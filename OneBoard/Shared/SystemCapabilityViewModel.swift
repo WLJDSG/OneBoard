@@ -185,6 +185,8 @@ final class SystemCapabilityViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+        // 打开系统设置让用户确认撤销结果
+        PermissionManager.shared.openPrivacySetting(for: kind)
         refresh()
         schedulePermissionRefresh()
         NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)

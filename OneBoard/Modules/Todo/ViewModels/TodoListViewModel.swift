@@ -169,6 +169,29 @@ final class TodoListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - 排序
+
+    /// 拖拽排序：移动条目从 source 到 destination
+    func moveItem(from source: IndexSet, to destination: Int) {
+        var mutableItems = activeItems
+        mutableItems.move(fromOffsets: source, toOffset: destination)
+
+        // 更新 sortOrder
+        for (index, var item) in mutableItems.enumerated() {
+            item.sortOrder = index
+        }
+        activeItems = mutableItems
+
+        // 异步持久化
+        Task {
+            do {
+                try await repository.updateSortOrders(mutableItems)
+            } catch {
+                print("[TodoListViewModel] 更新排序失败: \(error)")
+            }
+        }
+    }
+
     // MARK: - 搜索
 
     func performSearch() {

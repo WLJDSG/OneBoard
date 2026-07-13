@@ -313,8 +313,15 @@ final class AnnotationService: ObservableObject {
         if let bitmap = image.representations.compactMap({ $0 as? NSBitmapImageRep }).first {
             return CGSize(width: bitmap.pixelsWide, height: bitmap.pixelsHigh)
         }
-        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            return CGSize(width: cgImage.width, height: cgImage.height)
+        // 安全获取 CGImage：NSImage.cgImage 在部分显示器配置下可能崩溃
+        if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            return CGSize(width: cg.width, height: cg.height)
+        }
+        // TIFF 回退方案 — 解决 Retina 显示器上 cgImage 返回 nil 或崩溃的问题
+        if let tiff = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiff),
+           let cg = bitmap.cgImage {
+            return CGSize(width: cg.width, height: cg.height)
         }
         return image.size
     }
