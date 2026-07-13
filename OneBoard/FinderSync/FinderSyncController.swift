@@ -18,8 +18,10 @@ final class FinderSyncController: FIFinderSync {
 
     override init() {
         super.init()
-        // 明确注册用户目录和桌面；根目录“/”无法可靠覆盖桌面空白处菜单。
-        FIFinderSyncController.default().directoryURLs = [Self.actualHomeURL, Self.actualDesktopURL]
+        // 根目录覆盖所有本地卷路径，home/desktop 兼容 macOS 26 的桌面空白处菜单。
+        FIFinderSyncController.default().directoryURLs = FinderFileCreationRequest.managedDirectories(
+            homeURL: Self.actualHomeURL
+        )
         print("[FinderSync] 扩展已初始化")
     }
 
@@ -80,100 +82,35 @@ final class FinderSyncController: FIFinderSync {
     // MARK: - 文件创建
 
     @objc private func createTXTFile() {
-        createFile(extension: "txt", content: Data())
+        requestFileCreation(kind: .txt)
     }
 
     @objc private func createDOCXFile() {
-        createOfficeFile(extension: "docx", files: docxTemplateFiles)
+        requestFileCreation(kind: .docx)
     }
 
     @objc private func createXLSXFile() {
-        createOfficeFile(extension: "xlsx", files: xlsxTemplateFiles)
+        requestFileCreation(kind: .xlsx)
     }
 
-    private func createFile(extension ext: String, content: Data) {
+    private func requestFileCreation(kind: FinderFileKind) {
         guard let targetURL = targetDirectoryURL() else {
             print("[FinderSync] 无法获取目标目录")
             showCreationFailure("无法获取 Finder 当前目录。请在文件夹空白处右键，或先选中文件夹后重试。")
             return
         }
-
-        let baseName = "未命名"
-        var fileName = "\(baseName).\(ext)"
-        var counter = 1
-        let fm = FileManager.default
-
-        while fm.fileExists(atPath: targetURL.appendingPathComponent(fileName).path) {
-            fileName = "\(baseName) \(counter).\(ext)"
-            counter += 1
-        }
-
-        let fileURL = targetURL.appendingPathComponent(fileName)
-        do {
-            try content.write(to: fileURL, options: [.withoutOverwriting])
-            // 在 Finder 中选中新文件并进入重命名状态
-            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-            print("[FinderSync] 已创建文件: \(fileURL.path)")
-        } catch {
-            print("[FinderSync] 创建 \(ext) 文件失败: \(error)")
-            showCreationFailure("无法在“\(targetURL.lastPathComponent)”中新建文件。\n\n\(error.localizedDescription)")
-        }
-    }
-
-    private func createOfficeFile(extension ext: String, files: [String: String]) {
-        guard let targetURL = targetDirectoryURL() else {
-            print("[FinderSync] 无法获取目标目录")
-            showCreationFailure("无法获取 Finder 当前目录。请在文件夹空白处右键，或先选中文件夹后重试。")
+        let request = FinderFileCreationRequest(directoryURL: targetURL, kind: kind)
+        guard let commandURL = request.commandURL, NSWorkspace.shared.open(commandURL) else {
+            showCreationFailure("无法唤起 OneBoard 主应用。请确认 OneBoard 已正确安装后重试。")
             return
         }
-
-        let baseName = "未命名"
-        var fileName = "\(baseName).\(ext)"
-        var counter = 1
-        let fm = FileManager.default
-
-        while fm.fileExists(atPath: targetURL.appendingPathComponent(fileName).path) {
-            fileName = "\(baseName) \(counter).\(ext)"
-            counter += 1
-        }
-
-        let fileURL = targetURL.appendingPathComponent(fileName)
-        let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("oneboard-\(UUID().uuidString)", isDirectory: true)
-
-        do {
-            try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
-            defer { try? fm.removeItem(at: tempRoot) }
-
-            for (path, body) in files {
-                let url = tempRoot.appendingPathComponent(path)
-                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try body.data(using: .utf8)?.write(to: url)
-            }
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
-            process.currentDirectoryURL = tempRoot
-            process.arguments = ["-qr", fileURL.path] + Array(files.keys).sorted()
-            try process.run()
-            process.waitUntilExit()
-
-            guard process.terminationStatus == 0 else {
-                throw NSError(domain: "OneBoardFinderSync", code: Int(process.terminationStatus))
-            }
-
-            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-            print("[FinderSync] 已创建文件: \(fileURL.path)")
-        } catch {
-            print("[FinderSync] 创建 \(ext) 文件失败: \(error)")
-            showCreationFailure("无法在“\(targetURL.lastPathComponent)”中新建 \(ext) 文件。\n\n\(error.localizedDescription)")
-        }
+        print("[FinderSync] 已请求主应用创建 \(kind.rawValue) 文件: \(targetURL.path)")
     }
 
     private func targetDirectoryURL() -> URL? {
         let controller = FIFinderSyncController.default()
         if let targetURL = controller.targetedURL() {
-            return targetURL
+            return directoryURL(for: targetURL)
         }
 
         guard let selectedURL = controller.selectedItemURLs()?.first else {
@@ -183,12 +120,15 @@ final class FinderSyncController: FIFinderSync {
             return Self.actualDesktopURL
         }
 
-        var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: selectedURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            return selectedURL
-        }
+        return directoryURL(for: selectedURL)
+    }
 
-        return selectedURL.deletingLastPathComponent()
+    private func directoryURL(for url: URL) -> URL {
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            return url
+        }
+        return url.deletingLastPathComponent()
     }
 
     private func showCreationFailure(_ message: String) {
@@ -202,45 +142,4 @@ final class FinderSyncController: FIFinderSync {
         }
     }
 
-    private var docxTemplateFiles: [String: String] {
-        [
-            "[Content_Types].xml": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>
-            """,
-            "_rels/.rels": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>
-            """,
-            "word/document.xml": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p/><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>
-            """
-        ]
-    }
-
-    private var xlsxTemplateFiles: [String: String] {
-        [
-            "[Content_Types].xml": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>
-            """,
-            "_rels/.rels": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>
-            """,
-            "xl/_rels/workbook.xml.rels": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>
-            """,
-            "xl/workbook.xml": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>
-            """,
-            "xl/worksheets/sheet1.xml": """
-            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/></worksheet>
-            """
-        ]
-    }
 }

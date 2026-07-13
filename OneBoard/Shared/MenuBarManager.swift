@@ -350,7 +350,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         hostingView.layer?.masksToBounds = true
 
         let panel = ClipboardPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 360),
+            contentRect: NSRect(origin: .zero, size: GatewaySwitcherPanelLayout.size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false

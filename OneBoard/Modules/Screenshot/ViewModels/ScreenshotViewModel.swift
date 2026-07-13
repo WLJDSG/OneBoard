@@ -9,6 +9,17 @@ private final class AnnotationPanel: NSPanel {
 }
 
 enum ScreenshotPresentationLayout {
+    static func displayedSize(selectionRect: CGRect, visibleFrame: CGRect) -> CGSize {
+        let selectedSize = selectionRect.size
+        guard selectedSize.width > 0, selectedSize.height > 0 else { return .zero }
+        let scale = min(
+            visibleFrame.width * 0.9 / selectedSize.width,
+            visibleFrame.height * 0.82 / selectedSize.height,
+            1
+        )
+        return CGSize(width: selectedSize.width * scale, height: selectedSize.height * scale)
+    }
+
     static func origin(selectionRect: CGRect, displayedSize: CGSize, scale: CGFloat) -> CGPoint {
         guard scale != 1 else { return selectionRect.origin }
         return CGPoint(
@@ -79,13 +90,14 @@ final class ScreenshotViewModel: ObservableObject {
             ?? NSScreen.screens.first
         let screenFrame = screen?.frame ?? .zero
         let visibleFrame = screen?.visibleFrame ?? screenFrame
-        let maxWidth = visibleFrame.width * 0.9
-        let maxHeight = visibleFrame.height * 0.82
-
-        // 图片窗口：只包含图片和标注，不含工具栏
-        let scale = min(maxWidth / image.size.width, maxHeight / image.size.height, 1.0)
-        let imageWinWidth = image.size.width * scale
-        let imageWinHeight = image.size.height * scale
+        // NSImage 在 Retina 屏幕上可能报告像素尺寸；窗口必须使用框选区域的逻辑点尺寸。
+        let displayedSize = ScreenshotPresentationLayout.displayedSize(
+            selectionRect: selectionRect,
+            visibleFrame: visibleFrame
+        )
+        let scale = selectionRect.width > 0 ? displayedSize.width / selectionRect.width : 1
+        let imageWinWidth = displayedSize.width
+        let imageWinHeight = displayedSize.height
 
         // 工具栏作为独立悬浮窗，0.5cm 间距
         let toolbarGap: CGFloat = 19 // ~0.5cm

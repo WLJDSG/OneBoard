@@ -36,6 +36,7 @@ CLANG_MODULE_CACHE_PATH="$ONEBOARD_MODULE_CACHE" xcrun swiftc \
     -parse-as-library \
     -target "${BUILD_ARCH}-apple-macosx14.0" \
     "FinderSync/FinderSyncController.swift" \
+    "Shared/FinderFileCreation.swift" \
     -framework Cocoa \
     -framework FinderSync \
     -Xlinker -e \

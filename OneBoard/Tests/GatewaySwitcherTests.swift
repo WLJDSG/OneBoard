@@ -2,6 +2,10 @@ import XCTest
 @testable import OneBoardKit
 
 final class GatewaySwitcherTests: XCTestCase {
+    func testGatewayPanelUsesCompactSize() {
+        XCTAssertEqual(GatewaySwitcherPanelLayout.size, CGSize(width: 330, height: 300))
+    }
+
     func testParseDefaultRouteAndHardwarePorts() {
         let route = GatewayRouteParser.parseDefaultRoute("""
            route to: default

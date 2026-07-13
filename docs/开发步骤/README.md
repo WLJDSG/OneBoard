@@ -118,16 +118,27 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 
 ### 第八阶段：Finder 新建文件 + Cmd+Q 修复 ✅
 
-**状态：已完成实现**
+**状态：已完成，并于 2026-07-13 完成 macOS 26 权限链路修复**
 
-1. ✅ Finder Sync Extension（独立 SPM target + FIFinderSync 协议）
-2. ✅ 右键文件夹/桌面空白 → “新建文件”子菜单（txt/docx/xlsx/文件夹）
-3. ✅ 文件创建逻辑（自动命名、冲突处理、Finder 中选中进入重命名）
-4. ✅ App Group 共享 UserDefaults（主应用设置页管理文件类型，扩展读取配置）
-5. ✅ build_app_bundle.sh 扩展编译 + .appex 打包 + 签名
-6. ✅ Cmd+Q 修复（setupHiddenMainMenu，仅应用活跃时响应）
-7. ✅ 主应用 entitlements 新增 app-group 权限
+1. ✅ Finder Sync Extension（FIFinderSync 协议）
+2. ✅ 右键文件夹/桌面空白 → “新建文件”子菜单（txt/docx/xlsx）
+3. ✅ 通过 `oneboard://new-file` 将写入请求交给主应用，避免扩展沙盒直接写入失败
+4. ✅ 自动命名、冲突处理，并在 Finder 中选中新文件
+5. ✅ 根目录、用户目录、Desktop 监听与桌面空白处回退
+6. ✅ `build_app_bundle.sh` 编译、打包并签名 `.appex`
+7. ✅ Cmd+Q 修复（`setupHiddenMainMenu`，仅应用活跃时响应）
 8. ✅ 授权设置页新增 Finder 扩展启用提示
+
+### 2026-07-13：macOS 26 交互兼容修复 ✅
+
+**状态：已完成并生成验证通过的 DMG（2026-07-13）**
+
+1. ✅ 摇晃检测在缺少输入监听权限时保留轮询降级通道
+2. ✅ Finder 快速新建覆盖桌面及任意受监控目录，并改由主应用执行写入
+3. ✅ Retina 截图按框选区域逻辑尺寸原位显示
+4. ✅ 网关切换弹窗缩小为 330×300，并移除异常外边框
+5. ✅ 新增 Finder 请求、文件创建、截图布局、摇晃启动策略和网关布局回归测试
+6. ✅ 全量 65 项测试、Release 构建、签名、DMG checksum 和新建文件端到端验证通过
 
 
 
@@ -164,5 +175,5 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 7. **打包产物**：执行 `script/package_app.sh` 生成 `build/OneBoard.dmg`，并通过 `hdiutil verify build/OneBoard.dmg` 校验镜像
 8. **网关模块**：切换当前默认路由所在服务的网关/DNS，验证 Wi-Fi/有线网络自动识别、仅 DNS 模式、helper 安装/卸载和授权状态同步
 9. **待办模块**：选中文字 + 快捷键添加待办，右键 Services 菜单添加，鼠标移至顶部中央刘海触发面板，勾选完成淡出，查看历史统计，配置保留天数
-10. **Finder 扩展**：右键文件夹 → "新建文件"菜单 → 创建 txt/docx/xlsx/文件夹，文件在 Finder 中选中可重命名，设置页管理文件类型
+10. **Finder 扩展**：右键文件夹/桌面 → "新建文件"菜单 → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中
 11. **Cmd+Q**：OneBoard 活跃时（设置窗口/浮动面板）Cmd+Q 退出；其他应用活跃时 Cmd+Q 不影响 OneBoard

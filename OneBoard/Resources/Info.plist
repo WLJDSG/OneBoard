@@ -18,6 +18,17 @@
     <string>OneBoard</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.oneboard.mac.file-creation</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>oneboard</string>
+            </array>
+        </dict>
+    </array>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.1</string>
 	<key>CFBundleVersion</key>

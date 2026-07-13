@@ -2,6 +2,11 @@ import AppKit
 
 /// 文件拖拽检测器 - 检测文件拖拽时的摇晃手势
 final class DragDetector {
+    struct StartupStrategy: Equatable {
+        let startPolling: Bool
+        let startEventTap: Bool
+    }
+
     static let shared = DragDetector()
     static let fileDragDetected = Notification.Name(Constants.NotificationNames.shakeGestureDetected)
 
@@ -17,22 +22,26 @@ final class DragDetector {
     private init() {}
 
     func start() {
-        guard PermissionManager.shared.hasInputMonitoringPermission else {
-            print("[DragDetector] 缺少输入监控权限，无法监听全局拖拽")
-            return
-        }
-        guard PermissionManager.shared.hasAccessibilityPermission else {
-            print("[DragDetector] 缺少辅助功能权限，无法监听全局拖拽")
-            return
-        }
+        guard pollTimer == nil else { return }
+        let strategy = Self.startupStrategy(
+            inputMonitoringGranted: PermissionManager.shared.hasInputMonitoringPermission
+        )
         lastSeenDragPasteboardChangeCount = NSPasteboard(name: .drag).changeCount
-        startEventTap()
-        startPolling()
+        if strategy.startEventTap {
+            startEventTap()
+        } else {
+            print("[DragDetector] 未授权输入监听，使用鼠标状态轮询检测文件摇晃")
+        }
+        if strategy.startPolling { startPolling() }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.handleMouseEvent(event)
             return event
         }
         print("[DragDetector] 已启动")
+    }
+
+    static func startupStrategy(inputMonitoringGranted: Bool) -> StartupStrategy {
+        StartupStrategy(startPolling: true, startEventTap: inputMonitoringGranted)
     }
 
     func stop() {

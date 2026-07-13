@@ -3,6 +3,18 @@ import XCTest
 
 @MainActor
 final class ScreenshotSessionLifecycleTests: XCTestCase {
+    func testRetinaScreenshotUsesLogicalSelectionSize() {
+        let selection = CGRect(x: 120, y: 240, width: 900, height: 360)
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+
+        let size = ScreenshotPresentationLayout.displayedSize(
+            selectionRect: selection,
+            visibleFrame: visibleFrame
+        )
+
+        XCTAssertEqual(size, selection.size)
+    }
+
     func testUnscaledScreenshotKeepsSelectionOrigin() {
         let selection = CGRect(x: 120, y: 240, width: 640, height: 360)
 

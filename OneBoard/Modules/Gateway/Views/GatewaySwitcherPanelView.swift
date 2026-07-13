@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum GatewaySwitcherPanelLayout {
+    static let size = CGSize(width: 330, height: 300)
+}
+
 /// 网关切换面板 — Apple Notes 风格
 struct GatewaySwitcherPanelView: View {
     @StateObject private var viewModel = GatewayViewModel.shared
@@ -114,8 +118,10 @@ struct GatewaySwitcherPanelView: View {
             }
             .padding(.vertical, 8)
         }
-        .frame(width: 380, height: 360)
-        .oneBoardPanelStyle()
+        .frame(width: GatewaySwitcherPanelLayout.size.width, height: GatewaySwitcherPanelLayout.size.height)
+        .background(OneBoardColors.panelBg)
+        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+        .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
         .onAppear {
             viewModel.refresh()
             viewModel.startPolling()

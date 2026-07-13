@@ -39,10 +39,11 @@ SwiftUI View → ObservableObject ViewModel → Service → System API
 
 ```
 OneBoard/
-├── App/                    # 应用入口
-│   ├── OneBoardApp.swift   # @main
-│   ├── AppDelegate.swift   # 生命周期管理
-│   └── AppSettings.swift   # UserDefaults 设置
+├── App_minimal/            # 极简可执行入口
+│   └── main.swift          # 创建 NSStatusItem，加载 OneBoardKit
+├── App/                    # OneBoardKit 应用层
+│   ├── OneBoardApp.swift   # 设置窗口相关类型
+│   └── AppDelegate.swift   # 生命周期和 URL Scheme 路由
 ├── Core/                   # 核心基础设施
 │   ├── Database/           # 数据库管理 + 迁移
 │   ├── Extensions/         # Swift 扩展
@@ -51,14 +52,51 @@ OneBoard/
 ├── Modules/                # 功能模块
 │   ├── Clipboard/          # 剪贴板模块
 │   ├── Screenshot/         # 截图模块
-│   └── FileStaging/        # 文件暂存模块
+│   ├── FileStaging/        # 文件暂存模块
+│   └── Gateway/            # 网关切换模块
+├── FinderSync/             # Finder Sync Extension
 ├── Shared/                 # 共享服务
 │   ├── HotkeyManager.swift
 │   ├── MenuBarManager.swift
 │   ├── FloatingWindowManager.swift
+│   ├── FinderFileCreation.swift
 │   └── PermissionManager.swift
-└── Resources/              # 资源文件
+├── Resources/              # 资源文件
+└── Tests/                  # XCTest 回归测试
 ```
+
+### 可执行模块隔离
+
+`OneBoard` 可执行 target 必须保持极简，业务代码全部位于 `OneBoardKit`。macOS 26 下，不要把业务源码重新并入可执行 target，否则可能干扰 `NSStatusItem` 渲染。
+
+### Finder 新建文件跨进程协议
+
+Finder Sync Extension 运行在 App Sandbox 中，不直接向目标目录写文件：
+
+```text
+Finder 右键菜单
+  → FinderSyncController 获取 targetedURL/selectedItemURLs
+  → oneboard://new-file?directory=...&type=...
+  → AppDelegate 接收 URL
+  → FinderFileCreator 创建文件
+  → Finder 选中新文件
+```
+
+- `FinderFileCreationRequest` 只接受绝对目录和 txt/docx/xlsx 白名单类型。
+- Finder 监听集合包含 `/`、用户目录和 Desktop；Desktop 空白处没有目标 URL 时回退到真实桌面目录。
+- 文件名从 `未命名.ext` 开始，冲突时依次使用 `未命名 1.ext`、`未命名 2.ext`。
+
+### 截图坐标与 Retina 规则
+
+- 截图像素数据可使用 Retina 像素尺寸，但 AppKit 窗口布局必须使用框选区域的逻辑点尺寸。
+- 未缩放截图必须严格复用框选区域原点，不能按图片像素尺寸重新居中。
+- 只有框选区域超过可见屏幕约束时才进行等比缩放。
+
+### 文件摇晃检测降级
+
+- 有输入监听授权时启用 `CGEventTap`，并持续使用轮询作为补充。
+- 没有输入监听授权时不能终止整个检测器；必须保留鼠标状态和 drag pasteboard 轮询通道。
+- 已确认的文件拖拽在同一轮手势中保持确认状态，不能只依赖 pasteboard `changeCount` 变化。
 
 ## 数据模型
 
@@ -91,7 +129,9 @@ OneBoard/
 | 权限 | 用途 | 请求方式 |
 |------|------|---------|
 | 辅助功能 | 全局快捷键、模拟粘贴 | AXIsProcessTrusted() |
+| 输入监听 | 全局拖拽事件监听 | CGPreflightListenEventAccess() |
 | 屏幕录制 | 截图功能 | 系统自动弹窗 |
+| Finder 扩展 | Finder 右键快速新建 | 系统扩展管理页启用 |
 | 开机自启 | SMAppService | 代码注册 |
 
 ## 编码规范

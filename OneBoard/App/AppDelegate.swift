@@ -56,6 +56,24 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         print("[AppDelegate] OneBoard 启动完成")
     }
 
+    public func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let request = FinderFileCreationRequest(commandURL: url) else { continue }
+            do {
+                let fileURL = try FinderFileCreator.create(kind: request.kind, in: request.directoryURL)
+                NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+                print("[AppDelegate] 已创建文件: \(fileURL.path)")
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "OneBoard 新建文件失败"
+                alert.informativeText = "无法在“\(request.directoryURL.lastPathComponent)”中新建文件。\n\n\(error.localizedDescription)"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "好")
+                alert.runModal()
+            }
+        }
+    }
+
     public func applicationWillTerminate(_ notification: Notification) {
         PasteboardMonitor.shared.stop()
         DragDetector.shared.stop()

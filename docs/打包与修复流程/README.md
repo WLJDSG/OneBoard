@@ -40,6 +40,15 @@ ONEBOARD_CODESIGN_IDENTITY=- script/package_app.sh
 
 ## 打包后验证
 
+打包前先从 `OneBoard/` 目录执行全量测试和 Release 构建：
+
+```bash
+cd OneBoard
+swift test --disable-sandbox
+swift build -c release --disable-sandbox
+cd ..
+```
+
 打包完成后必须验证 DMG：
 
 ```bash
@@ -58,6 +67,16 @@ hdiutil: verify: checksum of "build/OneBoard.dmg" is VALID
 ls -lh build/OneBoard.dmg
 ```
 
+涉及 Finder 扩展或跨进程功能时，还必须挂载最终 DMG 检查真实产物，不能只检查打包过程中短暂存在的 `build/OneBoard.app`：
+
+```bash
+hdiutil attach -readonly -nobrowse build/OneBoard.dmg
+codesign --verify --deep --strict --verbose=2 /Volumes/OneBoard/OneBoard.app
+test -x /Volumes/OneBoard/OneBoard.app/Contents/PlugIns/OneBoardFinderSync.appex/Contents/MacOS/OneBoardFinderSync
+```
+
+Finder 新建文件链路可在临时目录做端到端验证：启动 DMG 内 App 后，打开 `oneboard://new-file` URL，确认目标目录出现 `未命名.txt`。测试目录必须使用临时路径，不要污染用户桌面或文档目录。
+
 ## 修 bug 标准流程
 
 每次修 bug 都必须按以下闭环执行：
@@ -65,11 +84,11 @@ ls -lh build/OneBoard.dmg
 1. **确定范围**：先明确 bug 影响的功能、入口、模块和复现条件，不扩大到无关重构。
 2. **查清原因**：阅读相关需求、技术规范和代码；用日志、构建错误、复现结果或代码路径说明 bug 为什么发生。
 3. **最小修复**：只修改必要文件，优先沿用现有架构和代码风格，避免顺手重构。
-4. **验证修复**：运行与 bug 相关的最小验证，包括 `swift build`、针对性手动验证或可用测试。
+4. **验证修复**：先让针对真实症状的回归测试失败，再修复并运行定向测试、全量 `swift test` 和 Release 构建。
 5. **未修复则继续**：如果验证失败，回到原因分析，继续修复和验证，直到确认修复为止。
 6. **重新打包**：确认 bug 修复后，重新执行标准打包命令生成 `build/OneBoard.dmg`。
 7. **验证安装包**：执行 `hdiutil verify build/OneBoard.dmg`，确认 DMG 有效。
-8. **记录结果**：在开发日志中记录修复范围、根因、改动、验证命令和打包结果。
+8. **记录结果**：在开发日志中记录修复范围、根因、改动、测试数量、验证命令、DMG checksum 和无法自动完成的肉眼验收项。
 
 ## Codex 执行要求
 
