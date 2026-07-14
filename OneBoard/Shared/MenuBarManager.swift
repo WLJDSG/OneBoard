@@ -192,6 +192,9 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
             /bin/rm -f "$HOME/Library/Preferences/$BID.plist" >/dev/null 2>&1
         done
 
+        # 辅助功能列表单独重试主 Bundle ID；此时 App 仍存在，tccutil 可解析代码签名。
+        /usr/bin/tccutil reset Accessibility "$CURRENT_BUNDLE_ID" >/tmp/oneboard-uninstall-tcc.log 2>&1
+
         /bin/rm -rf "$HOME/Library/Group Containers/group.com.oneboard.mac" >/dev/null 2>&1
         /bin/rm -rf "$HOME/Library/Application Scripts/group.com.oneboard.mac" >/dev/null 2>&1
         /bin/rm -rf "$HOME/Library/Application Support/OneBoard" >/dev/null 2>&1

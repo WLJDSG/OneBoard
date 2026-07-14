@@ -101,14 +101,4 @@ final class ScreenshotSelectionTests: XCTestCase {
         XCTAssertEqual(model.phase, .locked)
     }
 
-    func testToolbarUsesTopWhenBottomWouldLeaveBounds() {
-        let frame = ScreenshotSelectionToolbarLayout.frame(
-            selectionRect: CGRect(x: 200, y: 10, width: 400, height: 220),
-            toolbarSize: CGSize(width: 520, height: 44),
-            bounds: bounds,
-            gap: 12
-        )
-
-        XCTAssertEqual(frame, CGRect(x: 140, y: 242, width: 520, height: 44))
-    }
 }

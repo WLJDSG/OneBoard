@@ -15,12 +15,14 @@ struct FileStagingView: View {
             Divider()
 
             // Content
-            if viewModel.stagedFiles.isEmpty {
-                dropPrompt
-                    .frame(maxHeight: .infinity)
-            } else {
-                fileGrid
+            ZStack(alignment: .topLeading) {
+                if viewModel.stagedFiles.isEmpty {
+                    dropPrompt
+                } else {
+                    fileGrid
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: FileStagingViewModel.shelfSize.width, height: FileStagingViewModel.shelfSize.height)
         .oneBoardPanelStyle()
@@ -69,7 +71,7 @@ struct FileStagingView: View {
                 .foregroundColor(isDropTargeted ? OneBoardColors.accent : OneBoardColors.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 160)
+        .frame(maxHeight: .infinity)
     }
 
     // MARK: - File Grid
@@ -86,7 +88,7 @@ struct FileStagingView: View {
             }
             .padding(12)
         }
-        .frame(maxHeight: 340)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func fileTile(_ file: StagedFile) -> some View {

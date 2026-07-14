@@ -25,8 +25,7 @@ final class ScreenshotCaptureService: NSObject {
                     guard !didResume else { return }
                     didResume = true
                     DispatchQueue.main.async {
-                        self?.overlayWindow?.close()
-                        self?.overlayWindow = nil
+                        self?.closeOverlay()
                     }
                     continuation.resume(returning: result)
                 }
@@ -68,6 +67,12 @@ final class ScreenshotCaptureService: NSObject {
             }
         }
         return result
+    }
+
+    /// 标注阶段仍复用原框选遮罩；完成或取消整个截图会话时统一关闭。
+    func closeOverlay() {
+        overlayWindow?.close()
+        overlayWindow = nil
     }
 
     /// 在后台线程使用 screencapture 静默截取全屏

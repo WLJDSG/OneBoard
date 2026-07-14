@@ -228,6 +228,10 @@ final class PermissionGuideWindowManager {
     private var flowStartTime: Date = Date()  // 最短保护期，防权限 API 缓存误判
 
     var hasActiveFlow: Bool { currentKind != nil }
+    var shouldRelaunchIfTerminated: Bool {
+        guard !isRevoke else { return false }
+        return currentKind == .screenRecording || currentKind == .inputMonitoring
+    }
 
     private init() {}
 

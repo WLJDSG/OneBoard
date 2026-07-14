@@ -1,5 +1,18 @@
 import AppKit
 
+enum AnnotationCoordinateMapper {
+    static func imagePoint(
+        from localPoint: CGPoint,
+        boundsHeight: CGFloat,
+        isFlipped: Bool
+    ) -> CGPoint {
+        CGPoint(
+            x: localPoint.x,
+            y: isFlipped ? localPoint.y : boundsHeight - localPoint.y
+        )
+    }
+}
+
 /// 标注 ViewModel - 使用 NSEvent 监听实现流畅的拖拽和绘制
 @MainActor
 final class AnnotationViewModel: ObservableObject {
@@ -16,6 +29,8 @@ final class AnnotationViewModel: ObservableObject {
     @Published var editingTextLayerID: UUID?
 
     private weak var window: NSWindow?
+    private weak var coordinateView: NSView?
+    private var allowsWindowDragging = true
     private var localMouseMonitor: Any?
     private var startPoint: CGPoint = .zero
     private var lastDragPoint: CGPoint = .zero
@@ -35,8 +50,14 @@ final class AnnotationViewModel: ObservableObject {
         self.annotationService = annotationService
     }
 
-    func setWindow(_ window: NSWindow) {
+    func setWindow(
+        _ window: NSWindow,
+        coordinateView: NSView? = nil,
+        allowsWindowDragging: Bool = true
+    ) {
         self.window = window
+        self.coordinateView = coordinateView
+        self.allowsWindowDragging = allowsWindowDragging
         setupMouseMonitor(for: window)
     }
 
@@ -58,9 +79,15 @@ final class AnnotationViewModel: ObservableObject {
         localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             guard let self, event.window === window else { return event }
 
-            let winPoint = event.locationInWindow
-            guard let contentView = window.contentView else { return event }
-            let imagePoint = CGPoint(x: winPoint.x, y: contentView.bounds.height - winPoint.y)
+            let targetView = self.coordinateView ?? window.contentView
+            guard let targetView else { return event }
+            let localPoint = targetView.convert(event.locationInWindow, from: nil)
+            guard targetView.bounds.contains(localPoint) else { return event }
+            let imagePoint = AnnotationCoordinateMapper.imagePoint(
+                from: localPoint,
+                boundsHeight: targetView.bounds.height,
+                isFlipped: targetView.isFlipped
+            )
 
             switch event.type {
             case .leftMouseDown:
@@ -117,6 +144,10 @@ final class AnnotationViewModel: ObservableObject {
         currentPoint = point
 
         if annotationService.selectedTool == .cursor {
+            guard allowsWindowDragging else {
+                isDrawing = false
+                return
+            }
             isDraggingWindow = true
             if let window {
                 dragStartScreenPoint = screenPoint(for: event, in: window)

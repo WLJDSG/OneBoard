@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum GatewaySwitcherPanelLayout {
-    static let size = CGSize(width: 330, height: 300)
+    static let size = CGSize(width: 360, height: 360)
 }
 
 /// 网关切换面板 — Apple Notes 风格
@@ -40,83 +40,36 @@ struct GatewaySwitcherPanelView: View {
             .padding(.vertical, 10)
             .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
 
-            // Profiles
-            VStack(spacing: 1) {
-                ForEach(viewModel.profiles) { profile in
-                    let isActive = viewModel.activeProfile?.id == profile.id
-                    let isDisabled = viewModel.isSwitching || isActive
-
-                    Button { viewModel.switchGateway(to: profile) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: isActive ? "circle.hexagongrid.fill" : "circle.hexagongrid")
-                                .font(.system(size: 16))
-                                .foregroundColor(isActive ? OneBoardColors.accent : OneBoardColors.textTertiary)
-                                .frame(width: 22)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(profile.title)
-                                    .oneBoardFont(.body)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(OneBoardColors.textPrimary)
-                                Text(summary(for: profile))
-                                    .oneBoardFont(.caption)
-                                    .foregroundColor(OneBoardColors.textSecondary)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer()
-
-                            if isActive {
-                                Text("当前")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(OneBoardColors.accent)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .contentShape(Rectangle())
-                        .background(isActive ? OneBoardColors.selectedBg : Color.clear)
-                        .overlay(alignment: .leading) {
-                            if isActive {
-                                Rectangle().fill(OneBoardColors.accent).frame(width: 3)
-                            }
-                        }
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(viewModel.profiles) { profile in
+                        profileCard(profile)
                     }
-                    .buttonStyle(.plain)
-                    .opacity(isDisabled ? 0.5 : 1.0)
                 }
-            }
-            .padding(.vertical, 4)
-
-            // DNS callout
-            if !viewModel.snapshot.dnsServers.isEmpty {
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 10))
-                        .foregroundColor(OneBoardColors.textTertiary)
-                    Text("DNS: \(viewModel.snapshot.dnsServers.joined(separator: ", "))")
-                        .oneBoardFont(.captionSmall)
-                        .foregroundColor(OneBoardColors.textSecondary)
-                        .lineLimit(2)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
+                .padding(12)
             }
 
-            // Manage button
-            HStack {
-                Spacer()
+            HStack(spacing: 10) {
+                Image(systemName: "server.rack")
+                    .foregroundColor(OneBoardColors.textTertiary)
+                Text(dnsSummary)
+                    .oneBoardFont(.caption)
+                    .foregroundColor(OneBoardColors.textSecondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
                 Button {
                     SettingsWindowManager.shared.show(selectedTab: .gateway)
                 } label: {
-                    Text("管理配置...")
-                        .oneBoardFont(.callout)
-                        .foregroundColor(OneBoardColors.accent)
+                    Label("管理配置", systemImage: "slider.horizontal.3")
+                        .oneBoardFont(.caption)
                 }
-                .buttonStyle(.borderless)
-                Spacer()
+                .buttonStyle(.plain)
+                .foregroundColor(OneBoardColors.accent)
             }
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(OneBoardColors.hoverBg)
+            .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .top)
         }
         .frame(width: GatewaySwitcherPanelLayout.size.width, height: GatewaySwitcherPanelLayout.size.height)
         .background(OneBoardColors.panelBg)
@@ -129,9 +82,64 @@ struct GatewaySwitcherPanelView: View {
         .onDisappear {
             viewModel.stopPolling()
         }
-        .onChange(of: viewModel.isRefreshing) { newValue in
+        .onChange(of: viewModel.isRefreshing) { _, newValue in
             isAnimating = newValue
         }
+    }
+
+    private func profileCard(_ profile: GatewayProfile) -> some View {
+        let isActive = viewModel.activeProfile?.id == profile.id
+        return Button { viewModel.switchGateway(to: profile) } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(isActive ? OneBoardColors.accent.opacity(0.14) : OneBoardColors.hoverBg)
+                        .frame(width: 36, height: 36)
+                    Image(systemName: isActive ? "network.badge.shield.half.filled" : "network")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(isActive ? OneBoardColors.accent : OneBoardColors.textSecondary)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(profile.title)
+                        .oneBoardFont(.body)
+                        .fontWeight(.semibold)
+                        .foregroundColor(OneBoardColors.textPrimary)
+                    Text(summary(for: profile))
+                        .oneBoardFont(.caption)
+                        .foregroundColor(OneBoardColors.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if viewModel.isSwitching && !isActive {
+                    ProgressView().controlSize(.small)
+                } else if isActive {
+                    Label("当前", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(OneBoardColors.accent)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(OneBoardColors.textTertiary)
+                }
+            }
+            .padding(11)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                    .fill(isActive ? OneBoardColors.selectedBg : OneBoardColors.panelBg)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: OneBoardRadius.lg)
+                    .stroke(isActive ? OneBoardColors.accent.opacity(0.35) : OneBoardColors.panelBorder, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isSwitching || isActive)
+    }
+
+    private var dnsSummary: String {
+        guard !viewModel.snapshot.dnsServers.isEmpty else { return "DNS 跟随系统设置" }
+        return "DNS  \(viewModel.snapshot.dnsServers.joined(separator: ", "))"
     }
 
     private func summary(for profile: GatewayProfile) -> String {

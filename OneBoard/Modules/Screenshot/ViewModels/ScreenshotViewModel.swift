@@ -135,7 +135,7 @@ final class ScreenshotViewModel: ObservableObject {
                     Task { await self?.performTranslation(on: img) }
                 },
                 onClose: { [weak self] in
-                    self?.closeAnnotationWindows()
+                    self?.closeActiveScreenshotSession()
                 }
             )
         )
@@ -146,7 +146,8 @@ final class ScreenshotViewModel: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        imageWindow.level = .floating
+        // 标注画布覆盖在仍保留的框选遮罩上，视觉上始终停留在原截图页面。
+        imageWindow.level = NSWindow.Level(Int(CGWindowLevelForKey(.screenSaverWindow)) + 1)
         imageWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         imageWindow.isFloatingPanel = true
         imageWindow.hidesOnDeactivate = false
@@ -188,7 +189,7 @@ final class ScreenshotViewModel: ObservableObject {
                     Task { await self?.performTranslation(on: img) }
                 },
                 onClose: { [weak self] in
-                    self?.closeAnnotationWindows()
+                    self?.closeActiveScreenshotSession()
                 },
                 baseImage: image,
                 displaySize: CGSize(width: imageWinWidth, height: imageWinHeight)
@@ -206,7 +207,7 @@ final class ScreenshotViewModel: ObservableObject {
             defer: false
         )
         // 工具栏 level 略高于图片窗口，确保可点击
-        toolbarPanel.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+        toolbarPanel.level = NSWindow.Level(Int(CGWindowLevelForKey(.screenSaverWindow)) + 2)
         toolbarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         toolbarPanel.isFloatingPanel = true
         toolbarPanel.hidesOnDeactivate = false
@@ -270,6 +271,7 @@ final class ScreenshotViewModel: ObservableObject {
     }
 
     func closeActiveScreenshotSession() {
+        captureService.closeOverlay()
         closeAnnotationWindows()
         OCRBubbleWindowManager.shared.close()
         AnnotationResultWindowManager.shared.close()

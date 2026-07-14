@@ -212,20 +212,3 @@ struct ScreenshotSelectionModel {
         )
     }
 }
-
-enum ScreenshotSelectionToolbarLayout {
-    static func frame(
-        selectionRect: CGRect,
-        toolbarSize: CGSize,
-        bounds: CGRect,
-        gap: CGFloat
-    ) -> CGRect {
-        let belowY = selectionRect.minY - gap - toolbarSize.height
-        let y = belowY >= bounds.minY
-            ? belowY
-            : min(selectionRect.maxY + gap, bounds.maxY - toolbarSize.height)
-        let centeredX = selectionRect.midX - toolbarSize.width / 2
-        let x = min(max(centeredX, bounds.minX), bounds.maxX - toolbarSize.width)
-        return CGRect(origin: CGPoint(x: x, y: y), size: toolbarSize)
-    }
-}

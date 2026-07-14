@@ -72,9 +72,6 @@ final class FileStagingViewModel: ObservableObject {
                 do {
                     _ = try await self.repository.insert(stagedFile)
                     await self.reloadFiles()
-                    if self.isShelfVisible {
-                        self.updateFloatingWindow()
-                    }
                     print("[FileStaging] 文件已暂存: \(url.lastPathComponent)")
                 } catch {
                     print("[FileStaging] 暂存失败: \(error)")
@@ -91,9 +88,6 @@ final class FileStagingViewModel: ObservableObject {
         do {
             try await repository.delete(id: id)
             await reloadFiles()
-            if isShelfVisible {
-                updateFloatingWindow()
-            }
         } catch {
             print("[FileStaging] 删除失败: \(error)")
         }
@@ -146,9 +140,7 @@ final class FileStagingViewModel: ObservableObject {
 
         let size = Self.shelfSize
 
-        if let existingWindow = floatingWindow {
-            existingWindow.contentView = hostingView
-        } else {
+        if floatingWindow == nil {
             let panel = NSPanel(
                 contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.nonactivatingPanel, .borderless],

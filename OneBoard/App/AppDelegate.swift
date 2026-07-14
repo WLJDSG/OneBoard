@@ -85,9 +85,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // 系统权限弹窗的“退出并重新打开”不会经过 requestTermination()。
-        // 允许系统终止请求，macOS 才能退出并自动重新启动应用。
-        .terminateNow
+        // 菜单栏应用在系统权限弹窗中只会收到退出请求，系统不会可靠地再次启动它。
+        // 仅在录屏/输入监控授权流程仍活跃时，安排一个独立进程延迟重新打开。
+        if PermissionGuideWindowManager.shared.shouldRelaunchIfTerminated {
+            scheduleRelaunch()
+        }
+        return .terminateNow
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -120,6 +123,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleQuitFromMainMenu() {
         requestTermination()
+    }
+
+    private func scheduleRelaunch() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = [
+            "-c",
+            "sleep 1; /usr/bin/open -n \"$1\"",
+            "oneboard-relaunch",
+            Bundle.main.bundlePath,
+        ]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
     }
 
     private func setupPasteboardObserver() {

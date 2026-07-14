@@ -29,7 +29,28 @@ if pgrep -x OneBoard > /dev/null; then
     sleep 1
 fi
 
-# ---- 2. 删除应用 ----
+# ---- 2. 清理 UserDefaults ----
+echo "🧹 清理 UserDefaults..."
+for BID in "${BUNDLE_IDS[@]}"; do
+    [ -z "$BID" ] && continue
+    defaults delete "$BID" 2>/dev/null || true
+done
+
+# ---- 3. 清理 TCC 隐私权限（必须在删除 App 前执行） ----
+echo "🧹 清理隐私权限..."
+for BID in "${BUNDLE_IDS[@]}"; do
+    [ -z "$BID" ] && continue
+    for SERVICE in "${TCC_SERVICES[@]}"; do
+        tccutil reset "$SERVICE" "$BID" 2>/dev/null || true
+    done
+done
+
+# Accessibility 在系统设置中有独立列表，额外重试主 Bundle ID 并保留失败提示。
+if ! tccutil reset Accessibility "$BUNDLE_ID"; then
+    echo "⚠️  辅助功能授权记录清理失败：$BUNDLE_ID"
+fi
+
+# ---- 4. 删除应用 ----
 if [ -d "$APP_PATH" ]; then
     pluginkit -r "$APP_PATH/Contents/PlugIns/OneBoardFinderSync.appex" 2>/dev/null || true
     echo "🗑  删除 $APP_PATH"
@@ -41,22 +62,6 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 if [ -d "$PROJECT_DIR/build/OneBoard.app" ]; then
     rm -rf "$PROJECT_DIR/build/OneBoard.app"
 fi
-
-# ---- 3. 清理 UserDefaults ----
-echo "🧹 清理 UserDefaults..."
-for BID in "${BUNDLE_IDS[@]}"; do
-    [ -z "$BID" ] && continue
-    defaults delete "$BID" 2>/dev/null || true
-done
-
-# ---- 4. 清理 TCC 隐私权限 ----
-echo "🧹 清理隐私权限..."
-for BID in "${BUNDLE_IDS[@]}"; do
-    [ -z "$BID" ] && continue
-    for SERVICE in "${TCC_SERVICES[@]}"; do
-        tccutil reset "$SERVICE" "$BID" 2>/dev/null || true
-    done
-done
 
 # ---- 5. 清理 Control Center 状态栏记录 ----
 echo "🧹 清理菜单栏状态..."

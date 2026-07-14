@@ -1,9 +1,42 @@
 import AppKit
+import SwiftUI
 @testable import OneBoardKit
 import XCTest
 
 @MainActor
 final class AnnotationViewModelTests: XCTestCase {
+    func testSwiftUIHostingViewUsesFlippedCoordinates() {
+        let hostingView = NSHostingView(rootView: EmptyView())
+
+        XCTAssertTrue(hostingView.isFlipped)
+    }
+
+    func testFlippedHostingViewKeepsMouseMovementDirection() {
+        let start = AnnotationCoordinateMapper.imagePoint(
+            from: CGPoint(x: 30, y: 40),
+            boundsHeight: 300,
+            isFlipped: true
+        )
+        let end = AnnotationCoordinateMapper.imagePoint(
+            from: CGPoint(x: 90, y: 120),
+            boundsHeight: 300,
+            isFlipped: true
+        )
+
+        XCTAssertEqual(end.x - start.x, 60)
+        XCTAssertEqual(end.y - start.y, 80)
+    }
+
+    func testNonFlippedAppKitViewConvertsToTopLeftCoordinatesOnce() {
+        let point = AnnotationCoordinateMapper.imagePoint(
+            from: CGPoint(x: 30, y: 40),
+            boundsHeight: 300,
+            isFlipped: false
+        )
+
+        XCTAssertEqual(point, CGPoint(x: 30, y: 260))
+    }
+
     func testSelectToolForNumberKeyMapsAnsiNumberRowKeys() {
         let service = AnnotationService()
         let viewModel = AnnotationViewModel(annotationService: service)
