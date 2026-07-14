@@ -72,17 +72,32 @@ final class ScreenshotViewModel: ObservableObject {
             return
         }
         capturedImage = result.image
-        showAnnotationWindow(result: result)
+        switch ScreenshotLockedRoute.route(for: result.action) {
+        case .annotation(let tool):
+            showAnnotationWindow(result: result, initialTool: tool)
+        case .copy:
+            copyToClipboard(result.image)
+        case .save:
+            saveRenderedImageToDesktop(result.image)
+        case .pin:
+            pinToScreen(result.image, preferredFrame: result.selectionRect)
+        case .ocr:
+            await performOCR(on: result.image)
+            OCRBubbleWindowManager.shared.show(text: ocrResult, relativeTo: result.selectionRect)
+        case .translate:
+            await performTranslation(on: result.image)
+        }
     }
 
     /// 显示标注窗口（图片窗口 + 独立工具栏）
-    private func showAnnotationWindow(result: ScreenshotResult) {
+    private func showAnnotationWindow(result: ScreenshotResult, initialTool: AnnotationTool) {
         let image = result.image
         let selectionRect = result.selectionRect
 
         let annotationService = AnnotationService(baseImage: image)
         // 默认选中红色
         annotationService.selectedColor = .systemRed
+        annotationService.selectedTool = initialTool
         let viewModel = AnnotationViewModel(annotationService: annotationService)
 
         let screen = NSScreen.screens.first(where: { $0.frame.intersects(selectionRect) })

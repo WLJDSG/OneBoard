@@ -79,4 +79,15 @@ struct ScreenshotResult {
     let image: NSImage
     /// 框选区域（屏幕坐标系）
     let selectionRect: CGRect
+    let action: ScreenshotSelectionAction
+
+    init(
+        image: NSImage,
+        selectionRect: CGRect,
+        action: ScreenshotSelectionAction = .annotate(.cursor)
+    ) {
+        self.image = image
+        self.selectionRect = selectionRect
+        self.action = action
+    }
 }

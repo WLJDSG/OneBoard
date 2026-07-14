@@ -44,7 +44,7 @@ enum ScreenshotCropMapper {
     static func screenRect(forOverlayRect rect: CGRect, screenFrame: CGRect) -> CGRect {
         CGRect(
             x: screenFrame.minX + rect.minX,
-            y: screenFrame.minY + (screenFrame.height - rect.maxY),
+            y: screenFrame.minY + rect.minY,
             width: rect.width,
             height: rect.height
         )
@@ -56,7 +56,7 @@ enum ScreenshotCropMapper {
 /// 全屏遮罩 - 使用 AppKit NSView 处理鼠标拖拽，避免 SwiftUI 手势在关窗时重复回调。
 struct ScreenshotOverlayView: View {
     let screenshot: NSImage
-    let onConfirm: (NSImage, CGRect) -> Void
+    let onConfirm: (NSImage, CGRect, ScreenshotSelectionAction) -> Void
     let onCancel: () -> Void
     let eventManager: OverlayEventManager
 
@@ -75,7 +75,7 @@ struct ScreenshotOverlayView: View {
 
 private struct ScreenshotOverlayNSView: NSViewRepresentable {
     let screenshot: NSImage
-    let onConfirm: (NSImage, CGRect) -> Void
+    let onConfirm: (NSImage, CGRect, ScreenshotSelectionAction) -> Void
     let onCancel: () -> Void
     let eventManager: OverlayEventManager
 
@@ -92,23 +92,17 @@ private struct ScreenshotOverlayNSView: NSViewRepresentable {
 final class ScreenshotOverlayContentView: NSView {
     let screenshot: NSImage
     let eventManager: OverlayEventManager
-    var onConfirm: ((NSImage, CGRect) -> Void)?
+    var onConfirm: ((NSImage, CGRect, ScreenshotSelectionAction) -> Void)?
     var onCancel: (() -> Void)?
 
     private let cachedCGImage: CGImage?
     private let imagePixelSize: CGSize
-    private var startPoint: NSPoint?
-    private var currentPoint: NSPoint?
+    private var selectionModel = ScreenshotSelectionModel()
+    private var toolbarHostingView: NSHostingView<ScreenshotSelectionToolbarView>?
     private var hasFinished = false
 
     private var selectionRect: NSRect? {
-        guard let startPoint, let currentPoint else { return nil }
-        return NSRect(
-            x: min(startPoint.x, currentPoint.x),
-            y: min(startPoint.y, currentPoint.y),
-            width: abs(currentPoint.x - startPoint.x),
-            height: abs(currentPoint.y - startPoint.y)
-        )
+        selectionModel.rect
     }
 
     init(screenshot: NSImage, eventManager: OverlayEventManager) {
@@ -147,7 +141,7 @@ final class ScreenshotOverlayContentView: NSView {
                 self.finishCancel()
                 return nil
             case 36:
-                self.confirmCurrentSelection()
+                self.lockSelection()
                 return nil
             default:
                 return event
@@ -156,6 +150,8 @@ final class ScreenshotOverlayContentView: NSView {
     }
 
     override func removeFromSuperview() {
+        toolbarHostingView?.removeFromSuperview()
+        toolbarHostingView = nil
         eventManager.cleanup()
         super.removeFromSuperview()
     }
@@ -163,21 +159,26 @@ final class ScreenshotOverlayContentView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard !hasFinished else { return }
         let point = convert(event.locationInWindow, from: nil)
-        startPoint = point
-        currentPoint = point
+        if event.clickCount == 2, selectionRect?.contains(point) == true {
+            lockSelection()
+            return
+        }
+        hideSelectionToolbar()
+        selectionModel.begin(at: point, bounds: bounds)
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard !hasFinished, startPoint != nil else { return }
-        currentPoint = convert(event.locationInWindow, from: nil)
+        guard !hasFinished else { return }
+        selectionModel.update(to: convert(event.locationInWindow, from: nil), bounds: bounds)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard !hasFinished, startPoint != nil else { return }
-        currentPoint = convert(event.locationInWindow, from: nil)
-        confirmCurrentSelection()
+        guard !hasFinished else { return }
+        selectionModel.end(at: convert(event.locationInWindow, from: nil), bounds: bounds)
+        showSelectionToolbarIfNeeded()
+        needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -200,22 +201,20 @@ final class ScreenshotOverlayContentView: NSView {
             border.lineWidth = 2
             border.stroke()
 
+            drawResizeHandles(for: rect)
             drawSizeLabel(for: rect)
         } else {
             drawHint()
         }
     }
 
-    private func confirmCurrentSelection() {
+    private func lockSelection(_ action: ScreenshotSelectionAction = .annotate(.cursor)) {
         guard !hasFinished,
-              let rect = selectionRect,
+              let rect = selectionModel.lock(),
               rect.width > 10,
               rect.height > 10,
               let screen = window?.screen ?? NSScreen.main,
               let cg = cachedCGImage else {
-            startPoint = nil
-            currentPoint = nil
-            needsDisplay = true
             return
         }
 
@@ -227,8 +226,8 @@ final class ScreenshotOverlayContentView: NSView {
         guard crop.width > 10,
               crop.height > 10,
               let cropped = cg.cropping(to: crop) else {
-            startPoint = nil
-            currentPoint = nil
+            selectionModel.unlockAfterFailedCrop()
+            showSelectionToolbarIfNeeded()
             needsDisplay = true
             return
         }
@@ -240,7 +239,57 @@ final class ScreenshotOverlayContentView: NSView {
         }
         // CGImage 保留 Retina 原始像素，NSImage 的逻辑尺寸使用框选的屏幕点尺寸。
         let result = NSImage(cgImage: cropped, size: rect.size)
-        confirm(result, ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screen.frame))
+        confirm(
+            result,
+            ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screen.frame),
+            action
+        )
+    }
+
+    private func showSelectionToolbarIfNeeded() {
+        guard selectionModel.phase == .adjusting, let rect = selectionRect else {
+            hideSelectionToolbar()
+            return
+        }
+
+        let hostingView: NSHostingView<ScreenshotSelectionToolbarView>
+        if let existing = toolbarHostingView {
+            hostingView = existing
+        } else {
+            let rootView = ScreenshotSelectionToolbarView { [weak self] action in
+                self?.lockSelection(action)
+            }
+            hostingView = NSHostingView(rootView: rootView)
+            hostingView.wantsLayer = true
+            addSubview(hostingView)
+            toolbarHostingView = hostingView
+        }
+
+        let fittingSize = hostingView.fittingSize
+        hostingView.frame = ScreenshotSelectionToolbarLayout.frame(
+            selectionRect: rect,
+            toolbarSize: fittingSize,
+            bounds: bounds,
+            gap: 12
+        )
+        hostingView.isHidden = false
+    }
+
+    private func hideSelectionToolbar() {
+        toolbarHostingView?.isHidden = true
+    }
+
+    private func drawResizeHandles(for rect: CGRect) {
+        for handle in ScreenshotResizeHandle.allCases {
+            let center = handle.center(in: rect)
+            let handleRect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
+            NSColor.white.setFill()
+            OneBoardColors.nsAccent.setStroke()
+            let path = NSBezierPath(ovalIn: handleRect)
+            path.lineWidth = 1.5
+            path.fill()
+            path.stroke()
+        }
     }
 
     private func finishCancel() {
@@ -251,7 +300,7 @@ final class ScreenshotOverlayContentView: NSView {
 
     private func drawHint() {
         let title = "拖拽选择截图区域"
-        let subtitle = "Enter 确认  ·  Esc 取消"
+        let subtitle = "松开后可移动和缩放  ·  Esc 取消"
         let titleAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 18, weight: .medium),
             .foregroundColor: NSColor.white

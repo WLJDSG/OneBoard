@@ -47,4 +47,15 @@ final class ScreenshotSessionLifecycleTests: XCTestCase {
 
         XCTAssertTrue(true)
     }
+
+    func testAnnotationSelectionRoutesToChosenTool() {
+        XCTAssertEqual(
+            ScreenshotLockedRoute.route(for: .annotate(.mosaic)),
+            .annotation(.mosaic)
+        )
+    }
+
+    func testOutputSelectionKeepsImmediateOperation() {
+        XCTAssertEqual(ScreenshotLockedRoute.route(for: .ocr), .ocr)
+    }
 }

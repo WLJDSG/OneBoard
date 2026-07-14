@@ -36,9 +36,9 @@ final class ScreenshotCaptureService: NSObject {
                     screenshot: fullScreenImage,
                     eventManager: eventManager
                 )
-                overlayView.onConfirm = { [weak eventManager] img, rect in
+                overlayView.onConfirm = { [weak eventManager] img, rect, action in
                     eventManager?.cleanup()
-                    finish(ScreenshotResult(image: img, selectionRect: rect))
+                    finish(ScreenshotResult(image: img, selectionRect: rect, action: action))
                 }
                 overlayView.onCancel = { [weak eventManager] in
                     eventManager?.cleanup()
