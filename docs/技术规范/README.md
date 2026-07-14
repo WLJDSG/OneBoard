@@ -89,13 +89,19 @@ Finder 右键菜单
 ### 截图坐标与 Retina 规则
 
 - 截图像素数据可使用 Retina 像素尺寸，但 AppKit 窗口布局必须使用框选区域的逻辑点尺寸。
-- 未缩放截图必须严格复用框选区域原点，不能按图片像素尺寸重新居中。
+- `ScreenshotCropMapper.cropRect` 从 AppKit 左下原点转换到 CGImage 左上原点，裁剪时必须翻转 Y。
+- `ScreenshotCropMapper.screenRect` 只叠加屏幕原点，AppKit 窗口定位不得再次翻转 Y。
+- 未缩放截图必须严格复用框选区域原点，不能按图片像素尺寸重新居中或上下镜像。
 - 只有框选区域超过可见屏幕约束时才进行等比缩放。
+- 截图选区分为 selecting、adjusting、locked 三个阶段；只有 adjusting 阶段允许移动和八方向缩放。
+- 点击标注或输出工具时只允许执行一次锁定；进入 locked 后所有选区几何事件必须失效。
 
 ### 文件摇晃检测降级
 
 - 有输入监听授权时启用 `CGEventTap`，并持续使用轮询作为补充。
 - 没有输入监听授权时不能终止整个检测器；必须保留鼠标状态和 drag pasteboard 轮询通道。
+- 文件拖拽不能只凭 pasteboard 类型确认，必须读取真实 file URL 并验证目标是普通文件。
+- 常规扩展名不设白名单；以文件系统 `isRegularFile` 为准，同时显式拒绝 `.app`、目录和不可读取 URL。
 - 已确认的文件拖拽在同一轮手势中保持确认状态，不能只依赖 pasteboard `changeCount` 变化。
 
 ## 数据模型

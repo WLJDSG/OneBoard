@@ -19,19 +19,26 @@ final class DragDetectorTests: XCTestCase {
         XCTAssertFalse(DragDetector.supportsDraggedFileTypes([.string]))
     }
 
-    func testDragConfirmationAcceptsFileTypeWhenPasteboardChangeCountIsStable() {
-        let lastSeenChangeCount = 12
+    func testSupportedDraggedFileURLsOnlyAcceptRegularFiles() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let textFile = temporaryDirectory.appendingPathComponent("document.txt")
+        let archiveFile = temporaryDirectory.appendingPathComponent("archive.zip")
+        let appBundle = temporaryDirectory.appendingPathComponent("Example.app", isDirectory: true)
 
-        XCTAssertTrue(DragDetector.canConfirmFileDrag(
-            types: [.fileURL],
-            changeCount: lastSeenChangeCount,
-            lastSeenChangeCount: lastSeenChangeCount
-        ))
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        XCTAssertTrue(FileManager.default.createFile(atPath: textFile.path, contents: Data()))
+        XCTAssertTrue(FileManager.default.createFile(atPath: archiveFile.path, contents: Data()))
+        try FileManager.default.createDirectory(at: appBundle, withIntermediateDirectories: true)
 
-        XCTAssertTrue(DragDetector.canConfirmFileDrag(
-            types: [.fileURL],
-            changeCount: lastSeenChangeCount + 1,
-            lastSeenChangeCount: lastSeenChangeCount
-        ))
+        XCTAssertEqual(
+            DragDetector.supportedDraggedFileURLs([textFile, archiveFile, temporaryDirectory, appBundle]),
+            [textFile, archiveFile]
+        )
+    }
+
+    func testFileURLTypeWithoutReadableURLsDoesNotConfirmDrag() {
+        XCTAssertFalse(DragDetector.canConfirmFileDrag(types: [.fileURL], urls: []))
     }
 }

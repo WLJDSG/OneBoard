@@ -17,7 +17,6 @@ final class DragDetector {
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
     private var lastTriggerTime: TimeInterval = 0
     private var isDragConfirmed: Bool = false  // 当前拖拽已确认是文件拖拽
-    private var lastSeenDragPasteboardChangeCount: Int = NSPasteboard(name: .drag).changeCount
 
     private init() {}
 
@@ -26,7 +25,6 @@ final class DragDetector {
         let strategy = Self.startupStrategy(
             inputMonitoringGranted: PermissionManager.shared.hasInputMonitoringPermission
         )
-        lastSeenDragPasteboardChangeCount = NSPasteboard(name: .drag).changeCount
         if strategy.startEventTap {
             startEventTap()
         } else {
@@ -173,27 +171,31 @@ final class DragDetector {
         if isDragConfirmed { return true }
 
         let pasteboard = NSPasteboard(name: .drag)
-        let changeCount = pasteboard.changeCount
         let types = pasteboard.types ?? []
 
-        if Self.canConfirmFileDrag(
-            types: types,
-            changeCount: changeCount,
-            lastSeenChangeCount: lastSeenDragPasteboardChangeCount
-        ) || canReadDraggedFileURL(from: pasteboard, changeCount: changeCount) {
+        if canReadSupportedFileURL(from: pasteboard, types: types) {
             isDragConfirmed = true
-            lastSeenDragPasteboardChangeCount = changeCount
             return true
         }
         return false
     }
 
-    private func canReadDraggedFileURL(from pasteboard: NSPasteboard, changeCount: Int) -> Bool {
-        guard changeCount != lastSeenDragPasteboardChangeCount else { return false }
+    private func canReadSupportedFileURL(
+        from pasteboard: NSPasteboard,
+        types: [NSPasteboard.PasteboardType]
+    ) -> Bool {
+        guard Self.supportsDraggedFileTypes(types) else { return false }
         let fileURLReadOptions: [NSPasteboard.ReadingOptionKey: Any] = [
             .urlReadingFileURLsOnly: true
         ]
-        return pasteboard.canReadObject(forClasses: [NSURL.self], options: fileURLReadOptions)
+        let urls = (pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: fileURLReadOptions
+        ) ?? []).compactMap { object -> URL? in
+            guard let url = object as? NSURL else { return nil }
+            return url as URL
+        }
+        return Self.canConfirmFileDrag(types: types, urls: urls)
     }
 
     static func supportsDraggedFileTypes(_ types: [NSPasteboard.PasteboardType]) -> Bool {
@@ -207,12 +209,20 @@ final class DragDetector {
 
     static func canConfirmFileDrag(
         types: [NSPasteboard.PasteboardType],
-        changeCount: Int,
-        lastSeenChangeCount: Int
+        urls: [URL]
     ) -> Bool {
-        // Finder 在同一轮拖拽期间可能复用 drag pasteboard 的 changeCount。
-        // 鼠标已处于拖拽态时，文件 URL 类型本身足以确认本次文件拖拽。
-        supportsDraggedFileTypes(types)
+        supportsDraggedFileTypes(types) && !supportedDraggedFileURLs(urls).isEmpty
+    }
+
+    static func supportedDraggedFileURLs(_ urls: [URL]) -> [URL] {
+        urls.filter { url in
+            guard url.isFileURL,
+                  url.pathExtension.lowercased() != "app",
+                  let values = try? url.resourceValues(forKeys: [.isRegularFileKey]) else {
+                return false
+            }
+            return values.isRegularFile == true
+        }
     }
 
     // MARK: - 工具方法
@@ -224,7 +234,6 @@ final class DragDetector {
     private func finishCurrentDrag() {
         recentPositions.removeAll()
         isDragConfirmed = false
-        lastSeenDragPasteboardChangeCount = NSPasteboard(name: .drag).changeCount
     }
 
     private func detectShake() -> Bool {

@@ -49,6 +49,11 @@ final class FileStagingViewModel: ObservableObject {
         let normalizedURL = url.standardizedFileURL
         let path = normalizedURL.path
 
+        guard !DragDetector.supportedDraggedFileURLs([normalizedURL]).isEmpty else {
+            print("[FileStaging] 仅支持暂存普通文件，已忽略: \(url.lastPathComponent)")
+            return
+        }
+
         // 检查是否已在暂存列表中或正在处理中
         guard !stagedFiles.contains(where: { $0.fileURL == path }),
               !pendingFilePaths.contains(path) else {
