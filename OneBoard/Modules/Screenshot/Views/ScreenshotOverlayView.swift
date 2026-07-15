@@ -98,6 +98,7 @@ final class ScreenshotOverlayContentView: NSView {
     private let cachedCGImage: CGImage?
     private let imagePixelSize: CGSize
     private var selectionModel = ScreenshotSelectionModel()
+    private var selectionToolbarView: NSHostingView<ScreenshotSelectionToolbarView>?
     private var hasFinished = false
     private var annotationService: AnnotationService?
     private var annotationViewModel: AnnotationViewModel?
@@ -154,6 +155,8 @@ final class ScreenshotOverlayContentView: NSView {
     }
 
     override func removeFromSuperview() {
+        selectionToolbarView?.removeFromSuperview()
+        selectionToolbarView = nil
         annotationCanvasView?.removeFromSuperview()
         annotationToolbarView?.removeFromSuperview()
         eventManager.cleanup()
@@ -167,6 +170,7 @@ final class ScreenshotOverlayContentView: NSView {
             beginInlineAnnotation()
             return
         }
+        hideSelectionToolbar()
         selectionModel.begin(at: point, bounds: bounds)
         needsDisplay = true
     }
@@ -180,8 +184,8 @@ final class ScreenshotOverlayContentView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard !hasFinished, annotationService == nil else { return }
         selectionModel.end(at: convert(event.locationInWindow, from: nil), bounds: bounds)
-        // 框选完成后直接进入完整标注工具栏，不再显示中间的精简工具栏。
-        beginInlineAnnotation()
+        showSelectionToolbarIfNeeded()
+        needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -213,7 +217,7 @@ final class ScreenshotOverlayContentView: NSView {
         }
     }
 
-    private func beginInlineAnnotation() {
+    private func beginInlineAnnotation(_ tool: AnnotationTool = .cursor) {
         guard !hasFinished, annotationService == nil,
               let rect = selectionModel.lock(),
               rect.width > 10,
@@ -240,7 +244,7 @@ final class ScreenshotOverlayContentView: NSView {
         let image = NSImage(cgImage: cropped, size: rect.size)
         let service = AnnotationService(baseImage: image)
         service.selectedColor = .systemRed
-        service.selectedTool = .cursor
+        service.selectedTool = tool
         let viewModel = AnnotationViewModel(annotationService: service)
 
         let canvas = NSHostingView(
@@ -295,6 +299,79 @@ final class ScreenshotOverlayContentView: NSView {
             ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screen.frame),
             action
         )
+    }
+
+    private func finishSelection(_ action: ScreenshotSelectionAction) {
+        guard !hasFinished,
+              let rect = selectionModel.lock(),
+              rect.width > 10,
+              rect.height > 10,
+              let screen = window?.screen ?? NSScreen.main,
+              let cg = cachedCGImage else {
+            return
+        }
+
+        let crop = ScreenshotCropMapper.cropRect(
+            forOverlayRect: rect,
+            screenFrame: screen.frame,
+            imagePixelSize: imagePixelSize
+        )
+        guard crop.width > 10,
+              crop.height > 10,
+              let cropped = cg.cropping(to: crop) else {
+            selectionModel.unlockAfterFailedCrop()
+            showSelectionToolbarIfNeeded()
+            needsDisplay = true
+            return
+        }
+
+        hasFinished = true
+        let image = NSImage(cgImage: cropped, size: rect.size)
+        onConfirm?(
+            image,
+            ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screen.frame),
+            action
+        )
+    }
+
+    private func showSelectionToolbarIfNeeded() {
+        guard selectionModel.phase == .adjusting, let rect = selectionRect else {
+            hideSelectionToolbar()
+            return
+        }
+
+        let hostingView: NSHostingView<ScreenshotSelectionToolbarView>
+        if let existing = selectionToolbarView {
+            hostingView = existing
+        } else {
+            hostingView = NSHostingView(
+                rootView: ScreenshotSelectionToolbarView { [weak self] action in
+                    switch action {
+                    case .annotate(let tool):
+                        self?.hideSelectionToolbar()
+                        self?.beginInlineAnnotation(tool)
+                    default:
+                        self?.finishSelection(action)
+                    }
+                }
+            )
+            hostingView.wantsLayer = true
+            addSubview(hostingView)
+            selectionToolbarView = hostingView
+        }
+
+        let fittingSize = hostingView.fittingSize
+        hostingView.frame = ScreenshotSelectionToolbarLayout.frame(
+            selectionRect: rect,
+            toolbarSize: fittingSize,
+            bounds: bounds,
+            gap: 12
+        )
+        hostingView.isHidden = false
+    }
+
+    private func hideSelectionToolbar() {
+        selectionToolbarView?.isHidden = true
     }
 
     private func inlineToolbarFrame(selectionRect: CGRect, toolbarSize: CGSize) -> CGRect {

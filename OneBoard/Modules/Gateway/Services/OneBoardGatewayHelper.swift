@@ -4,6 +4,7 @@ struct OneBoardGatewayHelper {
     static let helperPath = "/usr/local/bin/oneboard-gateway-helper"
     static let sudoersPath = "/etc/sudoers.d/oneboard-gateway"
     static let allowedIPsPath = "/etc/oneboard-gateway-allowed-ips.conf"
+    static let versionMarker = "ONEBOARD_GATEWAY_HELPER_VERSION=2"
 
     private let runner: GatewayCommandRunning
     private let fileManager: FileManager
@@ -17,7 +18,15 @@ struct OneBoardGatewayHelper {
     }
 
     func isInstalled() -> Bool {
-        fileManager.isExecutableFile(atPath: Self.helperPath)
+        guard fileManager.isExecutableFile(atPath: Self.helperPath),
+              let script = try? String(contentsOfFile: Self.helperPath, encoding: .utf8) else {
+            return false
+        }
+        return Self.isCurrentHelperScript(script)
+    }
+
+    static func isCurrentHelperScript(_ script: String) -> Bool {
+        script.contains(versionMarker)
     }
 
     func install() throws {
@@ -35,9 +44,16 @@ struct OneBoardGatewayHelper {
 
     func syncWhitelist(ips: [String]) throws {
         let uniqueIPs = Array(Set(ips.filter(GatewayProfile.isValidIPv4))).sorted()
-        let body = uniqueIPs.joined(separator: "\n") + (uniqueIPs.isEmpty ? "" : "\n")
-        let command = "/bin/echo \(body.shellQuoted) > \(Self.allowedIPsPath.shellQuoted); /bin/chmod 644 \(Self.allowedIPsPath.shellQuoted)"
-        try runAdminShell(command)
+        let result = try runner.run(
+            "/usr/bin/sudo",
+            arguments: ["-n", Self.helperPath, "--sync-whitelist", uniqueIPs.joined(separator: ",")]
+        )
+        guard result.terminationStatus == 0 else {
+            let message = [result.standardError, result.standardOutput]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first { !$0.isEmpty } ?? "OneBoard 网关白名单同步失败"
+            throw GatewayError.commandFailed(message)
+        }
     }
 
     private func runAdminShell(_ shellCommand: String) throws {
@@ -67,6 +83,7 @@ struct OneBoardGatewayHelper {
     private static let helperBody = """
 #!/bin/sh
 set -eu
+ONEBOARD_GATEWAY_HELPER_VERSION=2
 
 ALLOWED_FILE="/etc/oneboard-gateway-allowed-ips.conf"
 SERVICE=""
@@ -74,6 +91,8 @@ IP=""
 SUBNET=""
 ROUTER=""
 DNS=""
+SYNC_WHITELIST=""
+SYNC_MODE=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -82,9 +101,35 @@ while [ "$#" -gt 0 ]; do
     --subnet) SUBNET="$2"; shift 2 ;;
     --router) ROUTER="$2"; shift 2 ;;
     --dns) DNS="$2"; shift 2 ;;
+    --sync-whitelist) SYNC_WHITELIST="$2"; SYNC_MODE=1; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+is_valid_ipv4() {
+  /usr/bin/awk -F. '
+    NF != 4 { exit 1 }
+    { for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1 }
+  ' <<EOF
+$1
+EOF
+}
+
+if [ "$SYNC_MODE" -eq 1 ]; then
+  TEMP_FILE="${ALLOWED_FILE}.tmp.$$"
+  : > "$TEMP_FILE"
+  OLD_IFS="$IFS"
+  IFS=","
+  for address in $SYNC_WHITELIST; do
+    [ -n "$address" ] || continue
+    is_valid_ipv4 "$address" || { /bin/rm -f "$TEMP_FILE"; echo "Invalid whitelist IP: $address" >&2; exit 3; }
+    /usr/bin/printf '%s\n' "$address" >> "$TEMP_FILE"
+  done
+  IFS="$OLD_IFS"
+  /bin/chmod 644 "$TEMP_FILE"
+  /bin/mv -f "$TEMP_FILE" "$ALLOWED_FILE"
+  exit 0
+fi
 
 is_allowed_ip() {
   [ -f "$ALLOWED_FILE" ] || return 1

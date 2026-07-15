@@ -17,9 +17,26 @@ final class FinderFileCreationTests: XCTestCase {
     func testFinderManagedDirectoriesCoverRootAndDesktop() {
         let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
         let directories = FinderFileCreationRequest.managedDirectories(homeURL: home)
+        let iCloudDesktop = home
+            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Desktop", isDirectory: true)
 
         XCTAssertTrue(directories.contains(URL(fileURLWithPath: "/", isDirectory: true)))
         XCTAssertTrue(directories.contains(home.appendingPathComponent("Desktop", isDirectory: true)))
+        XCTAssertTrue(directories.contains(iCloudDesktop))
+    }
+
+    func testFinderExtensionSharesFileTypePreferencesWithMainApp() throws {
+        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let entitlementsURL = testsDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent("FinderSync/OneBoardFinderSync.entitlements")
+        let data = try Data(contentsOf: entitlementsURL)
+        let plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+        let groups = try XCTUnwrap(plist["com.apple.security.application-groups"] as? [String])
+
+        XCTAssertTrue(groups.contains("group.com.oneboard.mac"))
     }
 
     func testCreatorWritesUniqueTextFiles() throws {

@@ -101,4 +101,38 @@ final class ScreenshotSelectionTests: XCTestCase {
         XCTAssertEqual(model.phase, .locked)
     }
 
+    func testOverlayKeepsSelectionAdjustableAfterMouseUp() throws {
+        let view = ScreenshotOverlayContentView(
+            screenshot: NSImage(size: bounds.size),
+            eventManager: OverlayEventManager()
+        )
+        view.frame = bounds
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 100, y: 100)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 400, y: 300)))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: CGPoint(x: 400, y: 300)))
+
+        let model = try XCTUnwrap(
+            Mirror(reflecting: view).children.first(where: { $0.label == "selectionModel" })?.value
+                as? ScreenshotSelectionModel
+        )
+        XCTAssertEqual(model.phase, .adjusting)
+    }
+
+    private func mouseEvent(type: NSEvent.EventType, location: CGPoint) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: type,
+                location: location,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: 1
+            )
+        )
+    }
+
 }

@@ -49,7 +49,13 @@ struct FinderFileCreationRequest: Equatable {
         [
             URL(fileURLWithPath: "/", isDirectory: true),
             homeURL.standardizedFileURL,
-            homeURL.appendingPathComponent("Desktop", isDirectory: true).standardizedFileURL
+            homeURL.appendingPathComponent("Desktop", isDirectory: true).standardizedFileURL,
+            homeURL
+                .appendingPathComponent(
+                    "Library/Mobile Documents/com~apple~CloudDocs/Desktop",
+                    isDirectory: true
+                )
+                .standardizedFileURL
         ]
     }
 }

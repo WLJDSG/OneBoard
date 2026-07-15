@@ -8,6 +8,15 @@ final class GatewayCapabilityTests: XCTestCase {
         XCTAssertEqual(OneBoardGatewayHelper.allowedIPsPath, "/etc/oneboard-gateway-allowed-ips.conf")
     }
 
+    func testLegacyHelperWithoutWhitelistSyncIsNotCurrent() {
+        XCTAssertFalse(OneBoardGatewayHelper.isCurrentHelperScript("#!/bin/sh\necho legacy"))
+        XCTAssertTrue(
+            OneBoardGatewayHelper.isCurrentHelperScript(
+                "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=2\n"
+            )
+        )
+    }
+
     func testWhitelistSyncWritesSortedUniqueIPs() throws {
         let runner = RecordingGatewayCommandRunner()
         let helper = OneBoardGatewayHelper(runner: runner)
@@ -15,9 +24,23 @@ final class GatewayCapabilityTests: XCTestCase {
         try helper.syncWhitelist(ips: ["192.168.31.3", "192.168.31.1", "192.168.31.3"])
 
         let command = runner.commands.joined(separator: "\n")
+        XCTAssertTrue(command.contains("/usr/bin/sudo"))
+        XCTAssertTrue(command.contains("-n"))
+        XCTAssertTrue(command.contains(OneBoardGatewayHelper.helperPath))
+        XCTAssertFalse(command.contains("/usr/bin/osascript"))
         XCTAssertTrue(command.contains("192.168.31.1"))
         XCTAssertTrue(command.contains("192.168.31.3"))
-        XCTAssertTrue(command.contains(OneBoardGatewayHelper.allowedIPsPath))
+    }
+
+    func testInstallAndInitialWhitelistNeedOnlyOneAuthorization() throws {
+        let runner = RecordingGatewayCommandRunner()
+        let helper = OneBoardGatewayHelper(runner: runner)
+
+        try helper.install()
+        try helper.syncWhitelist(ips: ["192.168.31.3", "192.168.31.1"])
+
+        XCTAssertEqual(runner.commands.filter { $0.contains("/usr/bin/osascript") }.count, 1)
+        XCTAssertTrue(runner.commands.contains { $0.contains("/usr/bin/sudo") && $0.contains("-n") })
     }
 
     func testUninstallRemovesHelperSudoersAndWhitelist() throws {
