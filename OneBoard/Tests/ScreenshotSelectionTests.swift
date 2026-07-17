@@ -119,6 +119,70 @@ final class ScreenshotSelectionTests: XCTestCase {
         XCTAssertEqual(model.phase, .adjusting)
     }
 
+    @MainActor
+    func testSelectingAnnotationToolImmediatelyLocksSelectionAndInstallsCanvas() throws {
+        let image = try makeRasterImage(size: bounds.size)
+        let view = ScreenshotOverlayContentView(
+            screenshot: image,
+            eventManager: OverlayEventManager()
+        )
+        view.frame = bounds
+        let window = NSWindow(
+            contentRect: bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = view
+        defer { window.close() }
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 100, y: 100)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 400, y: 300)))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: CGPoint(x: 400, y: 300)))
+
+        XCTAssertTrue(view.canCropSelectionForTesting)
+        let service = try XCTUnwrap(view.annotationServiceForTesting)
+        view.handleAnnotationToolSelection(.rectangle)
+
+        let model = try selectionModel(from: view)
+        XCTAssertEqual(service.selectedTool, .rectangle)
+        XCTAssertEqual(model.phase, .locked, "选择标注工具后应立即锁定选区")
+        XCTAssertTrue(view.hasAnnotationCanvasForTesting, "选择标注工具后应立即安装标注画布")
+    }
+
+    private func selectionModel(from view: ScreenshotOverlayContentView) throws -> ScreenshotSelectionModel {
+        try XCTUnwrap(
+            Mirror(reflecting: view).children.first(where: { $0.label == "selectionModel" })?.value
+                as? ScreenshotSelectionModel
+        )
+    }
+
+    private func makeRasterImage(size: CGSize) throws -> NSImage {
+        let rep = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: Int(size.width),
+                pixelsHigh: Int(size.height),
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )
+        )
+        rep.size = size
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSColor.white.setFill()
+        NSBezierPath(rect: CGRect(origin: .zero, size: size)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+        return try XCTUnwrap(NSImage(data: png))
+    }
+
     private func mouseEvent(type: NSEvent.EventType, location: CGPoint) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.mouseEvent(

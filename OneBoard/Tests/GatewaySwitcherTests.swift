@@ -95,4 +95,33 @@ final class GatewaySwitcherTests: XCTestCase {
         XCTAssertTrue(script.contains("networksetup -setdnsservers"))
         XCTAssertTrue(script.contains("1.1.1.1"))
     }
+
+    func testHelperBusinessRejectionNeverFallsBackToPasswordPrompt() {
+        let runner = RecordingGatewayCommandRunner(results: [
+            GatewayCommandResult(
+                standardOutput: "",
+                standardError: "DNS is not allowed: 1.1.1.1",
+                terminationStatus: 3
+            )
+        ])
+        let switcher = GatewaySwitcher(runner: runner)
+        let profile = GatewayProfile(
+            title: "DNS",
+            mode: .dnsOnly,
+            gateway: "",
+            dnsServers: ["1.1.1.1"],
+            description: ""
+        )
+        let snapshot = NetworkSnapshot(
+            gateway: "192.168.31.1",
+            interfaceName: "en0",
+            serviceName: "Wi-Fi",
+            localIPv4: "192.168.31.42",
+            subnetMask: "255.255.255.0",
+            dnsServers: []
+        )
+
+        XCTAssertThrowsError(try switcher.switchDefaultGateway(to: profile, snapshot: snapshot))
+        XCTAssertFalse(runner.commands.contains { $0.contains("/usr/bin/osascript") })
+    }
 }

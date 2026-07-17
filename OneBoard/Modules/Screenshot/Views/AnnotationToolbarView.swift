@@ -6,6 +6,7 @@ struct AnnotationToolbarView: View {
     @ObservedObject var annotationService: AnnotationService
     @ObservedObject var viewModel: AnnotationViewModel
 
+    var onToolSelected: ((AnnotationTool) -> Void)? = nil
     let onComplete: (NSImage) -> Void
     let onSave: (NSImage) -> Void
     let onPin: (NSImage) -> Void
@@ -151,14 +152,7 @@ struct AnnotationToolbarView: View {
 
             iconActionButton("OCR", icon: "text.viewfinder") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
-                Task {
-                    let vm = ScreenshotViewModel.shared
-                    await vm.performOCR(on: rendered)
-                    OCRBubbleWindowManager.shared.show(
-                        text: vm.ocrResult,
-                        relativeTo: NSApp.keyWindow?.frame
-                    )
-                }
+                handleOCROutput(rendered)
             }
 
             iconActionButton("完成 Enter", icon: "checkmark", prominent: true) {
@@ -174,11 +168,16 @@ struct AnnotationToolbarView: View {
         .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
     }
 
+    func handleOCROutput(_ image: NSImage) {
+        onOCR(image)
+    }
+
     // MARK: - 工具按钮
 
     private func toolButton(_ tool: AnnotationTool) -> some View {
         Button(action: {
             annotationService.selectedTool = tool
+            onToolSelected?(tool)
         }) {
             Image(systemName: tool.iconName)
                 .oneBoardFont(.body)

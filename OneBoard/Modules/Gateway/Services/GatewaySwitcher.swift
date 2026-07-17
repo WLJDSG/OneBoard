@@ -66,8 +66,7 @@ struct GatewaySwitcher {
         if combinedOutput.contains("a password is required")
             || combinedOutput.contains("no tty present")
             || combinedOutput.contains("command not found")
-            || combinedOutput.contains("No such file")
-            || combinedOutput.contains("not allowed") {
+            || combinedOutput.contains("No such file") {
             return false
         }
 

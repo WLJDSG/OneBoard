@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历史剪贴板、文件暂存。
+OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、文件暂存、Finder 快速新建、网关切换和待办事项。
 
 ## 开发阶段
 
@@ -24,15 +24,15 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 
 **状态：已完成（v1.0.20）**
 
-1. ✅ 实现 ScreenshotCaptureService（纯 `screencapture -i` 系统工具，`Task.detached` 后台执行）
+1. ✅ 实现 ScreenshotCaptureService（按显示器执行 `screencapture -D`，`Task.detached` 后台捕获，每块屏幕独立遮罩与裁剪）
 2. ✅ 实现 AnnotationService + AnnotationCanvasView（标注画布 + 实时拖动/绘制）
 3. ✅ 构建 AnnotationToolbarView（矩形/椭圆/箭头/直线/文字/马赛克 + 预设色/RGB 颜色面板）
 4. ✅ 实现 PinnedScreenshotWindow（置顶贴图浮动窗口）
 5. ✅ 实现 AppleVisionOCRService + OCR 设置界面
 6. ✅ 实现 TranslationService + DeepSeek AI 翻译
 7. ✅ 添加第三方 API 配置入口（工厂模式）
-8. ✅ 工具栏独立悬浮窗（level+1，MainActor.assumeIsolated 跟随）
-9. ✅ 截图架构迭代完成（dlsym → CGWindowList → screencapture → 纯系统工具）
+8. ✅ 完整工具栏内嵌遮罩并在调整/标注阶段复用，输出动作统一经过截图会话生命周期
+9. ✅ 截图架构迭代完成（dlsym → CGWindowList → screencapture → 多显示器独立捕获与原位画布）
 
 ### 第三阶段：文件暂存模块 ✅
 
@@ -84,10 +84,11 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 7. ✅ 实施设置页、菜单入口、小窗和快捷键
 8. ✅ 修复权限开关和文案状态联动
 9. ✅ 迁移/补充网关相关测试并通过 `swift build`
+10. ✅ Helper v3 安装时原子写入初始 IPv4 白名单，业务拒绝不再回退到管理员密码命令
 
 ### 第六阶段：截图、权限与剪贴板体验修整 ✅
 
-**状态：已完成实现，DMG 生成受当前沙盒环境限制**
+**状态：已完成；后续正式打包与 DMG 校验已通过**
 
 1. ✅ 修复点击剪贴板历史条目粘贴时重复生成记录的问题
 2. ✅ 优化截图工具栏，移除复制按钮，新增完成按钮（复制截图并关闭）
@@ -97,7 +98,7 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 6. ✅ 优化翻译工作台布局，压缩头部留白并固定窗口完整尺寸
 7. ✅ 优化权限页单项关闭后的状态刷新和文案
 8. ✅ 打包脚本新增 LaunchAtLogin helper 与主 App 的 ad-hoc 签名和验证输出
-9. ⚠️ `script/package_app.sh` 已完成构建和签名验证，但当前沙盒内 `hdiutil create` 报”设备未配置”，未能在本轮生成新的 DMG
+9. ✅ 后续已使用标准脚本完成 Release 构建、签名、DMG 生成和 `hdiutil verify`
 
 ### 第七阶段：待办事项模块 ✅
 
@@ -124,7 +125,7 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 2. ✅ 右键文件夹/桌面空白 → “新建文件”子菜单（txt/docx/xlsx）
 3. ✅ 通过 `oneboard://new-file` 将写入请求交给主应用，避免扩展沙盒直接写入失败
 4. ✅ 自动命名、冲突处理，并在 Finder 中选中新文件
-5. ✅ 根目录、用户目录、Desktop 监听与桌面空白处回退
+5. ✅ 根目录、用户目录、本地/iCloud/系统解析 Desktop 及符号链接目标监听与桌面空白处回退
 6. ✅ `build_app_bundle.sh` 编译、打包并签名 `.appex`
 7. ✅ Cmd+Q 修复（`setupHiddenMainMenu`，仅应用活跃时响应）
 8. ✅ 授权设置页新增 Finder 扩展启用提示
@@ -152,6 +153,18 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 6. ✅ 新增坐标映射、选区几何、一次性锁定、工具路由和普通文件过滤回归测试
 7. ✅ 全量 78 项测试、Release 构建、ad-hoc 签名、DMG 生成与 checksum 验证通过
 
+### 2026-07-17：多显示器截图、统一工具栏、Finder 与网关边界修复 ✅
+
+**状态：已完成并生成验证通过的 DMG（2026-07-17）**
+
+1. ✅ 每块显示器独立执行 `screencapture -D`，创建对应遮罩，并从鼠标所在屏幕开始交互
+2. ✅ 选区调整和标注阶段复用完整 `AnnotationToolbarView`，删除第二套精简工具栏
+3. ✅ 标注工具点击后立即锁定并安装画布，画布切换时转交第一次鼠标按下，避免首笔丢失
+4. ✅ OCR 等输出动作统一返回截图会话，关闭所有遮罩后再显示结果
+5. ✅ Finder 桌面监听和 entitlement 同时覆盖本地 Desktop、iCloud Desktop、系统解析目录及符号链接目标
+6. ✅ 网关 Helper 升级为 v3，安装与初始白名单写入只需一次授权，白名单拒绝不再进入管理员命令回退
+7. ✅ 全量 88 项 XCTest 通过，新增多屏捕获计划、标注锁定/画布、OCR 会话、Finder entitlement 和网关回退边界测试
+
 
 
 ### 第八阶段：截图模块深度优化 ✅
@@ -162,7 +175,7 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 2. ✅ 修复贴字漂移 bug：渲染管线重构，文字标注直接算像素坐标，消除双重 Y 翻转导致的坐标偏移
 3. ✅ 自定义全屏遮罩截图：`ScreenshotOverlayView` 替换系统 `screencapture -i`
    - 半透明暗色遮罩 + 框选区域挖空显示原图
-   - `screencapture -x` 后台线程静默全屏截图
+   - `screencapture -D` 后台线程按显示器静默截图
    - 修复 `NSImage.draw` 触发 `NSCoreDragCapture → SIGABRT` 闪退，改用 `CGContext.draw`
 4. ✅ 像素尺寸预览：选区右上角实时显示 W×H 蓝色标签
 5. ✅ 方向键微调选区：方向键 1px 调整，Shift+方向键 10px 步进
@@ -179,13 +192,13 @@ OneBoard 是一款 macOS 原生应用，整合三大功能：截图工具、历�
 每阶段完成后，通过以下方式进行验证：
 
 1. **剪贴板模块**：复制不同类型的文本/图片/文件，确认在 Popover 中正确显示，测试搜索/置顶/删除/点击粘贴
-2. **截图模块**：在屏幕顶部、中央、底部框选；松开后移动并测试八方向缩放；点击工具后确认选区锁定且原位进入标注，再测试 OCR、翻译和贴图
+2. **截图模块**：在主屏和外接屏分别于顶部、中央、底部框选；松开后移动并测试八方向缩放；点击工具后确认立即锁定、首笔生效且原位进入标注，再确认 OCR/翻译前所有遮罩已关闭
 3. **文件暂存**：在 Finder 中分别拖拽文本、图片和压缩包并晃动；确认应用窗口、目录和 `.app` 不触发暂存区，也不能被加入暂存列表
 4. **全局快捷键**：在不同应用中使用快捷键，确认功能正常触发
 5. **开机自启**：重启电脑确认应用自动启动
 6. **权限**：首次启动确认权限引导页正常显示，引导用户开启所需权限
 7. **打包产物**：执行 `script/package_app.sh` 生成 `build/OneBoard.dmg`，并通过 `hdiutil verify build/OneBoard.dmg` 校验镜像
-8. **网关模块**：切换当前默认路由所在服务的网关/DNS，验证 Wi-Fi/有线网络自动识别、仅 DNS 模式、helper 安装/卸载和授权状态同步
+8. **网关模块**：切换当前默认路由所在服务的网关/DNS，验证 Wi-Fi/有线网络自动识别、仅 DNS 模式、Helper 安装/卸载和授权状态同步；首次安装只出现一次授权，未进白名单地址必须直接失败且不弹出第二次管理员授权
 9. **待办模块**：选中文字 + 快捷键添加待办，右键 Services 菜单添加，鼠标移至顶部中央刘海触发面板，勾选完成淡出，查看历史统计，配置保留天数
-10. **Finder 扩展**：右键文件夹/桌面 → "新建文件"菜单 → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中
+10. **Finder 扩展**：分别在本地 Desktop、iCloud Desktop 和符号链接桌面右键 → “新建文件” → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中
 11. **Cmd+Q**：OneBoard 活跃时（设置窗口/浮动面板）Cmd+Q 退出；其他应用活跃时 Cmd+Q 不影响 OneBoard

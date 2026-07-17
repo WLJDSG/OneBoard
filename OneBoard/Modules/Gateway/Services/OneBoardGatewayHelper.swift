@@ -4,7 +4,7 @@ struct OneBoardGatewayHelper {
     static let helperPath = "/usr/local/bin/oneboard-gateway-helper"
     static let sudoersPath = "/etc/sudoers.d/oneboard-gateway"
     static let allowedIPsPath = "/etc/oneboard-gateway-allowed-ips.conf"
-    static let versionMarker = "ONEBOARD_GATEWAY_HELPER_VERSION=2"
+    static let versionMarker = "ONEBOARD_GATEWAY_HELPER_VERSION=3"
 
     private let runner: GatewayCommandRunning
     private let fileManager: FileManager
@@ -29,8 +29,8 @@ struct OneBoardGatewayHelper {
         script.contains(versionMarker)
     }
 
-    func install() throws {
-        let script = Self.installShellScript(helperBody: Self.helperBody)
+    func install(allowedIPs: [String]) throws {
+        let script = Self.installShellScript(helperBody: Self.helperBody, allowedIPs: allowedIPs)
         try runAdminShell(script)
     }
 
@@ -67,15 +67,18 @@ struct OneBoardGatewayHelper {
         }
     }
 
-    private static func installShellScript(helperBody: String) -> String {
+    private static func installShellScript(helperBody: String, allowedIPs: [String]) -> String {
         let sudoers = "\(NSUserName()) ALL=(root) NOPASSWD: \(helperPath)\n"
+        let whitelist = Array(Set(allowedIPs.filter(GatewayProfile.isValidIPv4)))
+            .sorted()
+            .joined(separator: "\n")
         return [
             "/bin/mkdir -p /usr/local/bin",
             "/usr/bin/printf %s \(helperBody.shellQuoted) > \(helperPath.shellQuoted)",
             "/bin/chmod 755 \(helperPath.shellQuoted)",
             "/usr/bin/printf %s \(sudoers.shellQuoted) > \(sudoersPath.shellQuoted)",
             "/bin/chmod 440 \(sudoersPath.shellQuoted)",
-            "/usr/bin/touch \(allowedIPsPath.shellQuoted)",
+            "/usr/bin/printf %s \(whitelist.shellQuoted) > \(allowedIPsPath.shellQuoted)",
             "/bin/chmod 644 \(allowedIPsPath.shellQuoted)"
         ].joined(separator: "; ")
     }
@@ -83,7 +86,7 @@ struct OneBoardGatewayHelper {
     private static let helperBody = """
 #!/bin/sh
 set -eu
-ONEBOARD_GATEWAY_HELPER_VERSION=2
+ONEBOARD_GATEWAY_HELPER_VERSION=3
 
 ALLOWED_FILE="/etc/oneboard-gateway-allowed-ips.conf"
 SERVICE=""

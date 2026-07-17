@@ -5,13 +5,13 @@
 | 层级 | 技术 | 版本要求 |
 |------|------|---------|
 | 语言 | Swift | 5.9+ |
-| UI 框架 | SwiftUI + AppKit | macOS 15.0+ |
+| UI 框架 | SwiftUI + AppKit | macOS 14.0+ |
 | 数据库 | GRDB.swift | 6.x |
 | 全局快捷键 | KeyboardShortcuts | 2.x |
 | 开机自启 | LaunchAtLogin | 4.x |
 | OCR | Apple Vision | macOS 内置 |
 | 翻译 | Apple Translation / Google Web / DeepSeek | macOS 15.0+ |
-| 截图 | CoreGraphics / ScreenCaptureKit | macOS 内置 |
+| 截图 | `/usr/sbin/screencapture` + CoreGraphics / AppKit | macOS 内置 |
 | 依赖管理 | Swift Package Manager | 5.9+ |
 
 ## 架构模式
@@ -83,7 +83,9 @@ Finder 右键菜单
 ```
 
 - `FinderFileCreationRequest` 只接受绝对目录和 txt/docx/xlsx 白名单类型。
-- Finder 监听集合包含 `/`、用户目录和 Desktop；Desktop 空白处没有目标 URL 时回退到真实桌面目录。
+- Finder 监听集合包含 `/`、用户目录、传统 `~/Desktop`、iCloud Desktop 和 `FileManager` 解析出的桌面目录。
+- 每个候选目录同时加入标准化路径与符号链接解析后的路径，兼容桌面迁移到 iCloud 或由符号链接重定向的环境。
+- Finder 扩展 entitlement 中的 Desktop 与 iCloud Desktop home-relative 临时例外必须和监听集合保持一致；扩展仍不得绕过主应用直接写文件。
 - 文件名从 `未命名.ext` 开始，冲突时依次使用 `未命名 1.ext`、`未命名 2.ext`。
 
 ### 截图坐标与 Retina 规则
@@ -95,6 +97,24 @@ Finder 右键菜单
 - 只有框选区域超过可见屏幕约束时才进行等比缩放。
 - 截图选区分为 selecting、adjusting、locked 三个阶段；只有 adjusting 阶段允许移动和八方向缩放。
 - 点击标注或输出工具时只允许执行一次锁定；进入 locked 后所有选区几何事件必须失效。
+
+### 多显示器截图与会话规则
+
+- `ScreenshotCaptureService` 必须为 `NSScreen.screens` 中的每块显示器生成独立捕获计划，并使用 `screencapture -D <displayNumber>` 分别取得原图。
+- 每块显示器创建一个与其 `screen.frame` 对齐的可成为 key window 的遮罩窗口；启动时优先激活鼠标所在屏幕的遮罩。
+- 每个遮罩只裁剪自己的显示器图像，裁剪映射使用遮罩局部 `bounds`，不得用主屏 frame 或跨屏拼接图推导比例。
+- 任意一个遮罩确认或取消后，统一清理所有事件监听和所有遮罩窗口；完成闭包只能恢复 continuation 一次。
+- adjusting 和 locked 阶段复用同一个 `AnnotationToolbarView`，不得恢复第二套精简 `ScreenshotSelectionToolbarView`。
+- 点击标注工具必须在同一事件链中锁定选区并安装 `AnnotationCanvasView`；第一次落笔发生在画布切换边界时，要把鼠标按下事件转交给 `AnnotationViewModel`，不能吞掉首笔。
+- OCR、翻译、复制、保存和贴图是截图会话输出动作，必须先走完成路径关闭所有遮罩，再打开后续窗口或执行输出。
+
+### 网关 Helper 安全边界
+
+- Helper 当前协议版本为 `ONEBOARD_GATEWAY_HELPER_VERSION=3`；旧版本必须被识别为需要重新安装。
+- 安装脚本在一次管理员授权内写入 Helper、sudoers 和初始 IPv4 白名单，白名单去重、排序并过滤非法地址，禁止先创建空白名单再二次提权同步。
+- Profile 变化后的白名单同步使用受限 Helper 路径；sudoers 只允许执行 `/usr/local/bin/oneboard-gateway-helper`。
+- `GatewaySwitcher` 只有在 Helper 缺失、需要密码、无 TTY 或命令不存在等执行能力问题时才允许进入管理员授权回退。
+- `Router/DNS is not allowed` 属于 Helper 的最终业务拒绝，必须直接向上抛错，禁止通过 AppleScript 管理员命令绕过白名单。
 
 ### 文件摇晃检测降级
 

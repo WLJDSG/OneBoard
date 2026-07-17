@@ -136,11 +136,10 @@ final class GatewayViewModel: ObservableObject {
 
     func installHelper() {
         statusMessage = "正在安装 OneBoard 网关免密 Helper..."
-        Task.detached(priority: .userInitiated) { [service] in
+        let ips = whitelistIPs
+        Task.detached(priority: .userInitiated) { [service, ips] in
             do {
-                try service.installHelper()
-                let ips = await MainActor.run { self.whitelistIPs }
-                try service.syncWhitelist(ips: ips)
+                try service.installHelper(allowedIPs: ips)
                 await MainActor.run {
                     self.isHelperInstalled = service.isHelperInstalled()
                     self.statusMessage = "网关免密 Helper 已启用"

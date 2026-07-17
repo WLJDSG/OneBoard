@@ -1,5 +1,7 @@
 # Screenshot Selection Lock Implementation Plan
 
+> 归档说明（2026-07-17）：本计划记录当时的实施步骤，其中独立 `ScreenshotSelectionToolbarView` 已被后续统一完整工具栏方案取代。不要按本文重新创建该文件；当前实现约束见 `docs/技术规范/README.md`。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修复截图结果上下镜像，并实现“松开后原位调整选区，点击工具后锁定并进入标注”的两阶段截图交互。

@@ -13,6 +13,10 @@ final class FinderSyncController: FIFinderSync {
     }()
 
     private static let actualDesktopURL = actualHomeURL.appendingPathComponent("Desktop", isDirectory: true)
+    private static let resolvedDesktopURL = FileManager.default.urls(
+        for: .desktopDirectory,
+        in: .userDomainMask
+    ).first
 
     private var currentMenuKind: FIMenuKind?
 
@@ -20,7 +24,8 @@ final class FinderSyncController: FIFinderSync {
         super.init()
         // 根目录覆盖所有本地卷路径，home/desktop 兼容 macOS 26 的桌面空白处菜单。
         FIFinderSyncController.default().directoryURLs = FinderFileCreationRequest.managedDirectories(
-            homeURL: Self.actualHomeURL
+            homeURL: Self.actualHomeURL,
+            desktopURL: Self.resolvedDesktopURL
         )
         print("[FinderSync] 扩展已初始化")
     }

@@ -169,6 +169,11 @@ final class AnnotationViewModel: ObservableObject {
         }
     }
 
+    /// 框选阶段的第一次落笔发生在画布安装之前，显式转交该事件，避免丢失首个鼠标按下。
+    func beginInteraction(at point: CGPoint, event: NSEvent) {
+        onMouseDown(at: point, event: event)
+    }
+
     private func onMouseDragged(at point: CGPoint, event: NSEvent) {
         if isResizingTextLayer, let layerID = resizingTextLayerID {
             resizeTextLayer(id: layerID, to: point)

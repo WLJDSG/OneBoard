@@ -10,9 +10,14 @@ final class GatewayCapabilityTests: XCTestCase {
 
     func testLegacyHelperWithoutWhitelistSyncIsNotCurrent() {
         XCTAssertFalse(OneBoardGatewayHelper.isCurrentHelperScript("#!/bin/sh\necho legacy"))
-        XCTAssertTrue(
+        XCTAssertFalse(
             OneBoardGatewayHelper.isCurrentHelperScript(
                 "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=2\n"
+            )
+        )
+        XCTAssertTrue(
+            OneBoardGatewayHelper.isCurrentHelperScript(
+                "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=3\n"
             )
         )
     }
@@ -36,11 +41,12 @@ final class GatewayCapabilityTests: XCTestCase {
         let runner = RecordingGatewayCommandRunner()
         let helper = OneBoardGatewayHelper(runner: runner)
 
-        try helper.install()
-        try helper.syncWhitelist(ips: ["192.168.31.3", "192.168.31.1"])
+        try helper.install(allowedIPs: ["192.168.31.3", "192.168.31.1"])
 
         XCTAssertEqual(runner.commands.filter { $0.contains("/usr/bin/osascript") }.count, 1)
-        XCTAssertTrue(runner.commands.contains { $0.contains("/usr/bin/sudo") && $0.contains("-n") })
+        XCTAssertFalse(runner.commands.contains { $0.contains("/usr/bin/sudo") && $0.contains("-n") })
+        XCTAssertTrue(runner.commands[0].contains("192.168.31.1"))
+        XCTAssertTrue(runner.commands[0].contains("192.168.31.3"))
     }
 
     func testUninstallRemovesHelperSudoersAndWhitelist() throws {

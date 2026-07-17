@@ -35,8 +35,13 @@ final class FinderFileCreationTests: XCTestCase {
             PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
         )
         let groups = try XCTUnwrap(plist["com.apple.security.application-groups"] as? [String])
+        let homeExceptions = try XCTUnwrap(
+            plist["com.apple.security.temporary-exception.files.home-relative-path.read-write"] as? [String]
+        )
 
         XCTAssertTrue(groups.contains("group.com.oneboard.mac"))
+        XCTAssertTrue(homeExceptions.contains("/Desktop/"))
+        XCTAssertTrue(homeExceptions.contains("/Library/Mobile Documents/com~apple~CloudDocs/Desktop/"))
     }
 
     func testCreatorWritesUniqueTextFiles() throws {

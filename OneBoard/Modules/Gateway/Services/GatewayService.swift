@@ -23,8 +23,15 @@ final class GatewayService: @unchecked Sendable {
         try OneBoardGatewayHelper(runner: runner).syncWhitelist(ips: ips)
     }
 
+    func installHelper(allowedIPs: [String]) throws {
+        try OneBoardGatewayHelper(runner: runner).install(allowedIPs: allowedIPs)
+    }
+
     func installHelper() throws {
-        try OneBoardGatewayHelper(runner: runner).install()
+        let profiles = GatewayProfileStore.shared.initializeDefaultsIfNeeded()
+        let allowedIPs = profiles.map(\.gateway).filter { !$0.isEmpty }
+            + profiles.flatMap(\.dnsServers)
+        try installHelper(allowedIPs: allowedIPs)
     }
 
     func uninstallHelper() throws {

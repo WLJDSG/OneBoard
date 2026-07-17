@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-OneBoard 是一个 macOS 原生应用，整合截图、历史剪贴板和文件暂存三大功能。
+OneBoard 是一个 macOS 原生应用，整合截图、历史剪贴板、文件暂存、Finder 快速新建和网关切换。
 
 ## 项目信息
 
@@ -42,11 +42,14 @@ OneBoard/                        # SPM 项目根目录
 ├── Core/                        # 核心基础设施
 ├── Modules/                     # 功能模块
 │   ├── Clipboard/               # 剪贴板模块
-│   ├── Screenshot/               # 截图模块
-│   └── FileStaging/             # 文件暂存模块
+│   ├── Screenshot/              # 截图模块
+│   ├── FileStaging/             # 文件暂存模块
+│   └── Gateway/                 # 网关切换模块
+├── FinderSync/                  # Finder Sync Extension
 ├── Shared/                      # 共享服务
 │   └── MenuBarManager.swift     # 菜单栏配置 + 浮动窗口管理
-└── Resources/                   # 资源文件
+├── Resources/                   # 资源文件
+└── Tests/                       # XCTest 回归测试
 ```
 
 **架构说明**：可执行模块 `OneBoard` 必须保持极简（只含 `main.swift`），所有业务代码在 `OneBoardKit` 库模块中。这是为了兼容 macOS 26——同模块编译时会干扰 NSStatusItem 渲染。
@@ -99,12 +102,18 @@ ONEBOARD_CODESIGN_IDENTITY=- bash script/package_app.sh
 5. 中文注释
 6. 修改代码后必须先 `swift build` 验证编译通过
 
+### 功能实现边界
+
+- 多显示器截图按显示器独立捕获、独立显示遮罩、独立裁剪，不能依赖主屏逻辑尺寸处理外接屏图像。
+- 选区调整和标注阶段复用完整 `AnnotationToolbarView`；标注工具点击即锁定并安装画布，OCR 等输出动作先结束截图会话再打开结果窗口。
+- Finder Sync 不直接创建文件；本地 Desktop、iCloud Desktop、系统解析桌面目录和符号链接目标必须一并纳入监听与权限配置。
+- 网关 Helper 安装时原子写入初始白名单，白名单拒绝是最终业务错误，不允许回退到管理员密码命令。
+
 ## 当前开发状态
 
-- **第一阶段**（剪贴板模块）：✅ 已完成
-- **第二阶段**（截图模块）：待开始
-- **第三阶段**（文件暂存模块）：待开始
-- **第四阶段**（收尾打磨）：待开始
+- **剪贴板、截图、文件暂存**：✅ 已完成并持续维护
+- **Finder 快速新建、网关切换、待办事项**：✅ 已完成并持续维护
+- **当前重点**：macOS 26 兼容、真实交互回归与发布包验证
 
 ## 开发工作流（重要）
 

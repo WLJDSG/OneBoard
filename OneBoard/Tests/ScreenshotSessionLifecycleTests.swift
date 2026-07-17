@@ -58,4 +58,27 @@ final class ScreenshotSessionLifecycleTests: XCTestCase {
     func testOutputSelectionKeepsImmediateOperation() {
         XCTAssertEqual(ScreenshotLockedRoute.route(for: .ocr), .ocr)
     }
+
+    func testOCRToolbarActionReturnsToScreenshotSession() {
+        let image = NSImage(size: CGSize(width: 120, height: 80))
+        let service = AnnotationService(baseImage: image)
+        let viewModel = AnnotationViewModel(annotationService: service)
+        var routedImage: NSImage?
+        let toolbar = AnnotationToolbarView(
+            annotationService: service,
+            viewModel: viewModel,
+            onComplete: { _ in },
+            onSave: { _ in },
+            onPin: { _ in },
+            onOCR: { routedImage = $0 },
+            onTranslate: { _ in },
+            onClose: {},
+            baseImage: image,
+            displaySize: image.size
+        )
+
+        toolbar.handleOCROutput(image)
+
+        XCTAssertTrue(routedImage === image, "OCR 必须交回截图会话处理，才能先关闭遮罩")
+    }
 }

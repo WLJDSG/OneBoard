@@ -45,18 +45,24 @@ struct FinderFileCreationRequest: Equatable {
         )
     }
 
-    static func managedDirectories(homeURL: URL) -> Set<URL> {
-        [
+    static func managedDirectories(homeURL: URL, desktopURL: URL? = nil) -> Set<URL> {
+        var candidates = [
             URL(fileURLWithPath: "/", isDirectory: true),
-            homeURL.standardizedFileURL,
-            homeURL.appendingPathComponent("Desktop", isDirectory: true).standardizedFileURL,
+            homeURL,
+            homeURL.appendingPathComponent("Desktop", isDirectory: true),
             homeURL
                 .appendingPathComponent(
                     "Library/Mobile Documents/com~apple~CloudDocs/Desktop",
                     isDirectory: true
                 )
-                .standardizedFileURL
         ]
+        if let desktopURL {
+            candidates.append(desktopURL)
+        }
+
+        return Set(candidates.flatMap { url in
+            [url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
+        })
     }
 }
 

@@ -3,6 +3,21 @@ import CoreGraphics
 import XCTest
 
 final class ScreenshotOverlayCropTests: XCTestCase {
+    func testCapturePlanCreatesIndependentEntryForRightExternalDisplay() {
+        let frames = [
+            CGRect(x: 0, y: 0, width: 1512, height: 982),
+            CGRect(x: 1512, y: 0, width: 2560, height: 1440),
+        ]
+
+        let plans = ScreenshotDisplayCapturePlan.make(screenFrames: frames)
+
+        XCTAssertEqual(plans.count, 2)
+        XCTAssertEqual(plans[0].displayNumber, 1)
+        XCTAssertEqual(plans[0].screenFrame, frames[0])
+        XCTAssertEqual(plans[1].displayNumber, 2)
+        XCTAssertEqual(plans[1].screenFrame, frames[1])
+    }
+
     func testScreenRectKeepsTopSelectionAtTopOfScreen() {
         let screenFrame = CGRect(x: -1440, y: 120, width: 1440, height: 900)
         let overlayRect = CGRect(x: 100, y: 700, width: 400, height: 120)
