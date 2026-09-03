@@ -32,6 +32,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         DragDetector.shared.start()
         _ = FileStagingViewModel.shared
         _ = GatewayProfileStore.shared.initializeDefaultsIfNeeded()
+        Task { @MainActor in
+            _ = CodexAccountViewModel.shared
+        }
         setupDefaultSettings()
 
         // Cmd+Q 修复：设置隐藏主菜单

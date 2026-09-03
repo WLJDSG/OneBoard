@@ -50,6 +50,11 @@ final class AppleTranslationService: TranslationServiceProtocol {
 /// Google 免费 Web 翻译端点
 final class GoogleTranslationService: TranslationServiceProtocol {
     private let endpoint = URL(string: "https://translate.googleapis.com/translate_a/single")!
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     func translate(_ text: String, from sourceLanguage: String?, to targetLanguage: String) async throws -> String {
         var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
@@ -68,12 +73,22 @@ final class GoogleTranslationService: TranslationServiceProtocol {
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw TranslationServiceError.translationFailed("Google 翻译未返回有效响应")
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 429 {
+                throw TranslationServiceError.translationFailed(
+                    "Google 翻译请求过于频繁，当前网络已被 Google 暂时限制。请稍后重试，或切换 Apple/DeepSeek。"
+                )
+            }
+            if httpResponse.value(forHTTPHeaderField: "Content-Type")?.localizedCaseInsensitiveContains("text/html") == true {
+                throw TranslationServiceError.translationFailed(
+                    "Google 翻译暂时不可用（HTTP \(httpResponse.statusCode)）。请稍后重试，或切换 Apple/DeepSeek。"
+                )
+            }
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
             throw TranslationServiceError.translationFailed("Google 翻译失败：\(message)")
         }

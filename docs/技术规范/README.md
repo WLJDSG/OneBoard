@@ -53,7 +53,8 @@ OneBoard/
 │   ├── Clipboard/          # 剪贴板模块
 │   ├── Screenshot/         # 截图模块
 │   ├── FileStaging/        # 文件暂存模块
-│   └── Gateway/            # 网关切换模块
+│   ├── Gateway/            # 网关切换模块
+│   └── CodexAccounts/      # Codex 桌面账号切换模块
 ├── FinderSync/             # Finder Sync Extension
 ├── Shared/                 # 共享服务
 │   ├── HotkeyManager.swift
@@ -83,10 +84,28 @@ Finder 右键菜单
 ```
 
 - `FinderFileCreationRequest` 只接受绝对目录和 txt/docx/xlsx 白名单类型。
-- Finder 监听集合包含 `/`、用户目录、传统 `~/Desktop`、iCloud Desktop 和 `FileManager` 解析出的桌面目录。
+- Finder 监听集合包含 `/`、用户目录、传统 `~/Desktop`、Finder 为 iCloud 桌面暴露的 iCloud Drive 根容器、iCloud Desktop 和 `FileManager` 解析出的桌面目录。
 - 每个候选目录同时加入标准化路径与符号链接解析后的路径，兼容桌面迁移到 iCloud 或由符号链接重定向的环境。
-- Finder 扩展 entitlement 中的 Desktop 与 iCloud Desktop home-relative 临时例外必须和监听集合保持一致；扩展仍不得绕过主应用直接写文件。
+- Finder 扩展 entitlement 中的 Desktop、iCloud Drive 根容器只读例外与 iCloud Desktop 读写例外必须和监听集合保持一致；扩展仍不得绕过主应用直接写文件。
 - 文件名从 `未命名.ext` 开始，冲突时依次使用 `未命名 1.ext`、`未命名 2.ext`。
+
+### Codex 账号状态与凭据续期
+
+```text
+Keychain 账号凭据
+  → 检查 access token exp（提前 5 分钟）
+  → 必要时 POST auth.openai.com/oauth/token 刷新并原子保存轮换结果
+  → GET chatgpt.com/backend-api/wham/usage
+  → 将 used_percent 换算为 remainingPercent
+  → 补充账号订阅到期信息
+  → 仅把额度、订阅、重置次数和更新时间写入 UserDefaults 元数据
+```
+
+- 后台每 15 分钟顺序刷新账号，避免同一账号并发请求；单账号失败不影响其余账号，并保留上次成功快照。
+- `refresh_token` 响应字段可选：服务端未返回新值时必须保留旧值，返回新值时保存轮换后的完整认证缓存。
+- 当前账号且 Codex 正在运行时禁止 OneBoard 旋转凭据，避免官方客户端与 OneBoard 重复使用同一 refresh token；切号前只续期尚未运行的目标账号。
+- 刷新当前账号状态前先从 Codex 官方 `file` / `keyring` 存储读取最新凭据并同步回 OneBoard vault，避免继续使用已被官方客户端轮换掉的旧 refresh token。
+- `wham/usage` 和订阅查询属于 Codex 当前认证服务接口，不视为公开稳定 SDK；字段缺失时显示未知，HTTP/解析失败时显示可恢复错误。
 
 ### 截图坐标与 Retina 规则
 
@@ -107,6 +126,8 @@ Finder 右键菜单
 - adjusting 和 locked 阶段复用同一个 `AnnotationToolbarView`，不得恢复第二套精简 `ScreenshotSelectionToolbarView`。
 - 点击标注工具必须在同一事件链中锁定选区并安装 `AnnotationCanvasView`；第一次落笔发生在画布切换边界时，要把鼠标按下事件转交给 `AnnotationViewModel`，不能吞掉首笔。
 - OCR、翻译、复制、保存和贴图是截图会话输出动作，必须先走完成路径关闭所有遮罩，再打开后续窗口或执行输出。
+- Google 免费 Web 翻译端点返回 `429` 时提示当前网络被临时限流并建议稍后重试或切换 Apple/DeepSeek；非成功 HTML 响应不得把拦截页或 `DOCTYPE` 原文展示在翻译面板。
+- `GoogleTranslationService` 的网络会话必须可注入，以便用确定性的 HTTP 响应覆盖限流回归测试。
 
 ### 网关 Helper 安全边界
 
@@ -115,6 +136,22 @@ Finder 右键菜单
 - Profile 变化后的白名单同步使用受限 Helper 路径；sudoers 只允许执行 `/usr/local/bin/oneboard-gateway-helper`。
 - `GatewaySwitcher` 只有在 Helper 缺失、需要密码、无 TTY 或命令不存在等执行能力问题时才允许进入管理员授权回退。
 - `Router/DNS is not allowed` 属于 Helper 的最终业务拒绝，必须直接向上抛错，禁止通过 AppleScript 管理员命令绕过白名单。
+
+### Codex 桌面认证缓存切换
+
+- 仅支持 bundle ID 为 `com.openai.codex` 的 Codex/ChatGPT macOS 桌面 App，不处理 Codex CLI。
+- 新增账号通过 Codex CLI 标准形态直接请求 `https://auth.openai.com/oauth/authorize`，发起 authorization-code + PKCE 流程，并使用随机 `state` 校验 `localhost` 回调；授权会话 10 分钟超时。
+- OAuth 请求使用 `originator=codex_cli_rs`，禁止套用 `https://chatgpt.com/codex/desktop-auth`，也不携带 `codex_app_version`、`source_surface_stable_id`、`codex_origin_stable_id` 等 Codex Desktop 私有参数。
+- OAuth 本机回调必须使用授权服务登记的 `http://localhost:1455/auth/callback`；随机端口会在进入登录前被拒绝。
+- 密码和验证码由 OpenAI 官方浏览器登录流程处理，OneBoard 不收集也不持久化这些字段；填写的邮箱必须与 `id_token` 中已授权账号一致。
+- `CodexAccountProfile` 只保存 UUID、显示名称、邮箱、账号/套餐标识和时间戳到 UserDefaults；对应认证缓存以 UUID 为 account、`com.oneboard.mac.codex-auth-cache` 为 service 保存到 macOS Keychain。
+- 当前认证存储按 `~/.codex/config.toml` 顶层 `cli_auth_credentials_store` 处理：`file` 使用 `~/.codex/auth.json`，`keyring` 使用官方 `Codex Auth` 钥匙串项，`auto` 优先钥匙串并在失败时回退到文件。
+- 文件读取和恢复前验证非空 JSON 对象并拒绝符号链接，原子替换后权限固定为 `0600`，目录首次创建时权限为 `0700`。
+- Codex 运行中禁止替换认证存储。切换请求先校验目标钥匙串项，再请求主应用正常退出；2 秒后仍残留时发送 SIGTERM，之后最长等待 20 秒。
+- 退出前通过父子 PID 捕获直属 Codex `app-server`，主进程退出后仍要确认这些旧进程结束，避免旧 token 刷新回写覆盖新账号。
+- 切换前先把当前文件写回已知活动账号钥匙串，使 OpenAI 自动刷新后的 token 不丢失；第一次切换到 OAuth 管理账号时，在 Codex 完全退出后直接接管当前官方认证存储。
+- 凭据提交后通过 LaunchServices 以新实例重新打开 Codex。关闭失败时必须在提交前停止；启动失败时保留已切换的目标凭据并提示手动打开。
+- 测试必须注入临时认证文件、内存 vault、伪官方钥匙串和可控进程生命周期，禁止读取或修改用户真实认证缓存。
 
 ### 文件摇晃检测降级
 

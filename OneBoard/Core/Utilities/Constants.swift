@@ -37,6 +37,12 @@ enum Constants {
     /// App Group 标识符（主应用与 Finder Sync Extension 通信）
     static let appGroupIdentifier = "group.com.oneboard.mac"
 
+    /// ChatGPT/Codex macOS 桌面 App 标识符
+    static let codexDesktopBundleIdentifier = "com.openai.codex"
+
+    /// Codex 多账号认证缓存的钥匙串服务名
+    static let codexAuthCacheKeychainService = "com.oneboard.mac.codex-auth-cache"
+
     // MARK: - UserDefaults Keys
 
     struct UserDefaultsKeys {
@@ -56,6 +62,9 @@ enum Constants {
         static let inputMonitoringPermissionEnabled = "input_monitoring_permission_enabled"
         static let notificationPermissionEnabled = "notification_permission_enabled"
         static let gatewayProfiles = "gateway_profiles"
+        static let codexAccountProfiles = "codex_account_profiles"
+        static let activeCodexAccountID = "active_codex_account_id"
+        static let pendingCodexAccountID = "pending_codex_account_id"
         static let selectedSettingsTab = "selected_settings_tab"
 
         // 待办事项

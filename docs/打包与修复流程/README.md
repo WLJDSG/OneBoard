@@ -96,7 +96,7 @@ Finder 新建文件链路可在临时目录做端到端验证：启动 DMG 内 A
 
 - **多显示器截图**：主屏、左右或上下排列的外接屏分别框选；混合 Retina/非 Retina 环境下，遮罩、裁剪、工具栏和标注方向必须落在同一块屏幕且比例一致。
 - **截图会话**：点击每类标注工具都应立即锁定并接受第一笔；点击 OCR/翻译后所有屏幕遮罩必须先消失，结果窗口不能被遮挡。
-- **Finder 桌面**：本地 Desktop、iCloud Desktop 和符号链接桌面都要验证右键菜单与主应用创建链路；不得只验证传统 `~/Desktop`。
+- **Finder 桌面**：本地 Desktop、Finder 映射到 iCloud Drive 根容器的桌面、iCloud Desktop 和符号链接桌面都要验证右键菜单与主应用创建链路；不得只验证传统 `~/Desktop`。
 - **网关 Helper**：首次安装与初始白名单写入只能出现一次管理员授权；未进白名单的 Router/DNS 必须直接失败，且不得弹出管理员授权绕过限制。
 
 ## 系统权限与截图专项规则
@@ -113,6 +113,7 @@ Finder 新建文件链路可在临时目录做端到端验证：启动 DMG 内 A
 - `Accessibility` 必须对主 Bundle ID 单独执行并检查退出码，不能只依赖被静默忽略的批量循环。
 - 不得使用无 Bundle ID 的全局 `tccutil reset Accessibility`，避免清除其他应用的辅助功能权限。
 - App 内延迟卸载、仓库 `script/uninstall.sh` 和 DMG 内卸载入口必须保持相同清理顺序。
+- Codex 多账号凭据保存在服务名为 `com.oneboard.mac.codex-auth-cache` 的钥匙串项中；彻底卸载必须在删除偏好设置前逐项清理，避免丢失账号索引后留下凭据残留。
 
 ### 截图标注坐标
 

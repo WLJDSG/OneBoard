@@ -1,6 +1,6 @@
 # OneBoard
 
-macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建和网关切换一体化工具。
+macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网关切换和 Codex 桌面账号切换一体化工具。
 
 当前版本已针对 Apple Silicon（包括 MacBook Air M3）和 macOS 26 的混合 Retina 多显示器、Finder 扩展及菜单栏交互进行适配。
 
@@ -19,7 +19,7 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建和网�
 - **标注工具**：矩形、椭圆、箭头、直线、文字（微信风格）、编号圆圈、马赛克
 - **粗细循环**：± 按钮到达边界自动循环
 - **OCR 文字识别**：先结束截图遮罩会话，再显示弹性结果气泡，避免结果被遮罩覆盖
-- **翻译**：Apple Translation / DeepSeek AI
+- **翻译**：Apple Translation / Google / DeepSeek AI；Google 免费端点被限流时显示可操作提示，不展示服务端 HTML
 - **贴图置顶**：截图悬浮在所有窗口之上
 - **撤销/重做**：无限步操作历史
 
@@ -39,7 +39,7 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建和网�
 
 - 在 Finder 文件夹、桌面和其他目录的右键菜单中快速创建 txt/docx/xlsx
 - Finder 扩展只负责获取目标目录，实际写入交由 OneBoard 主应用，避免扩展沙盒导致“没有权限”
-- 同时识别本地 Desktop、iCloud Desktop、系统解析出的桌面目录及其符号链接目标
+- 同时识别本地 Desktop、iCloud Drive 桌面容器根目录、iCloud Desktop、系统解析出的桌面目录及其符号链接目标
 - 自动处理重名文件，并在创建后通过 Finder 选中新文件
 
 ### 网关切换
@@ -48,6 +48,18 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建和网�
 - OneBoard 专属 Helper 只允许配置档中的合法 IPv4；安装 Helper 与写入初始白名单共用一次管理员授权
 - Helper 返回“地址不在白名单”时直接报错，不回退到管理员密码命令，避免绕过白名单边界
 - 紧凑型菜单栏弹窗和独立配置页
+
+### Codex 桌面账号切换
+
+- 填写 OpenAI 账号邮箱后直接打开 Codex 标准 OAuth 授权页，浏览器授权成功后自动新增或更新账号；不经过 Codex Desktop 私有中转页
+- 管理多个 Codex/ChatGPT 桌面 App 登录缓存，支持重命名、删除和快速切换
+- 每个账号展示 5 小时与每周剩余额度、重置时间、订阅到期时间和剩余主动重置次数，并在后台每 15 分钟自动更新
+- access token 临近到期、额度请求返回未授权或切号前会自动使用 refresh token 续期；服务端轮换后的凭据继续只保存在钥匙串
+- 密码与验证码始终只在 OpenAI 官方网页输入；OneBoard 不保存密码或验证码，认证缓存保存在 macOS 钥匙串
+- 菜单栏可快速选择账号；OneBoard 会先正常退出 Codex，超时时对已捕获的残留进程发送终止信号
+- 确认 Codex 主进程和旧 `app-server` 完全退出后才切换凭据，完成后自动重新打开 Codex
+- 兼容 Codex 官方 `file` / `keyring` / `auto` 凭据存储模式
+- 为避免 refresh token 被两个客户端同时使用，当前账号正在 Codex 中运行时 OneBoard 会暂缓凭据轮换，退出 Codex 后自动重试
 
 ### 其他
 
@@ -86,7 +98,8 @@ OneBoard/
 │   ├── Clipboard/    # 剪贴板模块
 │   ├── Screenshot/   # 截图模块
 │   ├── FileStaging/  # 文件暂存模块
-│   └── Gateway/      # 网关切换模块
+│   ├── Gateway/      # 网关切换模块
+│   └── CodexAccounts/# Codex 桌面账号切换模块
 ├── FinderSync/       # Finder Sync Extension
 ├── Shared/           # 共享服务与 Finder 新建文件协议
 ├── Resources/        # 资源文件

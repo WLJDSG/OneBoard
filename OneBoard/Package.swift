@@ -28,7 +28,10 @@ let package = Package(
             ],
             path: ".",
             exclude: ["Tests", "App_minimal", "FinderSync", "Resources"],
-            sources: ["App", "Core", "Modules", "Shared"]
+            sources: ["App", "Core", "Modules", "Shared"],
+            linkerSettings: [
+                .linkedFramework("Security"),
+            ]
         ),
         .testTarget(
             name: "OneBoardTests",

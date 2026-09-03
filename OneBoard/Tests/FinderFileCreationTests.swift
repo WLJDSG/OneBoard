@@ -17,11 +17,14 @@ final class FinderFileCreationTests: XCTestCase {
     func testFinderManagedDirectoriesCoverRootAndDesktop() {
         let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
         let directories = FinderFileCreationRequest.managedDirectories(homeURL: home)
+        let iCloudRoot = home
+            .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true)
         let iCloudDesktop = home
             .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Desktop", isDirectory: true)
 
         XCTAssertTrue(directories.contains(URL(fileURLWithPath: "/", isDirectory: true)))
         XCTAssertTrue(directories.contains(home.appendingPathComponent("Desktop", isDirectory: true)))
+        XCTAssertTrue(directories.contains(iCloudRoot))
         XCTAssertTrue(directories.contains(iCloudDesktop))
     }
 
@@ -42,6 +45,10 @@ final class FinderFileCreationTests: XCTestCase {
         XCTAssertTrue(groups.contains("group.com.oneboard.mac"))
         XCTAssertTrue(homeExceptions.contains("/Desktop/"))
         XCTAssertTrue(homeExceptions.contains("/Library/Mobile Documents/com~apple~CloudDocs/Desktop/"))
+        let readOnlyHomeExceptions = try XCTUnwrap(
+            plist["com.apple.security.temporary-exception.files.home-relative-path.read-only"] as? [String]
+        )
+        XCTAssertTrue(readOnlyHomeExceptions.contains("/Library/Mobile Documents/com~apple~CloudDocs/"))
     }
 
     func testCreatorWritesUniqueTextFiles() throws {

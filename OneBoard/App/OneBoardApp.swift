@@ -10,6 +10,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
     case authorization
     case hotkeys
     case gateway
+    case codexAccounts
     case recognition
     case todo
     case about
@@ -22,6 +23,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .authorization: return "授权"
         case .hotkeys: return "快捷键"
         case .gateway: return "网关"
+        case .codexAccounts: return "Codex 账号"
         case .recognition: return "识别·翻译"
         case .todo: return "待办·文件"
         case .about: return "关于"
@@ -34,6 +36,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .authorization: return "lock.shield"
         case .hotkeys: return "keyboard"
         case .gateway: return "network"
+        case .codexAccounts: return "person.2"
         case .recognition: return "text.viewfinder"
         case .todo: return "checklist"
         case .about: return "info.circle"
@@ -157,6 +160,8 @@ struct SettingsView: View {
             hotkeySettings
         case .gateway:
             GatewaySettingsView()
+        case .codexAccounts:
+            CodexAccountSettingsView()
         case .recognition:
             ocrTranslationSettings
         case .todo:

@@ -29,14 +29,21 @@ if pgrep -x OneBoard > /dev/null; then
     sleep 1
 fi
 
-# ---- 2. 清理 UserDefaults ----
+# ---- 2. 清理 Codex 账号钥匙串凭据 ----
+echo "🧹 清理 Codex 账号钥匙串凭据..."
+# 每个账号对应一个同服务名的通用密码项；限制循环次数避免异常状态下无限重试。
+for ((INDEX=0; INDEX<100; INDEX++)); do
+    security delete-generic-password -s "com.oneboard.mac.codex-auth-cache" >/dev/null 2>&1 || break
+done
+
+# ---- 3. 清理 UserDefaults ----
 echo "🧹 清理 UserDefaults..."
 for BID in "${BUNDLE_IDS[@]}"; do
     [ -z "$BID" ] && continue
     defaults delete "$BID" 2>/dev/null || true
 done
 
-# ---- 3. 清理 TCC 隐私权限（必须在删除 App 前执行） ----
+# ---- 4. 清理 TCC 隐私权限（必须在删除 App 前执行） ----
 echo "🧹 清理隐私权限..."
 for BID in "${BUNDLE_IDS[@]}"; do
     [ -z "$BID" ] && continue
@@ -50,7 +57,7 @@ if ! tccutil reset Accessibility "$BUNDLE_ID"; then
     echo "⚠️  辅助功能授权记录清理失败：$BUNDLE_ID"
 fi
 
-# ---- 4. 删除应用 ----
+# ---- 5. 删除应用 ----
 if [ -d "$APP_PATH" ]; then
     pluginkit -r "$APP_PATH/Contents/PlugIns/OneBoardFinderSync.appex" 2>/dev/null || true
     echo "🗑  删除 $APP_PATH"
@@ -63,7 +70,7 @@ if [ -d "$PROJECT_DIR/build/OneBoard.app" ]; then
     rm -rf "$PROJECT_DIR/build/OneBoard.app"
 fi
 
-# ---- 5. 清理 Control Center 状态栏记录 ----
+# ---- 6. 清理 Control Center 状态栏记录 ----
 echo "🧹 清理菜单栏状态..."
 python3 -c "
 import plistlib, os
@@ -82,7 +89,7 @@ else:
     print('  无需清理')
 " 2>/dev/null
 
-# ---- 6. 清理辅助功能授权记录 ----
+# ---- 7. 清理辅助功能授权记录 ----
 echo "🧹 清理辅助功能记录..."
 python3 -c "
 import plistlib, os
@@ -101,7 +108,7 @@ else:
     print('  无需清理')
 " 2>/dev/null
 
-# ---- 7. 清理 Spotlight ----
+# ---- 8. 清理 Spotlight ----
 echo "🧹 清理 Spotlight..."
 python3 -c "
 import plistlib, os
@@ -123,7 +130,7 @@ else:
     print('  无需清理')
 " 2>/dev/null
 
-# ---- 8. 清理缓存 ----
+# ---- 9. 清理缓存 ----
 echo "🧹 清理缓存..."
 for BID in "${BUNDLE_IDS[@]}"; do
     [ -z "$BID" ] && continue
@@ -139,13 +146,13 @@ rm -rf ~/Library/Application\ Scripts/group.com.oneboard.mac 2>/dev/null || true
 # 清理数据库目录（App 使用 Constants.appName 作为子目录名）
 rm -rf ~/Library/Application\ Support/OneBoard 2>/dev/null || true
 
-# ---- 8.5. 清理网关 Helper ----
+# ---- 10. 清理网关 Helper ----
 echo "🧹 清理网关 Helper..."
 sudo rm -f /usr/local/bin/oneboard-gateway-helper 2>/dev/null || true
 sudo rm -f /etc/sudoers.d/oneboard-gateway 2>/dev/null || true
 sudo rm -f /etc/oneboard-gateway-allowed-ips.conf 2>/dev/null || true
 
-# ---- 9. 重启系统服务 ----
+# ---- 11. 重启系统服务 ----
 echo "🔄 重启系统服务..."
 killall cfprefsd ControlCenter Dock 2>/dev/null || true
 

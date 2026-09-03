@@ -50,6 +50,11 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.appearance = NSAppearance(named: .aqua)
         menu.delegate = self
+        let codexItem = NSMenuItem(title: "Codex 账号", action: nil, keyEquivalent: "")
+        codexItem.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: "Codex 账号")
+        codexItem.submenu = makeCodexAccountMenu()
+        menu.addItem(codexItem)
+        menu.addItem(NSMenuItem.separator())
         let gatewayItem = NSMenuItem(title: "网关切换...", action: #selector(openGatewaySwitcher), keyEquivalent: "g")
         gatewayItem.target = self
         gatewayItem.image = NSImage(systemSymbolName: "network", accessibilityDescription: "网关切换")
@@ -95,10 +100,71 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         }
     }
 
+    @objc private func openCodexAccountSettings() {
+        Task { @MainActor in
+            SettingsWindowManager.shared.show(selectedTab: .codexAccounts)
+        }
+    }
+
+    @objc private func selectCodexAccount(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String,
+              let accountID = UUID(uuidString: value) else { return }
+        Task { @MainActor in
+            let message = await CodexAccountViewModel.shared.requestSwitch(id: accountID)
+            let alert = NSAlert()
+            alert.messageText = "Codex 账号"
+            alert.informativeText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "好")
+            alert.runModal()
+        }
+    }
+
     @objc private func openGatewaySwitcher() {
         Task { @MainActor in
             showGatewaySwitcherPanel()
         }
+    }
+
+    private func makeCodexAccountMenu() -> NSMenu {
+        let submenu = NSMenu(title: "Codex 账号")
+        let store = CodexAccountStore.shared
+        let profiles = store.profiles
+        let activeID = store.activeAccountID
+        let pendingID = store.pendingAccountID
+
+        if profiles.isEmpty {
+            let emptyItem = NSMenuItem(title: "暂无已保存账号", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            submenu.addItem(emptyItem)
+        } else {
+            for profile in profiles {
+                let item = NSMenuItem(
+                    title: profile.title,
+                    action: #selector(selectCodexAccount(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = profile.id.uuidString
+                item.state = activeID == profile.id ? .on : .off
+                if pendingID == profile.id {
+                    item.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: "Codex 账号正在切换")
+                }
+                item.isEnabled = pendingID == nil && activeID != profile.id
+                submenu.addItem(item)
+            }
+        }
+
+        submenu.addItem(NSMenuItem.separator())
+        let manageItem = NSMenuItem(
+            title: "管理 Codex 账号...",
+            action: #selector(openCodexAccountSettings),
+            keyEquivalent: ""
+        )
+        manageItem.target = self
+        manageItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "管理 Codex 账号")
+        submenu.addItem(manageItem)
+        return submenu
     }
 
     @objc private func openTodoPanel() {
@@ -110,7 +176,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     @objc private func runUninstaller() {
         let alert = NSAlert()
         alert.messageText = "彻底卸载 OneBoard？"
-        alert.informativeText = "将清理隐私权限、菜单栏状态、偏好设置、缓存和当前 OneBoard.app，并退出应用。"
+        alert.informativeText = "将清理 Codex 账号钥匙串凭据、隐私权限、菜单栏状态、偏好设置、缓存和当前 OneBoard.app，并退出应用。"
         alert.alertStyle = .critical
         alert.addButton(withTitle: "彻底卸载")
         alert.addButton(withTitle: "取消")
@@ -177,6 +243,11 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
             "com.oneboard.mac.dev2-LaunchAtLoginHelper"
         )
         TCC_SERVICES=(All Accessibility ScreenCapture ListenEvent SystemPolicyAllFiles SystemPolicyDesktopFolder SystemPolicyDocumentsFolder SystemPolicyDownloadsFolder AppleEvents UserNotifications)
+
+        # 每个 Codex 账号对应一个同服务名的通用密码项；限制循环次数避免异常状态下无限重试。
+        for ((INDEX=0; INDEX<100; INDEX++)); do
+            /usr/bin/security delete-generic-password -s "com.oneboard.mac.codex-auth-cache" >/dev/null 2>&1 || break
+        done
 
         for BID in "${BUNDLE_IDS[@]}"; do
             [ -z "$BID" ] && continue
