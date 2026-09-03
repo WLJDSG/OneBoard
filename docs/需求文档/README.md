@@ -88,6 +88,8 @@
 | 需求 | 优先级 | 说明 |
 |------|--------|------|
 | 双工具配置 | P0 | 独立管理 Codex 和 Claude Code 的官方/自定义 API 供应商及底层模型 ID |
+| Claude 模型映射 | P0 | 配置默认、Haiku、Sonnet、Opus、Fable、子代理模型及可选显示名；空槽位按角色回退，模型 ID 支持 `[1M]` 后缀 |
+| 模型页额度 | P0 | 官方 Codex 显示当前账号 5 小时/每周额度快照并可刷新；第三方无可信查询配置时不得伪造余额 |
 | 密钥存储 | P0 | API Key 按配置 UUID 保存到权限为 `0600` 的 OneBoard SQLite，不进入 UserDefaults、日志或界面回显 |
 | CC Switch 导入 | P0 | 只读导入 `~/.cc-switch/cc-switch.db` 中 Codex / Claude Code 配置、分层模型和当前标记；不得修改源库 |
 | 安全合并 | P0 | 保留 Codex TOML 和 Claude JSON 的未知字段；拒绝符号链接，原子写入并使用 `0600` 权限 |

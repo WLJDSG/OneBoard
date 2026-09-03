@@ -46,8 +46,14 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
     var model: String
     var claudeAPIKeyField: ClaudeAPIKeyField
     var claudeHaikuModel: String?
+    var claudeHaikuModelName: String?
     var claudeSonnetModel: String?
+    var claudeSonnetModelName: String?
     var claudeOpusModel: String?
+    var claudeOpusModelName: String?
+    var claudeFableModel: String?
+    var claudeFableModelName: String?
+    var claudeSubagentModel: String?
     var sourceIdentifier: String?
     var createdAt: Date
     var updatedAt: Date
@@ -61,8 +67,14 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         model: String,
         claudeAPIKeyField: ClaudeAPIKeyField = .authToken,
         claudeHaikuModel: String? = nil,
+        claudeHaikuModelName: String? = nil,
         claudeSonnetModel: String? = nil,
+        claudeSonnetModelName: String? = nil,
         claudeOpusModel: String? = nil,
+        claudeOpusModelName: String? = nil,
+        claudeFableModel: String? = nil,
+        claudeFableModelName: String? = nil,
+        claudeSubagentModel: String? = nil,
         sourceIdentifier: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -75,8 +87,14 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         self.model = model
         self.claudeAPIKeyField = claudeAPIKeyField
         self.claudeHaikuModel = claudeHaikuModel
+        self.claudeHaikuModelName = claudeHaikuModelName
         self.claudeSonnetModel = claudeSonnetModel
+        self.claudeSonnetModelName = claudeSonnetModelName
         self.claudeOpusModel = claudeOpusModel
+        self.claudeOpusModelName = claudeOpusModelName
+        self.claudeFableModel = claudeFableModel
+        self.claudeFableModelName = claudeFableModelName
+        self.claudeSubagentModel = claudeSubagentModel
         self.sourceIdentifier = sourceIdentifier
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -88,14 +106,21 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         copy.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.claudeHaikuModel = Self.trimmedOptional(claudeHaikuModel)
+        copy.claudeHaikuModelName = Self.trimmedOptional(claudeHaikuModelName)
         copy.claudeSonnetModel = Self.trimmedOptional(claudeSonnetModel)
+        copy.claudeSonnetModelName = Self.trimmedOptional(claudeSonnetModelName)
         copy.claudeOpusModel = Self.trimmedOptional(claudeOpusModel)
+        copy.claudeOpusModelName = Self.trimmedOptional(claudeOpusModelName)
+        copy.claudeFableModel = Self.trimmedOptional(claudeFableModel)
+        copy.claudeFableModelName = Self.trimmedOptional(claudeFableModelName)
+        copy.claudeSubagentModel = Self.trimmedOptional(claudeSubagentModel)
 
         guard !copy.title.isEmpty else { throw AIModelSwitchError.invalidProfile("名称不能为空") }
         guard !copy.model.isEmpty else { throw AIModelSwitchError.invalidProfile("模型 ID 不能为空") }
         guard !copy.title.contains(where: \.isNewline),
-              !copy.model.contains(where: \.isNewline) else {
-            throw AIModelSwitchError.invalidProfile("名称和模型 ID 不能换行")
+              !copy.model.contains(where: \.isNewline),
+              !copy.claudeValues.contains(where: { $0.contains(where: \.isNewline) }) else {
+            throw AIModelSwitchError.invalidProfile("名称、模型 ID 和显示名不能换行")
         }
 
         if copy.kind == .custom {
@@ -109,6 +134,16 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
             copy.baseURL = ""
         }
         return copy
+    }
+
+    private var claudeValues: [String] {
+        [
+            claudeHaikuModel, claudeHaikuModelName,
+            claudeSonnetModel, claudeSonnetModelName,
+            claudeOpusModel, claudeOpusModelName,
+            claudeFableModel, claudeFableModelName,
+            claudeSubagentModel,
+        ].compactMap { $0 }
     }
 
     private static func trimmedOptional(_ value: String?) -> String? {

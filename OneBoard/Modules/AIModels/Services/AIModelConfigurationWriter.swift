@@ -72,6 +72,14 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = profile.claudeHaikuModel ?? profile.model
         env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = profile.claudeSonnetModel ?? profile.model
         env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = profile.claudeOpusModel ?? profile.model
+        env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = profile.claudeFableModel
+            ?? profile.claudeOpusModel
+            ?? profile.model
+        Self.setIfPresent(profile.claudeHaikuModelName, key: "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME", in: &env)
+        Self.setIfPresent(profile.claudeSonnetModelName, key: "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME", in: &env)
+        Self.setIfPresent(profile.claudeOpusModelName, key: "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", in: &env)
+        Self.setIfPresent(profile.claudeFableModelName, key: "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME", in: &env)
+        Self.setIfPresent(profile.claudeSubagentModel, key: "CLAUDE_CODE_SUBAGENT_MODEL", in: &env)
         if profile.kind == .custom, let apiKey {
             env["ANTHROPIC_BASE_URL"] = profile.baseURL
             env[profile.claudeAPIKeyField.rawValue] = apiKey
@@ -80,6 +88,10 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
 
         let data = try JSONSerialization.data(withJSONObject: updated, options: [.prettyPrinted, .sortedKeys])
         try atomicWrite(data + Data([0x0A]), to: claudeSettingsURL)
+    }
+
+    private static func setIfPresent(_ value: String?, key: String, in environment: inout [String: Any]) {
+        if let value { environment[key] = value }
     }
 
     static func rewriteCodexConfig(_ existing: String, profile: AIProviderProfile, apiKey: String?) -> String {
@@ -193,7 +205,13 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_MODEL",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
         "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
         "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+        "ANTHROPIC_DEFAULT_FABLE_MODEL",
+        "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+        "CLAUDE_CODE_SUBAGENT_MODEL",
     ]
 }

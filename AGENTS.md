@@ -38,7 +38,7 @@ OneBoard/                        # SPM 项目根目录
 4. 网关 Helper 安装和初始白名单写入必须在一次管理员授权内完成；Helper 的白名单业务拒绝不得回退到管理员密码执行。
 5. Codex 账号新增必须使用官方浏览器 OAuth（PKCE + state + localhost 回调），直接请求标准 OpenAI 授权端点，不得套用 Codex Desktop 私有中转页或伪装 Desktop 专用参数；授权后的认证缓存只保存到 OneBoard SQLite，不得收集或保存密码、验证码；切换时必须先验证目标凭据、退出 Codex 并确认主进程与旧 app-server 完全结束，再替换认证存储并重新打开 Codex。
 6. Codex 额度、订阅、重置次数与 OAuth token 都存入 `~/Library/Application Support/OneBoard/oneboard.sqlite`；不得使用 macOS Keychain。自动续期必须保留服务端未轮换时的旧 refresh token；当前账号正在 Codex 中运行时不得由 OneBoard 并发刷新，切换目标账号时应在退出当前 Codex 前先校验并续期目标凭据。
-7. AI 模型切换与 Codex 账号切换必须隔离：供应商元数据与 API Key 存入 OneBoard SQLite；Codex 模型切换仅合并模型相关 `config.toml`，Claude Code 仅合并 `settings.json.env` 的受管键；切换必须先保留未知字段、生成稳定备份并原子写入。
+7. AI 模型切换与 Codex 账号切换必须隔离：供应商元数据与 API Key 存入 OneBoard SQLite；Codex 模型切换仅合并模型相关 `config.toml`，Claude Code 仅合并 `settings.json.env` 的受管键（含 Haiku/Sonnet/Opus/Fable/子代理映射）；切换必须先保留未知字段、生成稳定备份并原子写入。模型页只展示可信额度快照，不得静默执行导入的第三方用量脚本或伪造余额。
 
 ## 构建与打包
 

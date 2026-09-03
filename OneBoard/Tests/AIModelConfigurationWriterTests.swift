@@ -75,8 +75,17 @@ final class AIModelConfigurationWriterTests: XCTestCase {
             client: .claude,
             title: "Claude Relay",
             baseURL: "https://claude.example/anthropic",
-            model: "claude-test",
-            claudeAPIKeyField: .authToken
+            model: "default-test",
+            claudeAPIKeyField: .authToken,
+            claudeHaikuModel: "haiku-test[1M]",
+            claudeHaikuModelName: "Fast",
+            claudeSonnetModel: "sonnet-test",
+            claudeSonnetModelName: "Balanced",
+            claudeOpusModel: "opus-test",
+            claudeOpusModelName: "Strong",
+            claudeFableModel: "fable-test[1M]",
+            claudeFableModelName: "Long context",
+            claudeSubagentModel: "subagent-test"
         )
 
         try context.writer.apply(profile, apiKey: "new-key")
@@ -89,7 +98,89 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         XCTAssertEqual(env["ANTHROPIC_BASE_URL"], "https://claude.example/anthropic")
         XCTAssertEqual(env["ANTHROPIC_AUTH_TOKEN"], "new-key")
         XCTAssertNil(env["ANTHROPIC_API_KEY"])
-        XCTAssertEqual(env["ANTHROPIC_DEFAULT_OPUS_MODEL"], "claude-test")
+        XCTAssertEqual(env["ANTHROPIC_MODEL"], "default-test")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "haiku-test[1M]")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"], "Fast")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "sonnet-test")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"], "Balanced")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_OPUS_MODEL"], "opus-test")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"], "Strong")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_FABLE_MODEL"], "fable-test[1M]")
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"], "Long context")
+        XCTAssertEqual(env["CLAUDE_CODE_SUBAGENT_MODEL"], "subagent-test")
+    }
+
+    func testClaudeFableFallsBackToOpusThenDefaultModel() throws {
+        let context = try makeContext()
+        let opusProfile = AIProviderProfile(
+            client: .claude,
+            kind: .official,
+            title: "Claude",
+            model: "default-test",
+            claudeOpusModel: "opus-test"
+        )
+
+        try context.writer.apply(opusProfile, apiKey: nil)
+
+        var output = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: context.claudeURL)) as? [String: Any]
+        )
+        var env = try XCTUnwrap(output["env"] as? [String: String])
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_FABLE_MODEL"], "opus-test")
+
+        let defaultProfile = AIProviderProfile(
+            client: .claude,
+            kind: .official,
+            title: "Claude",
+            model: "default-test"
+        )
+        try context.writer.apply(defaultProfile, apiKey: nil)
+        output = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: context.claudeURL)) as? [String: Any]
+        )
+        env = try XCTUnwrap(output["env"] as? [String: String])
+        XCTAssertEqual(env["ANTHROPIC_DEFAULT_FABLE_MODEL"], "default-test")
+    }
+
+    func testOfficialCodexQuotaPresentationUsesActiveAccountSnapshot() {
+        let profile = AIProviderProfile(
+            client: .codex,
+            kind: .official,
+            title: "OpenAI Official",
+            model: "gpt-test"
+        )
+        let account = CodexAccountProfile(
+            title: "work@example.com",
+            status: CodexAccountStatusSnapshot(
+                fiveHour: CodexUsageWindowSnapshot(remainingPercent: 82, resetAt: nil, windowMinutes: 300),
+                weekly: CodexUsageWindowSnapshot(remainingPercent: 61, resetAt: nil, windowMinutes: nil),
+                resetCreditsAvailable: nil,
+                subscriptionActiveUntil: nil,
+                fetchedAt: Date()
+            )
+        )
+
+        XCTAssertEqual(
+            AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: account),
+            AIProviderQuotaPresentation(
+                text: "额度：5 小时 82% · 每周 61% · work@example.com",
+                tone: .normal
+            )
+        )
+    }
+
+    func testCustomProviderQuotaPresentationDoesNotPretendToKnowBalance() {
+        let profile = AIProviderProfile(
+            client: .claude,
+            title: "Relay",
+            baseURL: "https://relay.example",
+            model: "relay-model"
+        )
+
+        XCTAssertEqual(
+            AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: nil),
+            AIProviderQuotaPresentation(text: "额度：未配置查询", tone: .unavailable)
+        )
     }
 
     func testBackupIsCreatedOnceAndCanBeRestored() throws {

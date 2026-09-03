@@ -64,7 +64,9 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网�
 ### AI 模型与供应商切换
 
 - 分别管理 Codex 和 Claude Code 的官方/自定义 API 配置，支持供应商名称、API 地址、API Key 和底层模型 ID
+- Claude Code 可分别配置默认、Haiku、Sonnet、Opus、Fable 与子代理模型；角色模型支持自定义显示名和 `[1M]` 上下文标记
 - 设置页可新增、编辑、删除和切换；菜单栏可对 Codex / Claude Code 快速切换
+- 模型配置行展示额度摘要；官方 Codex 复用当前账号的 5 小时/每周真实快照，未配置查询能力的第三方供应商明确显示不可用
 - Codex 仅合并更新 `~/.codex/config.toml`，保留 MCP、项目信任等未知配置，不改动 `auth.json` 和已管理的账号凭据
 - Claude Code 仅合并更新 `~/.claude/settings.json` 的 Anthropic API/模型环境变量，保留 permissions、hooks 等其他字段
 - 配置元数据与 API Key 按 UUID 保存到 OneBoard SQLite；首次切换前创建 `*.oneboard-backup`，支持一键恢复

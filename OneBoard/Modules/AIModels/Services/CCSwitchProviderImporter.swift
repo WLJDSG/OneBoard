@@ -124,11 +124,17 @@ final class CCSwitchProviderImporter {
         let keyField: ClaudeAPIKeyField = authToken != nil ? .authToken : .apiKey
         let apiKey = authToken ?? apiKeyValue
         let haiku = Self.nonEmpty(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] as? String)
+        let haikuName = Self.nonEmpty(env["ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"] as? String)
         let sonnet = Self.nonEmpty(env["ANTHROPIC_DEFAULT_SONNET_MODEL"] as? String)
+        let sonnetName = Self.nonEmpty(env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"] as? String)
         let opus = Self.nonEmpty(env["ANTHROPIC_DEFAULT_OPUS_MODEL"] as? String)
+        let opusName = Self.nonEmpty(env["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"] as? String)
+        let fable = Self.nonEmpty(env["ANTHROPIC_DEFAULT_FABLE_MODEL"] as? String)
+        let fableName = Self.nonEmpty(env["ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"] as? String)
+        let subagent = Self.nonEmpty(env["CLAUDE_CODE_SUBAGENT_MODEL"] as? String)
         let model = Self.nonEmpty(env["ANTHROPIC_MODEL"] as? String)
             ?? Self.nonEmpty(settings["model"] as? String)
-            ?? sonnet ?? opus ?? haiku ?? ""
+            ?? sonnet ?? opus ?? fable ?? haiku ?? ""
         let kind: AIProviderKind = baseURL == nil && apiKey == nil ? .official : .custom
         let profile = try AIProviderProfile(
             client: .claude,
@@ -138,8 +144,14 @@ final class CCSwitchProviderImporter {
             model: model,
             claudeAPIKeyField: keyField,
             claudeHaikuModel: haiku,
+            claudeHaikuModelName: haikuName,
             claudeSonnetModel: sonnet,
+            claudeSonnetModelName: sonnetName,
             claudeOpusModel: opus,
+            claudeOpusModelName: opusName,
+            claudeFableModel: fable,
+            claudeFableModelName: fableName,
+            claudeSubagentModel: subagent,
             sourceIdentifier: "cc-switch:claude:\(id)"
         ).validated()
         if kind == .custom, apiKey == nil { throw AIModelSwitchError.apiKeyMissing }

@@ -67,7 +67,9 @@
 
 - 设置侧边栏使用“AI 模型”独立页，不与“Codex 账号”混合；顶部用分段控件切换 Codex / Claude Code。
 - 配置行显示供应商名称、模型 ID 和地址，当前配置使用绿色 `checkmark.circle.fill`。
+- 配置行追加额度摘要；官方 Codex 显示活动账号的 5 小时/每周剩余百分比，其他配置显示“未配置查询”，页头提供官方额度刷新入口。
 - 新增/编辑弹窗使用 grouped Form；API Key 使用 `SecureField`，编辑时留空表示保留 SQLite 原值。
+- Claude Code 编辑弹窗使用可折叠的“模型槽位映射”，包含 Haiku/Sonnet/Opus/Fable 模型 ID、可选显示名与子代理模型，并说明 `[1M]` 和空值回退语义。
 - 页面提供“从 CC Switch 导入”按钮，完成后显示导入数量和被跳过的配置名，不展示任何密钥。
 - 官方配置只要求名称和模型 ID；自定义 API 额外要求 HTTP(S) 地址和 API Key。
 - 页底恢复操作明确说明配置文件路径、保留字段和 Codex 活动密钥的明文边界。

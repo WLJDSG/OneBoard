@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AIModelSettingsView: View {
     @StateObject private var viewModel = AIModelSwitcherViewModel.shared
+    @StateObject private var codexAccountViewModel = CodexAccountViewModel.shared
     @State private var selectedClient: AIClient = .codex
     @State private var editingProfile: AIProviderProfile?
     @State private var isAddingProfile = false
@@ -31,7 +32,19 @@ struct AIModelSettingsView: View {
                         Label("新增模型配置", systemImage: "plus")
                     }
                 } header: {
-                    Text("\(selectedClient.title) 供应商")
+                    HStack {
+                        Text("\(selectedClient.title) 供应商")
+                        Spacer()
+                        if selectedClient == .codex {
+                            Button {
+                                Task { await codexAccountViewModel.refreshAllAccountStatuses() }
+                            } label: {
+                                Label("刷新额度", systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(!codexAccountViewModel.refreshingAccountIDs.isEmpty)
+                        }
+                    }
                 }
 
                 Section {
@@ -60,6 +73,7 @@ struct AIModelSettingsView: View {
             }
         }
         .padding()
+        .onAppear { codexAccountViewModel.refreshState() }
         .sheet(isPresented: $isAddingProfile) {
             AIProviderEditorView(client: selectedClient, profile: nil) { profile, key in
                 try viewModel.save(profile, apiKey: key)
@@ -89,6 +103,14 @@ struct AIModelSettingsView: View {
                     .font(.caption)
                     .foregroundColor(OneBoardColors.textSecondary)
                     .lineLimit(1)
+                let quota = AIProviderQuotaPresentation.make(
+                    profile: profile,
+                    activeCodexAccount: codexAccountViewModel.activeProfile
+                )
+                Text(quota.text)
+                    .font(.caption2)
+                    .foregroundColor(quotaColor(quota.tone))
+                    .lineLimit(1)
             }
             Spacer()
             if viewModel.activeID(for: selectedClient) == profile.id {
@@ -101,6 +123,14 @@ struct AIModelSettingsView: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
+        }
+    }
+
+    private func quotaColor(_ tone: AIProviderQuotaPresentation.Tone) -> Color {
+        switch tone {
+        case .normal: return OneBoardColors.success
+        case .unavailable: return OneBoardColors.textSecondary
+        case .warning: return OneBoardColors.warning
         }
     }
 
@@ -127,8 +157,14 @@ private struct AIProviderEditorView: View {
     @State private var apiKey = ""
     @State private var keyField: ClaudeAPIKeyField
     @State private var haikuModel: String
+    @State private var haikuModelName: String
     @State private var sonnetModel: String
+    @State private var sonnetModelName: String
     @State private var opusModel: String
+    @State private var opusModelName: String
+    @State private var fableModel: String
+    @State private var fableModelName: String
+    @State private var subagentModel: String
     @State private var errorMessage: String?
 
     init(
@@ -147,8 +183,14 @@ private struct AIProviderEditorView: View {
         _model = State(initialValue: profile?.model ?? "")
         _keyField = State(initialValue: profile?.claudeAPIKeyField ?? .authToken)
         _haikuModel = State(initialValue: profile?.claudeHaikuModel ?? "")
+        _haikuModelName = State(initialValue: profile?.claudeHaikuModelName ?? "")
         _sonnetModel = State(initialValue: profile?.claudeSonnetModel ?? "")
+        _sonnetModelName = State(initialValue: profile?.claudeSonnetModelName ?? "")
         _opusModel = State(initialValue: profile?.claudeOpusModel ?? "")
+        _opusModelName = State(initialValue: profile?.claudeOpusModelName ?? "")
+        _fableModel = State(initialValue: profile?.claudeFableModel ?? "")
+        _fableModelName = State(initialValue: profile?.claudeFableModelName ?? "")
+        _subagentModel = State(initialValue: profile?.claudeSubagentModel ?? "")
     }
 
     var body: some View {
@@ -168,9 +210,18 @@ private struct AIProviderEditorView: View {
                         Picker("密钥字段", selection: $keyField) {
                             ForEach(ClaudeAPIKeyField.allCases) { field in Text(field.title).tag(field) }
                         }
-                        TextField("Haiku 模型（可选）", text: $haikuModel)
-                        TextField("Sonnet 模型（可选）", text: $sonnetModel)
-                        TextField("Opus 模型（可选）", text: $opusModel)
+                    }
+                }
+                if client == .claude {
+                    DisclosureGroup("Claude Code 模型槽位映射") {
+                        Text("模型 ID 可带 [1M] 后缀；空槽位按默认模型回退，Fable 优先回退到 Opus。显示名仅影响 Claude Code 的模型选择界面。")
+                            .font(.caption)
+                            .foregroundColor(OneBoardColors.textSecondary)
+                        claudeModelFields("Haiku", model: $haikuModel, name: $haikuModelName)
+                        claudeModelFields("Sonnet", model: $sonnetModel, name: $sonnetModelName)
+                        claudeModelFields("Opus", model: $opusModel, name: $opusModelName)
+                        claudeModelFields("Fable", model: $fableModel, name: $fableModelName)
+                        TextField("子代理模型 ID（可选）", text: $subagentModel)
                     }
                 }
             }
@@ -185,7 +236,17 @@ private struct AIProviderEditorView: View {
             }
         }
         .padding(20)
-        .frame(width: 500)
+        .frame(width: 620, height: client == .claude ? 680 : 420)
+    }
+
+    @ViewBuilder
+    private func claudeModelFields(
+        _ title: String,
+        model: Binding<String>,
+        name: Binding<String>
+    ) -> some View {
+        TextField("\(title) 模型 ID（可选）", text: model)
+        TextField("\(title) 显示名（可选）", text: name)
     }
 
     private func save() {
@@ -200,8 +261,14 @@ private struct AIProviderEditorView: View {
                 model: model,
                 claudeAPIKeyField: keyField,
                 claudeHaikuModel: haikuModel,
+                claudeHaikuModelName: haikuModelName,
                 claudeSonnetModel: sonnetModel,
+                claudeSonnetModelName: sonnetModelName,
                 claudeOpusModel: opusModel,
+                claudeOpusModelName: opusModelName,
+                claudeFableModel: fableModel,
+                claudeFableModelName: fableModelName,
+                claudeSubagentModel: subagentModel,
                 sourceIdentifier: profile?.sourceIdentifier,
                 createdAt: profile?.createdAt ?? now,
                 updatedAt: now

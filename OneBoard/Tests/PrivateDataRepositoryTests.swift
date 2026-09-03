@@ -56,6 +56,12 @@ final class PrivateDataRepositoryTests: XCTestCase {
                     "ANTHROPIC_AUTH_TOKEN": "claude-key",
                     "ANTHROPIC_MODEL": "claude-test",
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "haiku-test",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Fast",
+                    "ANTHROPIC_DEFAULT_SONNET_MODEL": "sonnet-test",
+                    "ANTHROPIC_DEFAULT_OPUS_MODEL": "opus-test",
+                    "ANTHROPIC_DEFAULT_FABLE_MODEL": "fable-test[1M]",
+                    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Long context",
+                    "CLAUDE_CODE_SUBAGENT_MODEL": "subagent-test",
                 ],
             ]
             try db.execute(
@@ -84,6 +90,12 @@ final class PrivateDataRepositoryTests: XCTestCase {
         XCTAssertEqual(try vault.load(for: codex.id), "codex-key")
         XCTAssertEqual(try vault.load(for: claude.id), "claude-key")
         XCTAssertEqual(claude.claudeHaikuModel, "haiku-test")
+        XCTAssertEqual(claude.claudeHaikuModelName, "Fast")
+        XCTAssertEqual(claude.claudeSonnetModel, "sonnet-test")
+        XCTAssertEqual(claude.claudeOpusModel, "opus-test")
+        XCTAssertEqual(claude.claudeFableModel, "fable-test[1M]")
+        XCTAssertEqual(claude.claudeFableModelName, "Long context")
+        XCTAssertEqual(claude.claudeSubagentModel, "subagent-test")
         XCTAssertEqual(store.activeID(for: .codex), codex.id)
         XCTAssertEqual(store.activeID(for: .claude), claude.id)
     }
