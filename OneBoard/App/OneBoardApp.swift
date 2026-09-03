@@ -10,6 +10,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
     case authorization
     case hotkeys
     case gateway
+    case aiModels
     case codexAccounts
     case recognition
     case todo
@@ -23,6 +24,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .authorization: return "授权"
         case .hotkeys: return "快捷键"
         case .gateway: return "网关"
+        case .aiModels: return "AI 模型"
         case .codexAccounts: return "Codex 账号"
         case .recognition: return "识别·翻译"
         case .todo: return "待办·文件"
@@ -36,6 +38,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .authorization: return "lock.shield"
         case .hotkeys: return "keyboard"
         case .gateway: return "network"
+        case .aiModels: return "point.3.connected.trianglepath.dotted"
         case .codexAccounts: return "person.2"
         case .recognition: return "text.viewfinder"
         case .todo: return "checklist"
@@ -99,7 +102,8 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.selectedSettingsTab) private var selectedTabRawValue = SettingsTab.general.rawValue
     @AppStorage(Constants.UserDefaultsKeys.ocrServiceType) private var ocrServiceType = "apple"
     @AppStorage(Constants.UserDefaultsKeys.translationServiceType) private var translationServiceType = "apple"
-    @AppStorage(Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) private var ocrAPIKey = ""
+    @State private var ocrAPIKey = ""
+    @State private var translationAPIKey = ""
     @AppStorage(Constants.UserDefaultsKeys.translationSourceLanguage) private var sourceLanguage = ""
     @AppStorage(Constants.UserDefaultsKeys.translationTargetLanguage) private var targetLanguage = "en"
     @AppStorage(Constants.UserDefaultsKeys.todoShowNotifications) private var todoShowNotifications = true
@@ -133,7 +137,12 @@ struct SettingsView: View {
             }
         }
         .frame(width: 780, height: 620)
-        .onAppear { systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
+        .onAppear {
+            systemCapabilities.refresh()
+            gatewayViewModel.refreshHelperStatus()
+            ocrAPIKey = AppSettings.thirdPartyOCRAPIKey
+            translationAPIKey = AppSettings.thirdPartyTranslationAPIKey
+        }
         .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in systemCapabilities.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .systemCapabilityStatusDidChange)) { _ in systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
     }
@@ -160,6 +169,8 @@ struct SettingsView: View {
             hotkeySettings
         case .gateway:
             GatewaySettingsView()
+        case .aiModels:
+            AIModelSettingsView()
         case .codexAccounts:
             CodexAccountSettingsView()
         case .recognition:
@@ -293,14 +304,20 @@ struct SettingsView: View {
         Form {
             Section {
                 Picker("OCR 服务", selection: $ocrServiceType) { Text("Apple Vision（离线免费）").tag("apple"); Text("第三方 API").tag("third_party") }
-                if ocrServiceType == "third_party" { SecureField("API Key", text: $ocrAPIKey).textFieldStyle(.roundedBorder) }
+                if ocrServiceType == "third_party" {
+                    SecureField("API Key", text: secretBinding($ocrAPIKey) { AppSettings.thirdPartyOCRAPIKey = $0 })
+                        .textFieldStyle(.roundedBorder)
+                }
                 Picker("识别语言", selection: Binding(get: { UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.ocrLanguage) ?? "zh-Hans" }, set: { UserDefaults.standard.set($0, forKey: Constants.UserDefaultsKeys.ocrLanguage) })) {
                     Text("中文（简体）").tag("zh-Hans"); Text("中文（繁体）").tag("zh-Hant"); Text("英文").tag("en-US"); Text("日文").tag("ja-JP"); Text("韩文").tag("ko-KR")
                 }
             } header: { Text("OCR 文字识别") }
             Section {
                 Picker("翻译服务", selection: translationServiceSelection) { ForEach(TranslationServiceType.allCases) { Text($0.settingsDisplayName).tag($0.rawValue) } }
-                if selectedTranslationServiceType.requiresAPIKey { SecureField("API Key", text: Binding(get: { UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey) ?? "" }, set: { UserDefaults.standard.set($0, forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey) })).textFieldStyle(.roundedBorder) }
+                if selectedTranslationServiceType.requiresAPIKey {
+                    SecureField("API Key", text: secretBinding($translationAPIKey) { AppSettings.thirdPartyTranslationAPIKey = $0 })
+                        .textFieldStyle(.roundedBorder)
+                }
                 Picker("源语言", selection: $sourceLanguage) { Text("自动检测").tag(""); Text("英文").tag("en"); Text("中文（简体）").tag("zh-Hans"); Text("中文（繁体）").tag("zh-Hant"); Text("日文").tag("ja"); Text("韩文").tag("ko"); Text("法文").tag("fr"); Text("德文").tag("de") }
                 Picker("目标语言", selection: $targetLanguage) { Text("英文").tag("en"); Text("中文（简体）").tag("zh-Hans"); Text("中文（繁体）").tag("zh-Hant"); Text("日文").tag("ja"); Text("韩文").tag("ko"); Text("法文").tag("fr"); Text("德文").tag("de") }
             } header: { Text("翻译") }
@@ -309,6 +326,10 @@ struct SettingsView: View {
 
     private var translationServiceSelection: Binding<String> { Binding(get: { TranslationServiceType(rawValue: translationServiceType == "third_party" ? TranslationServiceType.deepSeek.rawValue : translationServiceType)?.rawValue ?? "apple" }, set: { translationServiceType = $0 }) }
     private var selectedTranslationServiceType: TranslationServiceType { TranslationServiceType(rawValue: translationServiceType == "third_party" ? TranslationServiceType.deepSeek.rawValue : translationServiceType) ?? .apple }
+
+    private func secretBinding(_ state: Binding<String>, save: @escaping (String) -> Void) -> Binding<String> {
+        Binding(get: { state.wrappedValue }, set: { value in state.wrappedValue = value; save(value) })
+    }
 
     private var aboutView: some View {
         VStack(spacing: 16) {

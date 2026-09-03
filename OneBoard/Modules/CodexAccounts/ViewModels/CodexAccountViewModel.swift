@@ -137,7 +137,7 @@ final class CodexAccountViewModel: ObservableObject {
     func deleteAccount(id: UUID) {
         do {
             try service.deleteAccount(id: id)
-            statusMessage = "账号及其钥匙串凭据已删除"
+            statusMessage = "账号及其数据库凭据已删除"
             refreshState()
         } catch {
             statusMessage = error.localizedDescription

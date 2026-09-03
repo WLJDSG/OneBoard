@@ -38,8 +38,12 @@ final class DatabaseManager {
         migrator.registerMigration(V4_AddTodoSortOrder.identifier) { db in
             try V4_AddTodoSortOrder.migrate(db)
         }
+        migrator.registerMigration(V5_CreatePrivateDataTables.identifier) { db in
+            try V5_CreatePrivateDataTables.migrate(db)
+        }
 
         try migrator.migrate(queue)
+        try secureDatabaseFiles(at: dbPath)
         self.dbQueue = queue
     }
 
@@ -51,9 +55,22 @@ final class DatabaseManager {
         ).first!
 
         let appFolder = appSupport.appendingPathComponent(Constants.appName)
-        try? FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: appFolder,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: appFolder.path)
 
         return appFolder.appendingPathComponent(Constants.databaseFileName).path
+    }
+
+    private func secureDatabaseFiles(at databasePath: String) throws {
+        let fileManager = FileManager.default
+        for path in [databasePath, databasePath + "-wal", databasePath + "-shm"]
+        where fileManager.fileExists(atPath: path) {
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+        }
     }
 }
 

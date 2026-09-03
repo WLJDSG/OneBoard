@@ -11,7 +11,7 @@ final class CodexAccountService {
 
     init(
         store: CodexAccountStore = .shared,
-        vault: CodexAuthCacheVaulting = KeychainCodexAuthCacheVault(),
+        vault: CodexAuthCacheVaulting = SQLiteCodexAuthCacheVault(),
         authCacheFile: CodexAuthCacheFileHandling = CodexAuthCredentialStore(),
         applicationLifecycle: CodexApplicationLifecycleControlling? = nil,
         statusProvider: CodexAccountStatusProviding = CodexAccountStatusService(),
@@ -94,7 +94,7 @@ final class CodexAccountService {
         }
         let savedData = try vault.load(for: id)
         var data = savedData
-        // 当前账号以 Codex 官方存储为最新权威；读取后同步回 OneBoard 钥匙串，
+        // 当前账号以 Codex auth.json 为最新权威；读取后同步回 OneBoard SQLite，
         // 这样 Codex 自己完成过 token 轮换时不会继续使用旧 refresh token。
         if activeAccountID == id, authCacheFile.exists {
             let currentData = try authCacheFile.read()

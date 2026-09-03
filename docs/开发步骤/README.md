@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、文件暂存、Finder 快速新建、网关切换、Codex 桌面账号切换和待办事项。
+OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、文件暂存、Finder 快速新建、网关切换、AI 模型供应商切换、Codex 桌面账号切换和待办事项。
 
 ## 开发阶段
 
@@ -169,27 +169,27 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 
 **状态：实现、全量测试、Release 构建和 DMG 校验均已完成**
 
-1. ✅ 新增 Codex 账号模型、UserDefaults 元数据仓库和 macOS Keychain 认证缓存 vault
+1. ✅ 新增 Codex 账号模型、SQLite 元数据仓库和认证缓存 vault
 2. ✅ 只接管官方浏览器登录完成后的认证缓存，不保存账号密码或验证码
 3. ✅ 新增切换状态机：Codex 运行中不改凭据，确认进程消失后再提交切换
 4. ✅ 切换前保存当前账号可能已刷新的缓存，原子恢复目标缓存并保持 `0600` 文件权限
 5. ✅ 设置页新增 Codex 账号 tab，支持保存当前登录、更新、重命名、删除和切换
 6. ✅ 菜单栏新增 Codex 账号快捷子菜单，显示当前与切换中状态
-7. ✅ 彻底卸载同步清理 `com.oneboard.mac.codex-auth-cache` 钥匙串凭据
+7. ✅ 彻底卸载通过删除 OneBoard Application Support 目录清理 SQLite 凭据
 8. ✅ 新增隔离临时文件的服务与编辑器测试，不读取用户真实认证缓存
 
 ### 2026-09-02：Codex 自动进程切换与官方存储兼容 ✅
 
 1. ✅ 参考 cockpit-tools 的事务顺序：校验目标、退出进程、提交凭据、重新启动
 2. ✅ 退出前捕获直属 Codex app-server，防止旧 token 在切换后回写
-3. ✅ 兼容 `cli_auth_credentials_store` 的 `file` / `keyring` / `auto` 模式
+3. ✅ 强制 `cli_auth_credentials_store = "file"`，彻底移除 OneBoard 与 Codex 官方钥匙串依赖
 4. ✅ 设置页保持 grouped Form 风格，切换期间显示进度并禁用并发操作
 
 ### 2026-09-03：Codex OAuth 新增账号 ✅
 
 1. ✅ 接入 Codex CLI 标准形态的 authorization-code + PKCE 授权链接，直接打开 OpenAI 授权端点
 2. ✅ 监听官方登记的 `http://localhost:1455/auth/callback`，校验 `state` 后交换令牌
-3. ✅ 授权成功后生成 Codex 官方认证结构并保存到 OneBoard 钥匙串 vault
+3. ✅ 授权成功后生成 Codex 官方认证结构并保存到 OneBoard SQLite vault
 4. ✅ 设置页改为“填写邮箱 → 浏览器授权 → 自动入库”，保留重命名、删除和快速切换
 5. ✅ 修复 Codex Desktop 私有中转页注入工作区参数后返回 `invalid_authorize_request`，移除 Desktop 专用版本和稳定 ID 参数
 6. ✅ Google 免费翻译端点返回 429/HTML 时改为可操作中文提示，并补确定性网络回归测试
@@ -197,6 +197,16 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 8. ✅ App 启动后每 15 分钟自动更新账号状态，access token 到期或远端拒绝时自动续期并保存 refresh token 轮换结果
 9. ✅ 当前账号正在 Codex 中运行时暂缓 OneBoard 侧凭据轮换；切号前自动续期目标账号且仍在关闭 Codex 前完成校验
 10. ✅ 新增额度响应换算、订阅解析、主动重置次数、凭据轮换和运行中互斥回归测试
+
+### 2026-09-03：Codex / Claude Code 模型供应商切换 ✅
+
+1. ✅ 对照 cc-switch 的 Codex TOML 和 Claude settings JSON 投影规则，建立独立 `AIModels` 模块
+2. ✅ 新增供应商元数据仓库与 SQLite API Key vault，官方/自定义 API 分开验证
+3. ✅ Codex 保留未知 TOML 字段并管理 OneBoard 专用 provider 表，不改动账号 `auth.json`
+4. ✅ Claude Code 保留 settings JSON 其他字段，合并更新 API 与 Haiku/Sonnet/Opus 默认模型键
+5. ✅ 配置文件原子写入、`0600` 权限、符号链接拦截和首次切换备份/恢复
+6. ✅ 设置页新增“AI 模型”页，菜单栏新增 Codex / Claude Code 两级快速切换
+7. ✅ 新增配置合并、密钥字段、备份恢复、符号链接和独立活动状态回归测试
 
 
 
@@ -235,4 +245,4 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 9. **待办模块**：选中文字 + 快捷键添加待办，右键 Services 菜单添加，鼠标移至顶部中央刘海触发面板，勾选完成淡出，查看历史统计，配置保留天数
 10. **Finder 扩展**：分别在本地 Desktop、Finder 映射到 iCloud Drive 根容器的桌面、iCloud Desktop 和符号链接桌面右键 → “新建文件” → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中
 11. **Cmd+Q**：OneBoard 活跃时（设置窗口/浮动面板）Cmd+Q 退出；其他应用活跃时 Cmd+Q 不影响 OneBoard
-12. **Codex 账号切换**：用两个真实测试账号分别在官方网页完成登录与验证码；保存后从设置页和菜单栏发起切换，确认 OneBoard 自动退出 Codex、退出期间不修改认证存储、切换后自动重开并进入目标账号，并验证 `file` / `keyring` / `auto`、重命名、删除和彻底卸载钥匙串清理
+12. **Codex 账号切换**：用两个真实测试账号分别在官方网页完成登录与验证码；保存后从设置页和菜单栏发起切换，确认 OneBoard 自动退出 Codex、退出期间不修改认证存储、切换后自动重开并进入目标账号，并验证 file 模式、SQLite 凭据、重命名、删除和彻底卸载清理

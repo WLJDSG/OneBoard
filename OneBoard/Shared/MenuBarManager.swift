@@ -50,6 +50,10 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.appearance = NSAppearance(named: .aqua)
         menu.delegate = self
+        let aiModelsItem = NSMenuItem(title: "AI 模型", action: nil, keyEquivalent: "")
+        aiModelsItem.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted", accessibilityDescription: "AI 模型")
+        aiModelsItem.submenu = makeAIModelMenu()
+        menu.addItem(aiModelsItem)
         let codexItem = NSMenuItem(title: "Codex 账号", action: nil, keyEquivalent: "")
         codexItem.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: "Codex 账号")
         codexItem.submenu = makeCodexAccountMenu()
@@ -103,6 +107,26 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     @objc private func openCodexAccountSettings() {
         Task { @MainActor in
             SettingsWindowManager.shared.show(selectedTab: .codexAccounts)
+        }
+    }
+
+    @objc private func openAIModelSettings() {
+        Task { @MainActor in
+            SettingsWindowManager.shared.show(selectedTab: .aiModels)
+        }
+    }
+
+    @objc private func selectAIModel(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String,
+              let profileID = UUID(uuidString: value) else { return }
+        Task { @MainActor in
+            let message = AIModelSwitcherViewModel.shared.switchProfile(id: profileID)
+            let alert = NSAlert()
+            alert.messageText = "AI 模型"
+            alert.informativeText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "好")
+            alert.runModal()
         }
     }
 
@@ -167,6 +191,46 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         return submenu
     }
 
+    private func makeAIModelMenu() -> NSMenu {
+        let root = NSMenu(title: "AI 模型")
+        let store = AIProviderStore.shared
+        let profiles = store.profiles
+
+        for client in AIClient.allCases {
+            let clientItem = NSMenuItem(title: client.title, action: nil, keyEquivalent: "")
+            let clientMenu = NSMenu(title: client.title)
+            let clientProfiles = profiles.filter { $0.client == client }
+            let activeID = store.activeID(for: client)
+            if clientProfiles.isEmpty {
+                let empty = NSMenuItem(title: "暂无配置", action: nil, keyEquivalent: "")
+                empty.isEnabled = false
+                clientMenu.addItem(empty)
+            } else {
+                for profile in clientProfiles {
+                    let item = NSMenuItem(
+                        title: "\(profile.title) · \(profile.model)",
+                        action: #selector(selectAIModel(_:)),
+                        keyEquivalent: ""
+                    )
+                    item.target = self
+                    item.representedObject = profile.id.uuidString
+                    item.state = activeID == profile.id ? .on : .off
+                    item.isEnabled = activeID != profile.id
+                    clientMenu.addItem(item)
+                }
+            }
+            clientItem.submenu = clientMenu
+            root.addItem(clientItem)
+        }
+
+        root.addItem(NSMenuItem.separator())
+        let manage = NSMenuItem(title: "管理 AI 模型...", action: #selector(openAIModelSettings), keyEquivalent: "")
+        manage.target = self
+        manage.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "管理 AI 模型")
+        root.addItem(manage)
+        return root
+    }
+
     @objc private func openTodoPanel() {
         Task { @MainActor in
             TodoSlidePanelWindowManager.shared.toggle()
@@ -176,7 +240,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     @objc private func runUninstaller() {
         let alert = NSAlert()
         alert.messageText = "彻底卸载 OneBoard？"
-        alert.informativeText = "将清理 Codex 账号钥匙串凭据、隐私权限、菜单栏状态、偏好设置、缓存和当前 OneBoard.app，并退出应用。"
+        alert.informativeText = "将清理 Codex 账号凭据、AI 供应商密钥、隐私权限、菜单栏状态、偏好设置、缓存和当前 OneBoard.app，并退出应用。"
         alert.alertStyle = .critical
         alert.addButton(withTitle: "彻底卸载")
         alert.addButton(withTitle: "取消")
@@ -247,6 +311,9 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         # 每个 Codex 账号对应一个同服务名的通用密码项；限制循环次数避免异常状态下无限重试。
         for ((INDEX=0; INDEX<100; INDEX++)); do
             /usr/bin/security delete-generic-password -s "com.oneboard.mac.codex-auth-cache" >/dev/null 2>&1 || break
+        done
+        for ((INDEX=0; INDEX<100; INDEX++)); do
+            /usr/bin/security delete-generic-password -s "com.oneboard.mac.ai-provider-key" >/dev/null 2>&1 || break
         done
 
         for BID in "${BUNDLE_IDS[@]}"; do

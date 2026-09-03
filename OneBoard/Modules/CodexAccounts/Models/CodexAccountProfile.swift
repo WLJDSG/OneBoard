@@ -47,7 +47,7 @@ enum CodexAccountError: LocalizedError, Equatable {
     case invalidAuthCache
     case invalidTitle
     case invalidEmail
-    case keychainFailure(String)
+    case storageFailure(String)
     case unsafeAuthCachePath
     case applicationCloseFailed
     case applicationLaunchFailed
@@ -76,8 +76,8 @@ enum CodexAccountError: LocalizedError, Equatable {
             return "账号名称不能为空。"
         case .invalidEmail:
             return "请输入有效的 OpenAI 账号邮箱。"
-        case .keychainFailure(let message):
-            return "无法访问 macOS 钥匙串：\(message)"
+        case .storageFailure(let message):
+            return "无法访问 OneBoard 数据库：\(message)"
         case .unsafeAuthCachePath:
             return "Codex 登录凭据路径是符号链接，为避免覆盖其他文件，已停止切换。"
         case .applicationCloseFailed:

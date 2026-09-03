@@ -113,7 +113,7 @@ Finder 新建文件链路可在临时目录做端到端验证：启动 DMG 内 A
 - `Accessibility` 必须对主 Bundle ID 单独执行并检查退出码，不能只依赖被静默忽略的批量循环。
 - 不得使用无 Bundle ID 的全局 `tccutil reset Accessibility`，避免清除其他应用的辅助功能权限。
 - App 内延迟卸载、仓库 `script/uninstall.sh` 和 DMG 内卸载入口必须保持相同清理顺序。
-- Codex 多账号凭据保存在服务名为 `com.oneboard.mac.codex-auth-cache` 的钥匙串项中；彻底卸载必须在删除偏好设置前逐项清理，避免丢失账号索引后留下凭据残留。
+- Codex 多账号与 AI Provider 凭据统一保存在 `~/Library/Application Support/OneBoard/oneboard.sqlite`；彻底卸载删除整个 OneBoard Application Support 目录即可同步清理。
 
 ### 截图标注坐标
 

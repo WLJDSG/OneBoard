@@ -140,9 +140,9 @@ private struct DeepSeekTranslationClient {
     private let model = "deepseek-v4-flash"
 
     func translate(_ text: String, sourceLanguage: String?, targetLanguage: String) async throws -> String {
-        let apiKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)?
+        let apiKey = AppSettings.thirdPartyTranslationAPIKey
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let apiKey, !apiKey.isEmpty else {
+        guard !apiKey.isEmpty else {
             throw TranslationServiceError.missingAPIKey
         }
 

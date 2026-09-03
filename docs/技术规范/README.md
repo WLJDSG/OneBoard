@@ -54,6 +54,7 @@ OneBoard/
 │   ├── Screenshot/         # 截图模块
 │   ├── FileStaging/        # 文件暂存模块
 │   ├── Gateway/            # 网关切换模块
+│   ├── AIModels/           # Codex / Claude Code 模型供应商切换
 │   └── CodexAccounts/      # Codex 桌面账号切换模块
 ├── FinderSync/             # Finder Sync Extension
 ├── Shared/                 # 共享服务
@@ -92,13 +93,13 @@ Finder 右键菜单
 ### Codex 账号状态与凭据续期
 
 ```text
-Keychain 账号凭据
+SQLite 账号凭据
   → 检查 access token exp（提前 5 分钟）
   → 必要时 POST auth.openai.com/oauth/token 刷新并原子保存轮换结果
   → GET chatgpt.com/backend-api/wham/usage
   → 将 used_percent 换算为 remainingPercent
   → 补充账号订阅到期信息
-  → 仅把额度、订阅、重置次数和更新时间写入 UserDefaults 元数据
+  → 把轮换后的凭据、额度、订阅、重置次数和更新时间写回 SQLite
 ```
 
 - 后台每 15 分钟顺序刷新账号，避免同一账号并发请求；单账号失败不影响其余账号，并保留上次成功快照。
@@ -144,14 +145,24 @@ Keychain 账号凭据
 - OAuth 请求使用 `originator=codex_cli_rs`，禁止套用 `https://chatgpt.com/codex/desktop-auth`，也不携带 `codex_app_version`、`source_surface_stable_id`、`codex_origin_stable_id` 等 Codex Desktop 私有参数。
 - OAuth 本机回调必须使用授权服务登记的 `http://localhost:1455/auth/callback`；随机端口会在进入登录前被拒绝。
 - 密码和验证码由 OpenAI 官方浏览器登录流程处理，OneBoard 不收集也不持久化这些字段；填写的邮箱必须与 `id_token` 中已授权账号一致。
-- `CodexAccountProfile` 只保存 UUID、显示名称、邮箱、账号/套餐标识和时间戳到 UserDefaults；对应认证缓存以 UUID 为 account、`com.oneboard.mac.codex-auth-cache` 为 service 保存到 macOS Keychain。
-- 当前认证存储按 `~/.codex/config.toml` 顶层 `cli_auth_credentials_store` 处理：`file` 使用 `~/.codex/auth.json`，`keyring` 使用官方 `Codex Auth` 钥匙串项，`auto` 优先钥匙串并在失败时回退到文件。
+- `CodexAccountProfile`、活动状态和认证缓存统一写入 `~/Library/Application Support/OneBoard/oneboard.sqlite`；认证缓存位于 `private_records/codex_account_auth_cache`。
+- OneBoard 将 `~/.codex/config.toml` 顶层 `cli_auth_credentials_store` 强制为 `file`，不读写官方 `Codex Auth` 钥匙串；当前活动凭据只在切换时物化到 `~/.codex/auth.json`。
 - 文件读取和恢复前验证非空 JSON 对象并拒绝符号链接，原子替换后权限固定为 `0600`，目录首次创建时权限为 `0700`。
-- Codex 运行中禁止替换认证存储。切换请求先校验目标钥匙串项，再请求主应用正常退出；2 秒后仍残留时发送 SIGTERM，之后最长等待 20 秒。
+- Codex 运行中禁止替换认证存储。切换请求先校验目标 SQLite 凭据，再请求主应用正常退出；2 秒后仍残留时发送 SIGTERM，之后最长等待 20 秒。
 - 退出前通过父子 PID 捕获直属 Codex `app-server`，主进程退出后仍要确认这些旧进程结束，避免旧 token 刷新回写覆盖新账号。
-- 切换前先把当前文件写回已知活动账号钥匙串，使 OpenAI 自动刷新后的 token 不丢失；第一次切换到 OAuth 管理账号时，在 Codex 完全退出后直接接管当前官方认证存储。
+- 切换前先把当前文件写回已知活动账号的 SQLite 记录，使 OpenAI 自动刷新后的 token 不丢失；第一次切换到 OAuth 管理账号时，在 Codex 完全退出后直接接管 `auth.json`。
 - 凭据提交后通过 LaunchServices 以新实例重新打开 Codex。关闭失败时必须在提交前停止；启动失败时保留已切换的目标凭据并提示手动打开。
-- 测试必须注入临时认证文件、内存 vault、伪官方钥匙串和可控进程生命周期，禁止读取或修改用户真实认证缓存。
+
+### AI 模型供应商切换
+
+- `AIProviderProfile`、当前标记与 API Key 统一存入 OneBoard SQLite；API Key 位于 `private_records/ai_provider_api_key`，普通配置状态位于 `application_state`。
+- Codex 写入器仅合并 `~/.codex/config.toml`：更新顶层 `model_provider` / `model`，并管理唯一 `[model_providers.oneboard]` 表；其他顶层字段和 TOML 表原样保留。
+- 自定义 Codex 表使用 `wire_api = "responses"`、`requires_openai_auth = false` 和 provider-scoped `experimental_bearer_token`；官方配置移除 OneBoard 表和 `model_provider`，但不修改账号认证缓存。
+- Claude Code 写入器解析 `~/.claude/settings.json`（兼容已存在的 `claude.json`），仅替换 `env` 中 OneBoard 管理的 `ANTHROPIC_*` API/模型键，其他 JSON 字段和环境变量保留。
+- 两种写入都拒绝符号链接，使用 Foundation atomic replace，将目标文件设为 `0600`；首次写入创建 `<filename>.oneboard-backup` 且后续不覆盖。
+- 切换仅影响新启动的 Codex / Claude Code 会话，不主动终止正在运行的 CLI 或桌面任务。
+- CC Switch 导入器以只读方式打开 `~/.cc-switch/cc-switch.db`，只接收 Codex / Claude；API Key 直接写入 `private_records`，空白或缺少必要字段的配置显式跳过。
+- 数据库目录固定为 `0700`，主库及已存在的 WAL/SHM 固定为 `0600`；测试必须注入临时数据库、认证文件和可控进程生命周期，禁止读取或修改用户真实认证缓存。
 
 ### 文件摇晃检测降级
 

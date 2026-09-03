@@ -106,7 +106,7 @@ struct CodexAccountSettingsView: View {
                 deletingProfile = nil
             }
         } message: { profile in
-            Text("将删除“\(profile.title)”及其钥匙串登录凭据。仅切换账号时才会退出并重新打开 Codex。")
+            Text("将删除“\(profile.title)”及其数据库登录凭据。仅切换账号时才会退出并重新打开 Codex。")
         }
     }
 

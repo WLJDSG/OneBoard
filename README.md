@@ -1,6 +1,6 @@
 # OneBoard
 
-macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网关切换和 Codex 桌面账号切换一体化工具。
+macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网关切换、AI 模型供应商切换和 Codex 桌面账号切换一体化工具。
 
 当前版本已针对 Apple Silicon（包括 MacBook Air M3）和 macOS 26 的混合 Retina 多显示器、Finder 扩展及菜单栏交互进行适配。
 
@@ -54,12 +54,22 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网�
 - 填写 OpenAI 账号邮箱后直接打开 Codex 标准 OAuth 授权页，浏览器授权成功后自动新增或更新账号；不经过 Codex Desktop 私有中转页
 - 管理多个 Codex/ChatGPT 桌面 App 登录缓存，支持重命名、删除和快速切换
 - 每个账号展示 5 小时与每周剩余额度、重置时间、订阅到期时间和剩余主动重置次数，并在后台每 15 分钟自动更新
-- access token 临近到期、额度请求返回未授权或切号前会自动使用 refresh token 续期；服务端轮换后的凭据继续只保存在钥匙串
-- 密码与验证码始终只在 OpenAI 官方网页输入；OneBoard 不保存密码或验证码，认证缓存保存在 macOS 钥匙串
+- access token 临近到期、额度请求返回未授权或切号前会自动使用 refresh token 续期；服务端轮换后的凭据保存在 OneBoard SQLite
+- 密码与验证码始终只在 OpenAI 官方网页输入；OneBoard 不保存密码或验证码，认证缓存保存在权限为 `0600` 的 `oneboard.sqlite`
 - 菜单栏可快速选择账号；OneBoard 会先正常退出 Codex，超时时对已捕获的残留进程发送终止信号
 - 确认 Codex 主进程和旧 `app-server` 完全退出后才切换凭据，完成后自动重新打开 Codex
-- 兼容 Codex 官方 `file` / `keyring` / `auto` 凭据存储模式
+- OneBoard 强制 Codex 使用 `file` 凭据模式，避免访问系统钥匙串；活动账号仅物化到 `~/.codex/auth.json`
 - 为避免 refresh token 被两个客户端同时使用，当前账号正在 Codex 中运行时 OneBoard 会暂缓凭据轮换，退出 Codex 后自动重试
+
+### AI 模型与供应商切换
+
+- 分别管理 Codex 和 Claude Code 的官方/自定义 API 配置，支持供应商名称、API 地址、API Key 和底层模型 ID
+- 设置页可新增、编辑、删除和切换；菜单栏可对 Codex / Claude Code 快速切换
+- Codex 仅合并更新 `~/.codex/config.toml`，保留 MCP、项目信任等未知配置，不改动 `auth.json` 和已管理的账号凭据
+- Claude Code 仅合并更新 `~/.claude/settings.json` 的 Anthropic API/模型环境变量，保留 permissions、hooks 等其他字段
+- 配置元数据与 API Key 按 UUID 保存到 OneBoard SQLite；首次切换前创建 `*.oneboard-backup`，支持一键恢复
+- 支持从 `~/.cc-switch/cc-switch.db` 一键导入 Codex / Claude Code 配置，不修改 CC Switch 源数据
+- 第三方 Codex API 活动时，密钥按 Codex 要求写入 provider-scoped `experimental_bearer_token`，配置文件权限设为 `0600`
 
 ### 其他
 
@@ -99,6 +109,7 @@ OneBoard/
 │   ├── Screenshot/   # 截图模块
 │   ├── FileStaging/  # 文件暂存模块
 │   ├── Gateway/      # 网关切换模块
+│   ├── AIModels/     # Codex / Claude Code 模型供应商切换
 │   └── CodexAccounts/# Codex 桌面账号切换模块
 ├── FinderSync/       # Finder Sync Extension
 ├── Shared/           # 共享服务与 Finder 新建文件协议

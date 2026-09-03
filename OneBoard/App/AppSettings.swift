@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 应用设置集中管理
-/// 使用 @AppStorage 在 UserDefaults 中持久化
+/// 普通偏好使用 UserDefaults，API Key 统一存入 OneBoard SQLite。
 enum AppSettings {
 
     // MARK: - 剪贴板设置
@@ -21,8 +21,10 @@ enum AppSettings {
     static var ocrServiceType: String = "apple"
 
     /// 第三方 OCR API Key
-    @AppStorage(Constants.UserDefaultsKeys.thirdPartyOCRAPIKey)
-    static var thirdPartyOCRAPIKey: String = ""
+    static var thirdPartyOCRAPIKey: String {
+        get { ApplicationSecretStore.shared.value(for: Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) }
+        set { ApplicationSecretStore.shared.setValue(newValue, for: Constants.UserDefaultsKeys.thirdPartyOCRAPIKey) }
+    }
 
     /// OCR 识别语言
     @AppStorage(Constants.UserDefaultsKeys.ocrLanguage)
@@ -35,8 +37,10 @@ enum AppSettings {
     static var translationServiceType: String = TranslationServiceType.apple.rawValue
 
     /// 第三方翻译 API Key
-    @AppStorage(Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)
-    static var thirdPartyTranslationAPIKey: String = ""
+    static var thirdPartyTranslationAPIKey: String {
+        get { ApplicationSecretStore.shared.value(for: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey) }
+        set { ApplicationSecretStore.shared.setValue(newValue, for: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey) }
+    }
 
     /// 翻译目标语言
     @AppStorage(Constants.UserDefaultsKeys.translationTargetLanguage)
