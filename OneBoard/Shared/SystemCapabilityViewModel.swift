@@ -62,17 +62,20 @@ final class SystemCapabilityViewModel: ObservableObject {
     private let permissions: SystemPermissionProviding
     private let gatewayHelper: GatewayHelperStatusProviding
     private let launchAtLogin: LaunchAtLoginProviding
+    private let authorizer: SensitiveOperationAuthorizing
     private let confirmsDisablePermission: @MainActor (OneBoardPermissionKind) -> Bool
 
     init(
         permissions: SystemPermissionProviding = PermissionManager.shared,
         gatewayHelper: GatewayHelperStatusProviding = GatewayService(),
         launchAtLogin: LaunchAtLoginProviding = DefaultLaunchAtLoginProvider(),
+        authorizer: SensitiveOperationAuthorizing = SensitiveOperationAuthorizer(),
         confirmsDisablePermission: @escaping @MainActor (OneBoardPermissionKind) -> Bool = SystemCapabilityViewModel.confirmDisablePermission
     ) {
         self.permissions = permissions
         self.gatewayHelper = gatewayHelper
         self.launchAtLogin = launchAtLogin
+        self.authorizer = authorizer
         self.confirmsDisablePermission = confirmsDisablePermission
         refresh()
     }
@@ -136,27 +139,28 @@ final class SystemCapabilityViewModel: ObservableObject {
 
     func setGatewayHelperEnabled(_ enabled: Bool) {
         statusMessage = enabled ? "正在安装 OneBoard 网关免密 Helper..." : "正在卸载 OneBoard 网关免密 Helper..."
-        Task.detached(priority: .userInitiated) { [gatewayHelper] in
+        Task { [gatewayHelper, authorizer] in
             do {
                 if enabled {
-                    try gatewayHelper.installHelper()
+                    try await Task.detached(priority: .userInitiated) {
+                        try gatewayHelper.installHelper()
+                    }.value
                 } else {
-                    try gatewayHelper.uninstallHelper()
+                    try await authorizer.authorize(reason: "确认卸载 OneBoard 网关 Helper")
+                    try await Task.detached(priority: .userInitiated) {
+                        try gatewayHelper.uninstallHelper()
+                    }.value
                 }
                 let installed = gatewayHelper.isHelperInstalled()
-                await MainActor.run {
-                    self.gatewayHelperInstalled = installed
-                    self.statusMessage = installed ? "网关免密 Helper 已启用" : "网关免密 Helper 已卸载"
-                    self.errorMessage = nil
-                    NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
-                }
+                self.gatewayHelperInstalled = installed
+                self.statusMessage = installed ? "网关免密 Helper 已启用" : "网关免密 Helper 已卸载"
+                self.errorMessage = nil
+                NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
             } catch {
                 let installed = gatewayHelper.isHelperInstalled()
-                await MainActor.run {
-                    self.gatewayHelperInstalled = installed
-                    self.errorMessage = error.localizedDescription
-                    NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
-                }
+                self.gatewayHelperInstalled = installed
+                self.errorMessage = error.localizedDescription
+                NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
             }
         }
     }

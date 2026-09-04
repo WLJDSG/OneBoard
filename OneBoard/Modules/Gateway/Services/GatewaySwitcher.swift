@@ -1,22 +1,10 @@
 import Foundation
 
-struct GatewayHelperConfiguration {
-    var isEnabled: Bool
-
-    static let disabledForTests = GatewayHelperConfiguration(isEnabled: false)
-    static let system = GatewayHelperConfiguration(isEnabled: true)
-}
-
 struct GatewaySwitcher {
     private let runner: GatewayCommandRunning
-    private let helper: GatewayHelperConfiguration
 
-    init(
-        runner: GatewayCommandRunning = ProcessGatewayCommandRunner(),
-        helper: GatewayHelperConfiguration = .system
-    ) {
+    init(runner: GatewayCommandRunning = ProcessGatewayCommandRunner()) {
         self.runner = runner
-        self.helper = helper
     }
 
     func switchDefaultGateway(to profile: GatewayProfile) throws {
@@ -29,15 +17,8 @@ struct GatewaySwitcher {
             throw GatewayError.missingNetworkConfiguration
         }
 
-        if helper.isEnabled, try runPasswordlessHelper(profile: profile, serviceName: serviceName, snapshot: snapshot) {
-            return
-        }
-
-        let shellCommand = Self.shellCommand(serviceName: serviceName, profile: profile, snapshot: snapshot)
-        let appleScript = "do shell script \(shellCommand.appleScriptQuoted) with administrator privileges"
-        let result = try runner.run("/usr/bin/osascript", arguments: ["-e", appleScript])
-        guard result.terminationStatus == 0 else {
-            throw GatewayError.commandFailed(Self.failureMessage(from: result))
+        guard try runPasswordlessHelper(profile: profile, serviceName: serviceName, snapshot: snapshot) else {
+            throw GatewayError.helperRequired
         }
     }
 
@@ -73,36 +54,4 @@ struct GatewaySwitcher {
         throw GatewayError.commandFailed(combinedOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private static func shellCommand(
-        serviceName: String,
-        profile: GatewayProfile,
-        snapshot: NetworkSnapshot
-    ) -> String {
-        let service = serviceName.shellQuoted
-        let dns = profile.dnsServers.map(\.shellQuoted).joined(separator: " ")
-        var commands: [String] = []
-
-        if profile.mode == .gatewayAndDNS {
-            guard let ipAddress = snapshot.localIPv4, let subnetMask = snapshot.subnetMask else {
-                return "exit 2"
-            }
-            commands.append("/usr/sbin/networksetup -setmanual \(service) \(ipAddress.shellQuoted) \(subnetMask.shellQuoted) \(profile.gateway.shellQuoted)")
-        }
-
-        commands.append("/usr/sbin/networksetup -setdnsservers \(service) \(dns)")
-
-        if profile.mode == .gatewayAndDNS {
-            commands.append("/sbin/route -n change default \(profile.gateway.shellQuoted) || /sbin/route -n add default \(profile.gateway.shellQuoted)")
-        }
-
-        commands.append("/usr/bin/dscacheutil -flushcache")
-        commands.append("/usr/bin/killall -HUP mDNSResponder || true")
-        return commands.joined(separator: "; ")
-    }
-
-    private static func failureMessage(from result: GatewayCommandResult) -> String {
-        [result.standardError, result.standardOutput]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty } ?? "切换网关失败"
-    }
 }

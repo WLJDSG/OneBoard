@@ -1,15 +1,10 @@
 import FinderSync
 import Cocoa
 import Darwin
-import os
 
 /// Finder Sync 扩展主控制器
 @objc(FinderSyncController)
 final class FinderSyncController: FIFinderSync {
-    private static let diagnosticLogger = Logger(
-        subsystem: "com.oneboard.mac.Findersync",
-        category: "desktop-diagnostics"
-    )
     private static let actualHomeURL: URL = {
         guard let user = getpwuid(getuid()), let home = user.pointee.pw_dir else {
             return FileManager.default.homeDirectoryForCurrentUser
@@ -28,31 +23,16 @@ final class FinderSyncController: FIFinderSync {
     override init() {
         super.init()
         // 根目录覆盖所有本地卷路径，home/desktop 兼容 macOS 26 的桌面空白处菜单。
-        let managedDirectories = FinderFileCreationRequest.managedDirectories(
+        FIFinderSyncController.default().directoryURLs = FinderFileCreationRequest.managedDirectories(
             homeURL: Self.actualHomeURL,
             desktopURL: Self.resolvedDesktopURL
         )
-        FIFinderSyncController.default().directoryURLs = managedDirectories
-        let registeredPaths = managedDirectories.map(\.path).sorted().joined(separator: " | ")
-        Self.diagnosticLogger.notice(
-            "[DEBUG-FINDER-DESKTOP] registered=\(registeredPaths, privacy: .public)"
-        )
         print("[FinderSync] 扩展已初始化")
-    }
-
-    override func beginObservingDirectory(at url: URL) {
-        Self.diagnosticLogger.notice("[DEBUG-FINDER-DESKTOP] beginObserving=\(url.path, privacy: .public)")
     }
 
     // MARK: - 菜单
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
-        let controller = FIFinderSyncController.default()
-        let targetedPath = controller.targetedURL()?.path ?? "nil"
-        let selectedPaths = controller.selectedItemURLs()?.map(\.path).joined(separator: " | ") ?? "nil"
-        Self.diagnosticLogger.notice(
-            "[DEBUG-FINDER-DESKTOP] menuKind=\(menuKind.rawValue, privacy: .public) targeted=\(targetedPath, privacy: .public) selected=\(selectedPaths, privacy: .public)"
-        )
         // 在桌面/文件夹空白处、选中文件项和工具栏菜单中显示。
         switch menuKind {
         case .contextualMenuForContainer, .contextualMenuForItems, .toolbarItemMenu:
@@ -142,7 +122,7 @@ final class FinderSyncController: FIFinderSync {
             // 桌面空白处右键时，Finder 可能不提供 targetedURL/selectedItemURLs。
             // 仅容器菜单回退到桌面，避免工具栏操作误建到桌面。
             guard currentMenuKind == .contextualMenuForContainer else { return nil }
-            return Self.resolvedDesktopURL ?? Self.actualDesktopURL
+            return Self.actualDesktopURL
         }
 
         return directoryURL(for: selectedURL)

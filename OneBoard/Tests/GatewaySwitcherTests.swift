@@ -47,7 +47,7 @@ final class GatewaySwitcherTests: XCTestCase {
 
     func testGatewayAndDNSUsesManualRouteAndDNSCommands() throws {
         let runner = RecordingGatewayCommandRunner()
-        let switcher = GatewaySwitcher(runner: runner, helper: .disabledForTests)
+        let switcher = GatewaySwitcher(runner: runner)
         let profile = GatewayProfile(title: "代理网关", gateway: "192.168.31.3", description: "")
         let snapshot = NetworkSnapshot(
             gateway: "192.168.31.1",
@@ -61,16 +61,18 @@ final class GatewaySwitcherTests: XCTestCase {
         try switcher.switchDefaultGateway(to: profile, snapshot: snapshot)
 
         let script = runner.commands.joined(separator: "\n")
-        XCTAssertTrue(script.contains("networksetup -setmanual"))
+        XCTAssertTrue(script.contains(OneBoardGatewayHelper.helperPath))
+        XCTAssertTrue(script.contains("--ip"))
+        XCTAssertTrue(script.contains("--subnet"))
+        XCTAssertTrue(script.contains("--router"))
         XCTAssertTrue(script.contains("192.168.31.42"))
         XCTAssertTrue(script.contains("192.168.31.3"))
-        XCTAssertTrue(script.contains("networksetup -setdnsservers"))
-        XCTAssertTrue(script.contains("route -n change default"))
+        XCTAssertTrue(script.contains("--dns"))
     }
 
     func testDNSOnlyDoesNotChangeDefaultRoute() throws {
         let runner = RecordingGatewayCommandRunner()
-        let switcher = GatewaySwitcher(runner: runner, helper: .disabledForTests)
+        let switcher = GatewaySwitcher(runner: runner)
         let profile = GatewayProfile(
             title: "DNS",
             mode: .dnsOnly,
@@ -90,9 +92,11 @@ final class GatewaySwitcherTests: XCTestCase {
         try switcher.switchDefaultGateway(to: profile, snapshot: snapshot)
 
         let script = runner.commands.joined(separator: "\n")
-        XCTAssertFalse(script.contains("-setmanual"))
-        XCTAssertFalse(script.contains("route -n change default"))
-        XCTAssertTrue(script.contains("networksetup -setdnsservers"))
+        XCTAssertTrue(script.contains(OneBoardGatewayHelper.helperPath))
+        XCTAssertFalse(script.contains("--ip"))
+        XCTAssertFalse(script.contains("--subnet"))
+        XCTAssertFalse(script.contains("--router"))
+        XCTAssertTrue(script.contains("--dns"))
         XCTAssertTrue(script.contains("1.1.1.1"))
     }
 
@@ -122,6 +126,37 @@ final class GatewaySwitcherTests: XCTestCase {
         )
 
         XCTAssertThrowsError(try switcher.switchDefaultGateway(to: profile, snapshot: snapshot))
+        XCTAssertFalse(runner.commands.contains { $0.contains("/usr/bin/osascript") })
+    }
+
+    func testMissingHelperRequiresInstallationInsteadOfPasswordPrompt() {
+        let runner = RecordingGatewayCommandRunner(results: [
+            GatewayCommandResult(
+                standardOutput: "",
+                standardError: "sudo: a password is required",
+                terminationStatus: 1
+            )
+        ])
+        let switcher = GatewaySwitcher(runner: runner)
+        let profile = GatewayProfile(
+            title: "DNS",
+            mode: .dnsOnly,
+            gateway: "",
+            dnsServers: ["1.1.1.1"],
+            description: ""
+        )
+        let snapshot = NetworkSnapshot(
+            gateway: "192.168.31.1",
+            interfaceName: "en0",
+            serviceName: "Wi-Fi",
+            localIPv4: "192.168.31.42",
+            subnetMask: "255.255.255.0",
+            dnsServers: []
+        )
+
+        XCTAssertThrowsError(try switcher.switchDefaultGateway(to: profile, snapshot: snapshot)) { error in
+            XCTAssertEqual(error as? GatewayError, .helperRequired)
+        }
         XCTAssertFalse(runner.commands.contains { $0.contains("/usr/bin/osascript") })
     }
 }

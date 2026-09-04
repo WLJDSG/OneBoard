@@ -4,7 +4,7 @@ struct OneBoardGatewayHelper {
     static let helperPath = "/usr/local/bin/oneboard-gateway-helper"
     static let sudoersPath = "/etc/sudoers.d/oneboard-gateway"
     static let allowedIPsPath = "/etc/oneboard-gateway-allowed-ips.conf"
-    static let versionMarker = "ONEBOARD_GATEWAY_HELPER_VERSION=3"
+    static let versionMarker = "ONEBOARD_GATEWAY_HELPER_VERSION=4"
 
     private let runner: GatewayCommandRunning
     private let fileManager: FileManager
@@ -35,11 +35,16 @@ struct OneBoardGatewayHelper {
     }
 
     func uninstall() throws {
-        try runAdminShell([
-            "/bin/rm -f \(Self.helperPath.shellQuoted)",
-            "/bin/rm -f \(Self.sudoersPath.shellQuoted)",
-            "/bin/rm -f \(Self.allowedIPsPath.shellQuoted)"
-        ].joined(separator: "; "))
+        let result = try runner.run(
+            "/usr/bin/sudo",
+            arguments: ["-n", Self.helperPath, "--uninstall"]
+        )
+        guard result.terminationStatus == 0 else {
+            let message = [result.standardError, result.standardOutput]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first { !$0.isEmpty } ?? "OneBoard 网关 Helper 卸载失败，请先升级或重新安装 Helper"
+            throw GatewayError.commandFailed(message)
+        }
     }
 
     func syncWhitelist(ips: [String]) throws {
@@ -86,7 +91,7 @@ struct OneBoardGatewayHelper {
     private static let helperBody = """
 #!/bin/sh
 set -eu
-ONEBOARD_GATEWAY_HELPER_VERSION=3
+ONEBOARD_GATEWAY_HELPER_VERSION=4
 
 ALLOWED_FILE="/etc/oneboard-gateway-allowed-ips.conf"
 SERVICE=""
@@ -96,6 +101,7 @@ ROUTER=""
 DNS=""
 SYNC_WHITELIST=""
 SYNC_MODE=0
+UNINSTALL_MODE=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -105,9 +111,17 @@ while [ "$#" -gt 0 ]; do
     --router) ROUTER="$2"; shift 2 ;;
     --dns) DNS="$2"; shift 2 ;;
     --sync-whitelist) SYNC_WHITELIST="$2"; SYNC_MODE=1; shift 2 ;;
+    --uninstall) UNINSTALL_MODE=1; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+if [ "$UNINSTALL_MODE" -eq 1 ]; then
+  /bin/rm -f "/etc/sudoers.d/oneboard-gateway"
+  /bin/rm -f "$ALLOWED_FILE"
+  /bin/rm -f "$0"
+  exit 0
+fi
 
 is_valid_ipv4() {
   /usr/bin/awk -F. '

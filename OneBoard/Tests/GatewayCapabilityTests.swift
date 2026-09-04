@@ -12,12 +12,12 @@ final class GatewayCapabilityTests: XCTestCase {
         XCTAssertFalse(OneBoardGatewayHelper.isCurrentHelperScript("#!/bin/sh\necho legacy"))
         XCTAssertFalse(
             OneBoardGatewayHelper.isCurrentHelperScript(
-                "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=2\n"
+                "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=3\n"
             )
         )
         XCTAssertTrue(
             OneBoardGatewayHelper.isCurrentHelperScript(
-                "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=3\n"
+                "#!/bin/sh\nONEBOARD_GATEWAY_HELPER_VERSION=4\n"
             )
         )
     }
@@ -56,8 +56,10 @@ final class GatewayCapabilityTests: XCTestCase {
         try helper.uninstall()
 
         let command = runner.commands.joined(separator: "\n")
+        XCTAssertTrue(command.contains("/usr/bin/sudo"))
+        XCTAssertTrue(command.contains("-n"))
+        XCTAssertTrue(command.contains("--uninstall"))
         XCTAssertTrue(command.contains(OneBoardGatewayHelper.helperPath))
-        XCTAssertTrue(command.contains(OneBoardGatewayHelper.sudoersPath))
-        XCTAssertTrue(command.contains(OneBoardGatewayHelper.allowedIPsPath))
+        XCTAssertFalse(command.contains("/usr/bin/osascript"))
     }
 }

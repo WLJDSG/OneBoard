@@ -102,6 +102,7 @@ enum GatewayError: LocalizedError, Equatable, Sendable {
     case invalidDNS(String)
     case invalidGateway(String)
     case invalidProfile(String)
+    case helperRequired
     case missingNetworkConfiguration
 
     var errorDescription: String? {
@@ -114,6 +115,8 @@ enum GatewayError: LocalizedError, Equatable, Sendable {
             return "网关地址不合法：\(gateway)"
         case .invalidProfile(let message):
             return message
+        case .helperRequired:
+            return "网关 Helper 尚未启用或需要升级，请先在“设置 > 授权”中安装；安装完成后切换只需 Touch ID 或 Mac 登录密码。"
         case .missingNetworkConfiguration:
             return "没有检测到可写入的网络服务、IP 或子网掩码，请先确认当前网络已连接。"
         }

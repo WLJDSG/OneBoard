@@ -37,16 +37,18 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网�
 
 ### Finder 快速新建
 
-- 在 Finder 文件夹、桌面和其他目录的右键菜单中快速创建 txt/docx/xlsx
+- 在受支持的本地 Finder 文件夹和本地桌面的右键菜单中快速创建 txt/docx/xlsx
 - Finder 扩展只负责获取目标目录，实际写入交由 OneBoard 主应用，避免扩展沙盒导致“没有权限”
-- 同时识别本地 Desktop、iCloud Drive 桌面容器根目录、iCloud Desktop、系统解析出的桌面目录及其符号链接目标
+- iCloud Drive（包括启用 iCloud 同步的桌面）由 File Provider 管理，Finder Sync 无法在其空白处添加菜单
 - 自动处理重名文件，并在创建后通过 Finder 选中新文件
 
 ### 网关切换
 
 - 网关与 DNS 配置快速切换
-- OneBoard 专属 Helper 只允许配置档中的合法 IPv4；安装 Helper 与写入初始白名单共用一次管理员授权
+- 网关切换先使用 Touch ID 确认身份；未配置指纹时由 macOS 回退到本机登录密码
+- OneBoard 专属 Helper 只允许配置档中的合法 IPv4；首次安装/升级 Helper 与写入初始白名单共用一次系统管理员授权
 - Helper 返回“地址不在白名单”时直接报错，不回退到管理员密码命令，避免绕过白名单边界
+- Helper 卸载与 App 内彻底卸载使用 Touch ID 确认及 Helper 受限自卸载，不再重复弹出管理员密码框
 - 紧凑型菜单栏弹窗和独立配置页
 
 ### Codex 桌面账号切换

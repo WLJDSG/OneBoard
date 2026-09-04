@@ -107,7 +107,7 @@ ONEBOARD_CODESIGN_IDENTITY=- bash script/package_app.sh
 - 多显示器截图按显示器独立捕获、独立显示遮罩、独立裁剪，不能依赖主屏逻辑尺寸处理外接屏图像。
 - 选区调整和标注阶段复用完整 `AnnotationToolbarView`；标注工具点击即锁定并安装画布，OCR 等输出动作先结束截图会话再打开结果窗口。
 - Finder Sync 不直接创建文件；本地 Desktop、iCloud Desktop、系统解析桌面目录和符号链接目标必须一并纳入监听与权限配置。
-- 网关 Helper 安装时原子写入初始白名单，白名单拒绝是最终业务错误，不允许回退到管理员密码命令。
+- 网关切换、Helper 卸载和 App 内彻底卸载使用 Touch ID 优先的设备所有者验证；首次安装/升级 Helper 仍保留一次系统管理员授权。Helper 缺失或白名单拒绝是最终错误，不允许回退到管理员密码 shell。
 
 ## 当前开发状态
 

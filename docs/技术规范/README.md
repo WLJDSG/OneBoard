@@ -85,9 +85,10 @@ Finder 右键菜单
 ```
 
 - `FinderFileCreationRequest` 只接受绝对目录和 txt/docx/xlsx 白名单类型。
-- Finder 监听集合包含 `/`、用户目录、传统 `~/Desktop`、Finder 为 iCloud 桌面暴露的 iCloud Drive 根容器、iCloud Desktop 和 `FileManager` 解析出的桌面目录。
+- Finder 监听集合包含 `/`、用户目录、传统 `~/Desktop`、iCloud Desktop 兼容路径和 `FileManager` 解析出的桌面目录；候选路径只用于 Finder Sync 支持的本地目录。
 - 每个候选目录同时加入标准化路径与符号链接解析后的路径，兼容桌面迁移到 iCloud 或由符号链接重定向的环境。
-- Finder 扩展 entitlement 中的 Desktop、iCloud Drive 根容器只读例外与 iCloud Desktop 读写例外必须和监听集合保持一致；扩展仍不得绕过主应用直接写文件。
+- iCloud Drive 及启用 iCloud 同步的桌面由 File Provider 管理，第三方 Finder Sync 无法在其空白处添加菜单；不得通过扩大沙盒权限宣称兼容。
+- Finder 扩展 entitlement 仅保留 Desktop 与 iCloud Desktop 兼容路径的读写例外；扩展仍不得绕过主应用直接写文件。
 - 文件名从 `未命名.ext` 开始，冲突时依次使用 `未命名 1.ext`、`未命名 2.ext`。
 
 ### Codex 账号状态与凭据续期
@@ -132,11 +133,14 @@ SQLite 账号凭据
 
 ### 网关 Helper 安全边界
 
-- Helper 当前协议版本为 `ONEBOARD_GATEWAY_HELPER_VERSION=3`；旧版本必须被识别为需要重新安装。
+- Helper 当前协议版本为 `ONEBOARD_GATEWAY_HELPER_VERSION=4`；旧版本必须被识别为需要重新安装。
 - 安装脚本在一次管理员授权内写入 Helper、sudoers 和初始 IPv4 白名单，白名单去重、排序并过滤非法地址，禁止先创建空白名单再二次提权同步。
 - Profile 变化后的白名单同步使用受限 Helper 路径；sudoers 只允许执行 `/usr/local/bin/oneboard-gateway-helper`。
-- `GatewaySwitcher` 只有在 Helper 缺失、需要密码、无 TTY 或命令不存在等执行能力问题时才允许进入管理员授权回退。
+- 网关切换先通过 `LAContext.evaluatePolicy(.deviceOwnerAuthentication)` 确认设备所有者，系统优先使用 Touch ID，并在不可用时回退到 Mac 登录密码。
+- `GatewaySwitcher` 在 Helper 缺失、需要密码、无 TTY 或命令不存在时直接要求安装/升级 Helper，不得进入 AppleScript 管理员授权回退。
 - `Router/DNS is not allowed` 属于 Helper 的最终业务拒绝，必须直接向上抛错，禁止通过 AppleScript 管理员命令绕过白名单。
+- Helper v4 仅增加 `--uninstall` 自卸载命令；卸载通过既有 sudoers 精确路径执行，并在删除 sudoers、白名单和自身前经过 Touch ID/登录密码确认。
+- Touch ID 只确认当前设备所有者，不能授予 root；首次安装或升级 Helper 写入系统目录时仍必须由 macOS 完成一次管理员授权。
 
 ### Codex 桌面认证缓存切换
 

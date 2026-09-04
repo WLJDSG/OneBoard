@@ -108,6 +108,48 @@ final class SystemCapabilityViewModelTests: XCTestCase {
             "开机自启未能启用，请确认 OneBoard 位于 /Applications，且登录项 Helper 已正确打包并签名。"
         )
     }
+
+    func testDisablingGatewayHelperRequiresAuthentication() async {
+        let helper = StubGatewayHelperProvider(installed: true)
+        let authorizer = StubSensitiveOperationAuthorizer()
+        let viewModel = SystemCapabilityViewModel(
+            permissions: StubPermissionProvider(accessibility: true, screenRecording: true),
+            gatewayHelper: helper,
+            launchAtLogin: StubLaunchAtLoginProvider(enabled: false),
+            authorizer: authorizer,
+            confirmsDisablePermission: { _ in true }
+        )
+
+        viewModel.setGatewayHelperEnabled(false)
+        await waitUntil { !helper.installed }
+
+        XCTAssertEqual(authorizer.reasons, ["确认卸载 OneBoard 网关 Helper"])
+        XCTAssertFalse(helper.installed)
+    }
+
+    func testFailedAuthenticationKeepsGatewayHelperInstalled() async {
+        let helper = StubGatewayHelperProvider(installed: true)
+        let authorizer = StubSensitiveOperationAuthorizer(error: SensitiveOperationAuthorizationError.failed("用户取消"))
+        let viewModel = SystemCapabilityViewModel(
+            permissions: StubPermissionProvider(accessibility: true, screenRecording: true),
+            gatewayHelper: helper,
+            launchAtLogin: StubLaunchAtLoginProvider(enabled: false),
+            authorizer: authorizer,
+            confirmsDisablePermission: { _ in true }
+        )
+
+        viewModel.setGatewayHelperEnabled(false)
+        await waitUntil { viewModel.errorMessage != nil }
+
+        XCTAssertTrue(helper.installed)
+        XCTAssertEqual(viewModel.errorMessage, "身份验证未通过：用户取消")
+    }
+
+    private func waitUntil(_ condition: @escaping () -> Bool) async {
+        for _ in 0..<100 where !condition() {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
 }
 
 private final class StubPermissionProvider: SystemPermissionProviding {
@@ -164,5 +206,28 @@ private final class StubLaunchAtLoginProvider: LaunchAtLoginProviding {
     var isEnabled: Bool {
         get { forceReadBackValue ?? enabled }
         set { enabled = newValue }
+    }
+}
+
+private final class StubSensitiveOperationAuthorizer: SensitiveOperationAuthorizing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedReasons: [String] = []
+    private let error: Error?
+
+    init(error: Error? = nil) {
+        self.error = error
+    }
+
+    var reasons: [String] {
+        lock.withLock { storedReasons }
+    }
+
+    func authorize(reason: String) async throws {
+        lock.withLock {
+            storedReasons.append(reason)
+        }
+        if let error {
+            throw error
+        }
     }
 }

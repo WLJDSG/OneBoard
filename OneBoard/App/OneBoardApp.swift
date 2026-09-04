@@ -201,7 +201,7 @@ struct SettingsView: View {
             } header: { Text("隐私权限") }
 
             Section {
-                capabilityRow(title: "网关免密 Helper", description: "用于网关切换时避免反复输入管理员密码", isGranted: systemCapabilities.gatewayHelperInstalled, onEnable: { systemCapabilities.setGatewayHelperEnabled(true) }, onDisable: { systemCapabilities.setGatewayHelperEnabled(false) })
+                capabilityRow(title: "网关安全 Helper", description: "首次安装需管理员授权；后续切换与卸载使用 Touch ID 或登录密码确认", isGranted: systemCapabilities.gatewayHelperInstalled, onEnable: { systemCapabilities.setGatewayHelperEnabled(true) }, onDisable: { systemCapabilities.setGatewayHelperEnabled(false) })
                 Toggle("开机自启", isOn: Binding(get: { systemCapabilities.launchAtLoginEnabled }, set: { systemCapabilities.setLaunchAtLoginEnabled($0) }))
             } header: { Text("系统能力") }
 
@@ -212,7 +212,7 @@ struct SettingsView: View {
             } header: { Text("Finder 扩展") } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     if let m = systemCapabilities.errorMessage ?? systemCapabilities.statusMessage ?? gatewayViewModel.statusMessage { Text(m) }
-                    Text("Finder 右键新建文件需要先启用 OneBoard Finder 扩展。启用后，在桌面或 Finder 文件夹空白处右键，选择“新建文件”。")
+                    Text("Finder 右键新建文件需要先启用 OneBoard Finder 扩展。启用后，可在受支持的本地 Finder 文件夹空白处右键选择“新建文件”；iCloud Drive 与启用 iCloud 同步的桌面不受 Finder Sync 支持。")
                         .font(.caption).foregroundColor(OneBoardColors.textSecondary)
                 }
             }

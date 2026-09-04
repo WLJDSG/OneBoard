@@ -30,6 +30,7 @@ let package = Package(
             exclude: ["Tests", "App_minimal", "FinderSync", "Resources"],
             sources: ["App", "Core", "Modules", "Shared"],
             linkerSettings: [
+                .linkedFramework("LocalAuthentication"),
                 .linkedFramework("Security"),
             ]
         ),

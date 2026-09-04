@@ -85,6 +85,7 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 8. ✅ 修复权限开关和文案状态联动
 9. ✅ 迁移/补充网关相关测试并通过 `swift build`
 10. ✅ Helper v3 安装时原子写入初始 IPv4 白名单，业务拒绝不再回退到管理员密码命令
+11. ✅ Helper v4 为网关切换和卸载接入 Touch ID/登录密码身份确认，移除 Helper 缺失时的管理员 shell 回退，并增加受限自卸载命令
 
 ### 第六阶段：截图、权限与剪贴板体验修整 ✅
 
@@ -122,10 +123,10 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 **状态：已完成，并于 2026-07-13 完成 macOS 26 权限链路修复**
 
 1. ✅ Finder Sync Extension（FIFinderSync 协议）
-2. ✅ 右键文件夹/桌面空白 → “新建文件”子菜单（txt/docx/xlsx）
+2. ✅ 右键受支持的本地文件夹/本地桌面空白 → “新建文件”子菜单（txt/docx/xlsx）
 3. ✅ 通过 `oneboard://new-file` 将写入请求交给主应用，避免扩展沙盒直接写入失败
 4. ✅ 自动命名、冲突处理，并在 Finder 中选中新文件
-5. ✅ 根目录、用户目录、iCloud Drive 桌面容器根目录、本地/iCloud/系统解析 Desktop 及符号链接目标监听；桌面空白处优先回退到系统解析目录
+5. ✅ 根目录、用户目录、本地 Desktop、系统解析 Desktop 及符号链接目标监听；桌面空白处回退到真实 `~/Desktop`
 6. ✅ `build_app_bundle.sh` 编译、打包并签名 `.appex`
 7. ✅ Cmd+Q 修复（`setupHiddenMainMenu`，仅应用活跃时响应）
 8. ✅ 授权设置页新增 Finder 扩展启用提示
@@ -161,7 +162,7 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 2. ✅ 选区调整和标注阶段复用完整 `AnnotationToolbarView`，删除第二套精简工具栏
 3. ✅ 标注工具点击后立即锁定并安装画布，画布切换时转交第一次鼠标按下，避免首笔丢失
 4. ✅ OCR 等输出动作统一返回截图会话，关闭所有遮罩后再显示结果
-5. ✅ Finder 桌面监听和 entitlement 同时覆盖本地 Desktop、iCloud Desktop、系统解析目录及符号链接目标
+5. ✅ Finder 桌面监听和 entitlement 覆盖本地 Desktop、系统解析目录及符号链接目标；File Provider 管理的 iCloud 桌面不在 Finder Sync 支持范围内
 6. ✅ 网关 Helper 升级为 v3，安装与初始白名单写入只需一次授权，白名单拒绝不再进入管理员命令回退
 7. ✅ 全量 88 项 XCTest 通过，新增多屏捕获计划、标注锁定/画布、OCR 会话、Finder entitlement 和网关回退边界测试
 
@@ -243,8 +244,8 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 5. **开机自启**：重启电脑确认应用自动启动
 6. **权限**：首次启动确认权限引导页正常显示，引导用户开启所需权限
 7. **打包产物**：执行 `script/package_app.sh` 生成 `build/OneBoard.dmg`，并通过 `hdiutil verify build/OneBoard.dmg` 校验镜像
-8. **网关模块**：切换当前默认路由所在服务的网关/DNS，验证 Wi-Fi/有线网络自动识别、仅 DNS 模式、Helper 安装/卸载和授权状态同步；首次安装只出现一次授权，未进白名单地址必须直接失败且不弹出第二次管理员授权
+8. **网关模块**：切换当前默认路由所在服务的网关/DNS，验证 Wi-Fi/有线网络自动识别、仅 DNS 模式、Helper 安装/卸载和授权状态同步；切换与卸载优先弹 Touch ID、无指纹时回退登录密码，首次安装/升级只出现一次系统管理员授权；Helper 缺失或地址未进白名单时必须直接失败且不得弹管理员 shell
 9. **待办模块**：选中文字 + 快捷键添加待办，右键 Services 菜单添加，鼠标移至顶部中央刘海触发面板，勾选完成淡出，查看历史统计，配置保留天数
-10. **Finder 扩展**：分别在本地 Desktop、Finder 映射到 iCloud Drive 根容器的桌面、iCloud Desktop 和符号链接桌面右键 → “新建文件” → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中
+10. **Finder 扩展**：分别在受支持的本地目录、本地 Desktop 和符号链接桌面右键 → “新建文件” → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中。启用 iCloud 同步的桌面应显示限制说明，不以出现 Finder Sync 菜单作为验收项
 11. **Cmd+Q**：OneBoard 活跃时（设置窗口/浮动面板）Cmd+Q 退出；其他应用活跃时 Cmd+Q 不影响 OneBoard
 12. **Codex 账号切换**：用两个真实测试账号分别在官方网页完成登录与验证码；保存后从设置页和菜单栏发起切换，确认 OneBoard 自动退出 Codex、退出期间不修改认证存储、切换后自动重开并进入目标账号，并验证 file 模式、SQLite 凭据、重命名、删除和彻底卸载清理

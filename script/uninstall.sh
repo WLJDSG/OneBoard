@@ -141,9 +141,12 @@ rm -rf ~/Library/Application\ Support/OneBoard 2>/dev/null || true
 
 # ---- 9. 清理网关 Helper ----
 echo "🧹 清理网关 Helper..."
-sudo rm -f /usr/local/bin/oneboard-gateway-helper 2>/dev/null || true
-sudo rm -f /etc/sudoers.d/oneboard-gateway 2>/dev/null || true
-sudo rm -f /etc/oneboard-gateway-allowed-ips.conf 2>/dev/null || true
+if ! /usr/bin/sudo -n /usr/local/bin/oneboard-gateway-helper --uninstall 2>/dev/null; then
+    # 仅旧版/损坏 Helper 残留需要一次传统管理员授权兜底。
+    sudo rm -f /usr/local/bin/oneboard-gateway-helper 2>/dev/null || true
+    sudo rm -f /etc/sudoers.d/oneboard-gateway 2>/dev/null || true
+    sudo rm -f /etc/oneboard-gateway-allowed-ips.conf 2>/dev/null || true
+fi
 
 # ---- 10. 重启系统服务 ----
 echo "🔄 重启系统服务..."

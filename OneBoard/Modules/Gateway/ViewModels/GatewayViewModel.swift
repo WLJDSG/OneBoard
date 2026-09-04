@@ -19,14 +19,17 @@ final class GatewayViewModel: ObservableObject {
 
     private let service: GatewayService
     private let profileStore: GatewayProfileStore
+    private let authorizer: SensitiveOperationAuthorizing
     private var refreshTimer: Timer?
 
     init(
         service: GatewayService = GatewayService(),
-        profileStore: GatewayProfileStore = .shared
+        profileStore: GatewayProfileStore = .shared,
+        authorizer: SensitiveOperationAuthorizing = SensitiveOperationAuthorizer()
     ) {
         self.service = service
         self.profileStore = profileStore
+        self.authorizer = authorizer
         loadProfiles()
         refresh()
         refreshHelperStatus()
@@ -114,22 +117,20 @@ final class GatewayViewModel: ObservableObject {
         isSwitching = true
         statusMessage = "正在切换到 \(profile.title)..."
 
-        Task.detached(priority: .userInitiated) { [service, snapshot] in
+        Task { [service, snapshot, authorizer] in
             do {
-                try service.switchGateway(to: profile, snapshot: snapshot)
-                let nextSnapshot = service.currentSnapshot()
-                let helperInstalled = service.isHelperInstalled()
-                await MainActor.run {
-                    self.snapshot = nextSnapshot
-                    self.isHelperInstalled = helperInstalled
-                    self.statusMessage = "已切换到 \(profile.title)"
-                    self.isSwitching = false
-                }
+                try await authorizer.authorize(reason: "确认切换到网关“\(profile.title)”")
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try service.switchGateway(to: profile, snapshot: snapshot)
+                    return (service.currentSnapshot(), service.isHelperInstalled())
+                }.value
+                self.snapshot = result.0
+                self.isHelperInstalled = result.1
+                self.statusMessage = "已切换到 \(profile.title)"
+                self.isSwitching = false
             } catch {
-                await MainActor.run {
-                    self.statusMessage = error.localizedDescription
-                    self.isSwitching = false
-                }
+                self.statusMessage = error.localizedDescription
+                self.isSwitching = false
             }
         }
     }
@@ -156,19 +157,19 @@ final class GatewayViewModel: ObservableObject {
 
     func uninstallHelper() {
         statusMessage = "正在卸载 OneBoard 网关免密 Helper..."
-        Task.detached(priority: .userInitiated) { [service] in
+        Task { [service, authorizer] in
             do {
-                try service.uninstallHelper()
-                await MainActor.run {
-                    self.isHelperInstalled = service.isHelperInstalled()
-                    self.statusMessage = "网关免密 Helper 已卸载"
-                    NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
-                }
+                try await authorizer.authorize(reason: "确认卸载 OneBoard 网关 Helper")
+                let installed = try await Task.detached(priority: .userInitiated) {
+                    try service.uninstallHelper()
+                    return service.isHelperInstalled()
+                }.value
+                self.isHelperInstalled = installed
+                self.statusMessage = "网关免密 Helper 已卸载"
+                NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
             } catch {
-                await MainActor.run {
-                    self.statusMessage = error.localizedDescription
-                    self.refreshHelperStatus()
-                }
+                self.statusMessage = error.localizedDescription
+                self.refreshHelperStatus()
             }
         }
     }

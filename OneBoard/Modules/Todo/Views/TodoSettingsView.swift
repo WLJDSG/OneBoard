@@ -70,7 +70,7 @@ struct TodoSettingsView: View {
                 }.padding(.vertical, 4)
 
             } header: { Text("Finder 右键新建文件类型") } footer: {
-                Text("启用 Finder 扩展后，右键文件夹可选择新建的文件类型。需在 系统设置 > 扩展 > Finder 扩展 中启用 OneBoard。")
+                Text("启用 Finder 扩展后，可在受支持的本地 Finder 文件夹中右键新建文件。iCloud Drive（包括启用 iCloud 同步的桌面）由系统 File Provider 管理，macOS 不允许第三方 Finder Sync 在其空白处添加此菜单。")
                     .font(.caption).foregroundColor(OneBoardColors.textSecondary)
             }
 

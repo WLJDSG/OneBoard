@@ -246,22 +246,25 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         alert.addButton(withTitle: "取消")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        do {
-            LaunchAtLogin.isEnabled = false
-            UserDefaults.standard.set(false, forKey: Constants.UserDefaultsKeys.launchAtLogin)
-            try launchDeferredUninstaller()
-            if let appDelegate = AppDelegate.shared {
-                appDelegate.requestTermination()
-            } else {
-                NSApp.terminate(nil)
+        Task { @MainActor in
+            do {
+                try await SensitiveOperationAuthorizer().authorize(reason: "确认彻底卸载 OneBoard 并清理本机数据")
+                LaunchAtLogin.isEnabled = false
+                UserDefaults.standard.set(false, forKey: Constants.UserDefaultsKeys.launchAtLogin)
+                try launchDeferredUninstaller()
+                if let appDelegate = AppDelegate.shared {
+                    appDelegate.requestTermination()
+                } else {
+                    NSApp.terminate(nil)
+                }
+            } catch {
+                let failure = NSAlert()
+                failure.messageText = "未能开始卸载"
+                failure.informativeText = error.localizedDescription
+                failure.alertStyle = .warning
+                failure.addButton(withTitle: "好")
+                failure.runModal()
             }
-        } catch {
-            let failure = NSAlert()
-            failure.messageText = "卸载脚本启动失败"
-            failure.informativeText = error.localizedDescription
-            failure.alertStyle = .warning
-            failure.addButton(withTitle: "好")
-            failure.runModal()
         }
     }
 
@@ -337,8 +340,8 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         /bin/rm -rf "$HOME/Library/Application Scripts/group.com.oneboard.mac" >/dev/null 2>&1
         /bin/rm -rf "$HOME/Library/Application Support/OneBoard" >/dev/null 2>&1
 
-        # 清理网关 Helper
-        /usr/bin/osascript -e "do shell script \"/bin/rm -f /usr/local/bin/oneboard-gateway-helper /etc/sudoers.d/oneboard-gateway /etc/oneboard-gateway-allowed-ips.conf\" with administrator privileges" >/dev/null 2>&1
+        # 当前 Helper 可在 sudoers 允许范围内自卸载，不再弹管理员密码框。
+        /usr/bin/sudo -n /usr/local/bin/oneboard-gateway-helper --uninstall >/dev/null 2>&1
 
         /usr/bin/python3 - <<'PY' >/dev/null 2>&1
         import os
