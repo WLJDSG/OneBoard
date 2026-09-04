@@ -89,10 +89,13 @@
 | 需求 | 优先级 | 说明 |
 |------|--------|------|
 | 双工具配置 | P0 | 独立管理 Codex 和 Claude Code 的官方/自定义 API 供应商及底层模型 ID |
+| 供应商信息 | P0 | 可配置名称、备注、官网链接、请求地址和默认模型，编辑页按用途分区展示 |
 | Claude 模型映射 | P0 | 配置默认、Haiku、Sonnet、Opus、Fable、子代理模型及可选显示名；空槽位按角色回退，模型 ID 支持 `[1M]` 后缀 |
 | 模型页额度 | P0 | 官方 Codex 显示当前账号 5 小时/每周额度快照并可刷新；第三方无可信查询配置时不得伪造余额 |
-| 密钥存储 | P0 | API Key 按配置 UUID 保存到权限为 `0600` 的 OneBoard SQLite，不进入 UserDefaults、日志或界面回显 |
+| 密钥存储 | P0 | API Key 按配置 UUID 直接保存到权限为 `0600` 的 OneBoard SQLite，不进入钥匙串、UserDefaults 或日志；界面默认遮蔽，仅在用户主动点击后显示 |
 | CC Switch 导入 | P0 | 只读导入 `~/.cc-switch/cc-switch.db` 中 Codex / Claude Code 配置、分层模型和当前标记；不得修改源库 |
+| 独立代理 | P0 | OneBoard 内置 Claude/Codex 协议转换、流式响应、鉴权注入、完整 URL、请求覆盖和端点测速；卸载 CC Switch 后继续工作 |
+| 代理密钥边界 | P0 | 真实 API Key 仅由 OneBoard SQLite 持久化并在启动时注入代理内存；客户端配置只允许占位认证值 |
 | 安全合并 | P0 | 保留 Codex TOML 和 Claude JSON 的未知字段；拒绝符号链接，原子写入并使用 `0600` 权限 |
 | 账号隔离 | P0 | Codex 模型切换不得写入或删除 `auth.json`，不得干扰 Codex 账号切换模块 |
 | 备份恢复 | P0 | 首次写入前创建稳定备份，后续切换不覆盖，支持一键恢复 |

@@ -24,6 +24,7 @@ Carthage/Build/
 .DS_Store
 *.swp
 *.lock
+!ProxySidecar/Cargo.lock
 Thumbs.db
 
 # App bundle

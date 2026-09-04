@@ -1,0 +1,20 @@
+[package]
+name = "oneboard-ai-proxy"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow = "1"
+cc-switch = { git = "https://github.com/farion1231/cc-switch.git", rev = "c58a25b2ae583710f24ce8867e48340bda619f7d", package = "cc-switch" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+strip = "symbols"

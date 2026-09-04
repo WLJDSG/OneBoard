@@ -110,6 +110,101 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         XCTAssertEqual(env["CLAUDE_CODE_SUBAGENT_MODEL"], "subagent-test")
     }
 
+    func testProxyRoutingWritesOnlyPlaceholderToClientConfigs() throws {
+        let context = try makeContext()
+        let codex = AIProviderProfile(
+            client: .codex,
+            title: "Relay",
+            baseURL: "https://upstream.example/v1",
+            model: "gpt-test"
+        )
+        try context.writer.apply(
+            codex,
+            apiKey: "must-not-reach-client-config",
+            routing: AIProxyRouting(baseURL: "http://127.0.0.1:43123/v1")
+        )
+        let codexText = try String(contentsOf: context.codexURL, encoding: .utf8)
+        XCTAssertTrue(codexText.contains("base_url = \"http://127.0.0.1:43123/v1\""))
+        XCTAssertTrue(codexText.contains("experimental_bearer_token = \"PROXY_MANAGED\""))
+        XCTAssertFalse(codexText.contains("must-not-reach-client-config"))
+
+        let claude = AIProviderProfile(
+            client: .claude,
+            title: "Relay",
+            baseURL: "https://upstream.example",
+            model: "claude-test"
+        )
+        try context.writer.apply(
+            claude,
+            apiKey: "must-not-reach-client-config",
+            routing: AIProxyRouting(baseURL: "http://127.0.0.1:43123")
+        )
+        let root = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: context.claudeURL)) as? [String: Any]
+        )
+        let env = try XCTUnwrap(root["env"] as? [String: String])
+        XCTAssertEqual(env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:43123")
+        XCTAssertEqual(env["ANTHROPIC_AUTH_TOKEN"], "PROXY_MANAGED")
+        XCTAssertFalse(String(data: try Data(contentsOf: context.claudeURL), encoding: .utf8)!.contains("must-not-reach-client-config"))
+    }
+
+    func testProxySnapshotCarriesCCSwitchRuntimeMetadataAndSecretOnlyInMemoryPayload() throws {
+        let profile = AIProviderProfile(
+            client: .claude,
+            title: "Converted Relay",
+            baseURL: "https://relay.example/v1",
+            model: "claude-test",
+            apiFormat: .openAIResponses,
+            isFullURL: true,
+            customUserAgent: "OneBoard-Test",
+            requestHeaderOverridesJSON: "{\"x-route\":\"work\"}",
+            requestBodyOverridesJSON: "{\"temperature\":0.2}",
+            promptCacheKey: "stable-cache"
+        )
+
+        let data = try AIProxySnapshotBuilder.makePayload(providers: [(profile, "sqlite-secret")])
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual((root["listenPort"] as? NSNumber)?.intValue, 15731)
+        let providers = try XCTUnwrap(root["providers"] as? [[String: Any]])
+        let provider = try XCTUnwrap(providers.first?["provider"] as? [String: Any])
+        let settings = try XCTUnwrap(provider["settingsConfig"] as? [String: Any])
+        let env = try XCTUnwrap(settings["env"] as? [String: Any])
+        let meta = try XCTUnwrap(provider["meta"] as? [String: Any])
+        let overrides = try XCTUnwrap(meta["localProxyRequestOverrides"] as? [String: Any])
+
+        XCTAssertEqual(env["ANTHROPIC_AUTH_TOKEN"] as? String, "sqlite-secret")
+        XCTAssertEqual(meta["apiFormat"] as? String, "openai_responses")
+        XCTAssertEqual(meta["isFullUrl"] as? Bool, true)
+        XCTAssertEqual(meta["customUserAgent"] as? String, "OneBoard-Test")
+        XCTAssertEqual((overrides["headers"] as? [String: String])?["x-route"], "work")
+        XCTAssertEqual((overrides["body"] as? [String: Double])?["temperature"], 0.2)
+    }
+
+    func testProxySnapshotUpdatesImportedCodexModelAndURLWithoutDroppingOtherConfig() throws {
+        let profile = AIProviderProfile(
+            client: .codex,
+            title: "Imported Relay",
+            baseURL: "https://new.example/v1",
+            model: "new-model",
+            runtimeSettingsJSON: """
+            {"auth":{},"config":"model_provider = \\"relay\\"\\nmodel = \\"old-model\\"\\nmodel_reasoning_effort = \\"high\\"\\n[model_providers.relay]\\nbase_url = \\"https://old.example/v1\\"\\nwire_api = \\"responses\\"\\n"}
+            """
+        )
+
+        let data = try AIProxySnapshotBuilder.makePayload(providers: [(profile, "sqlite-secret")])
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let providers = try XCTUnwrap(root["providers"] as? [[String: Any]])
+        let provider = try XCTUnwrap(providers.first?["provider"] as? [String: Any])
+        let settings = try XCTUnwrap(provider["settingsConfig"] as? [String: Any])
+        let config = try XCTUnwrap(settings["config"] as? String)
+
+        XCTAssertTrue(config.contains("model = \"new-model\""))
+        XCTAssertTrue(config.contains("base_url = \"https://new.example/v1\""))
+        XCTAssertTrue(config.contains("model_reasoning_effort = \"high\""))
+        XCTAssertFalse(config.contains("old-model"))
+        XCTAssertFalse(config.contains("old.example"))
+    }
+
     func testClaudeFableFallsBackToOpusThenDefaultModel() throws {
         let context = try makeContext()
         let opusProfile = AIProviderProfile(
@@ -221,6 +316,53 @@ final class AIModelConfigurationWriterTests: XCTestCase {
     func testCustomProfileRequiresHTTPURL() {
         let profile = AIProviderProfile(client: .codex, title: "Bad", baseURL: "file:///tmp/api", model: "gpt-test")
         XCTAssertThrowsError(try profile.validated())
+    }
+
+    func testProviderWebsiteRequiresHTTPURLAndMetadataIsTrimmed() throws {
+        let invalid = AIProviderProfile(
+            client: .claude,
+            title: "Relay",
+            websiteURL: "file:///tmp/provider",
+            baseURL: "https://relay.example",
+            model: "claude-test"
+        )
+        XCTAssertThrowsError(try invalid.validated()) { error in
+            XCTAssertEqual(error as? AIModelSwitchError, .invalidProfile("官网链接必须是有效的 HTTP(S) URL"))
+        }
+
+        let valid = AIProviderProfile(
+            client: .claude,
+            title: " Relay ",
+            note: " Company account ",
+            websiteURL: " https://relay.example/docs ",
+            baseURL: "https://relay.example",
+            model: "claude-test"
+        )
+        let validated = try valid.validated()
+        XCTAssertEqual(validated.title, "Relay")
+        XCTAssertEqual(validated.note, "Company account")
+        XCTAssertEqual(validated.websiteURL, "https://relay.example/docs")
+    }
+
+    func testLegacyProviderWithoutPresentationMetadataStillDecodes() throws {
+        let profile = AIProviderProfile(
+            client: .claude,
+            title: "Legacy",
+            baseURL: "https://relay.example",
+            model: "claude-test"
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any]
+        )
+        object.removeValue(forKey: "note")
+        object.removeValue(forKey: "websiteURL")
+
+        let decoded = try JSONDecoder().decode(
+            AIProviderProfile.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        XCTAssertNil(decoded.note)
+        XCTAssertNil(decoded.websiteURL)
     }
 
     private func makeContext() throws -> (

@@ -44,10 +44,15 @@ final class CCSwitchProviderImporter {
                 try Row.fetchAll(
                     db,
                     sql: """
-                    SELECT id, app_type, name, settings_config, is_current
-                    FROM providers
+                    SELECT p.id, p.app_type, p.name, p.settings_config, p.website_url, p.notes, p.meta, p.is_current,
+                           COALESCE((
+                               SELECT json_group_array(e.url)
+                               FROM provider_endpoints e
+                               WHERE e.provider_id = p.id AND e.app_type = p.app_type
+                           ), '[]') AS endpoints_json
+                    FROM providers p
                     WHERE app_type IN ('codex', 'claude')
-                    ORDER BY app_type, COALESCE(sort_index, 999999), created_at, id
+                    ORDER BY p.app_type, COALESCE(p.sort_index, 999999), p.created_at, p.id
                     """
                 )
             }
@@ -73,6 +78,11 @@ final class CCSwitchProviderImporter {
         let appType: String = row["app_type"]
         let name: String = row["name"]
         let settingsText: String = row["settings_config"]
+        let websiteURL: String? = row["website_url"]
+        let notes: String? = row["notes"]
+        let metadataText: String = row["meta"]
+        let endpointsText: String = row["endpoints_json"]
+        let endpoints = Self.stringArray(from: endpointsText)
         let isCurrent: Bool = row["is_current"]
         guard let data = settingsText.data(using: .utf8),
               let settings = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -81,9 +91,15 @@ final class CCSwitchProviderImporter {
 
         switch appType {
         case "codex":
-            return try parseCodex(id: id, name: name, settings: settings, isCurrent: isCurrent)
+            return try parseCodex(
+                id: id, name: name, websiteURL: websiteURL, notes: notes,
+                settings: settings, metadataText: metadataText, endpoints: endpoints, isCurrent: isCurrent
+            )
         case "claude":
-            return try parseClaude(id: id, name: name, settings: settings, isCurrent: isCurrent)
+            return try parseClaude(
+                id: id, name: name, websiteURL: websiteURL, notes: notes,
+                settings: settings, metadataText: metadataText, endpoints: endpoints, isCurrent: isCurrent
+            )
         default:
             throw AIModelSwitchError.importFailure("不支持 \(appType)")
         }
@@ -92,7 +108,11 @@ final class CCSwitchProviderImporter {
     private func parseCodex(
         id: String,
         name: String,
+        websiteURL: String?,
+        notes: String?,
         settings: [String: Any],
+        metadataText: String,
+        endpoints: [String],
         isCurrent: Bool
     ) throws -> CCSwitchImportedProvider {
         let parsed = Self.parseCodexTOML(settings["config"] as? String ?? "")
@@ -103,8 +123,23 @@ final class CCSwitchProviderImporter {
             client: .codex,
             kind: kind,
             title: name,
+            note: notes,
+            websiteURL: websiteURL,
             baseURL: parsed.baseURL ?? "",
             model: parsed.model ?? "",
+            apiFormat: Self.apiFormat(from: metadataText, client: .codex),
+            isFullURL: Self.metadataBool("isFullUrl", from: metadataText),
+            customUserAgent: Self.metadataString("customUserAgent", from: metadataText),
+            requestHeaderOverridesJSON: Self.requestOverrideJSON("headers", from: metadataText),
+            requestBodyOverridesJSON: Self.requestOverrideJSON("body", from: metadataText),
+            promptCacheKey: Self.metadataString("promptCacheKey", from: metadataText),
+            promptCacheRouting: Self.promptCacheRouting(from: metadataText),
+            impersonateClaudeCode: Self.metadataBool("impersonateClaudeCode", from: metadataText),
+            maxOutputTokens: Self.metadataInt("maxOutputTokens", from: metadataText),
+            endpointAutoSelect: Self.metadataBool("endpointAutoSelect", from: metadataText),
+            customEndpoints: endpoints,
+            runtimeSettingsJSON: Self.sanitizedSettingsJSON(settings, client: .codex),
+            runtimeMetadataJSON: Self.normalizedJSONObject(metadataText),
             sourceIdentifier: "cc-switch:codex:\(id)"
         ).validated()
         if kind == .custom, apiKey == nil { throw AIModelSwitchError.apiKeyMissing }
@@ -114,7 +149,11 @@ final class CCSwitchProviderImporter {
     private func parseClaude(
         id: String,
         name: String,
+        websiteURL: String?,
+        notes: String?,
         settings: [String: Any],
+        metadataText: String,
+        endpoints: [String],
         isCurrent: Bool
     ) throws -> CCSwitchImportedProvider {
         let env = settings["env"] as? [String: Any] ?? [:]
@@ -140,8 +179,20 @@ final class CCSwitchProviderImporter {
             client: .claude,
             kind: kind,
             title: name,
+            note: notes,
+            websiteURL: websiteURL,
             baseURL: baseURL ?? "",
             model: model,
+            apiFormat: Self.apiFormat(from: metadataText, client: .claude),
+            isFullURL: Self.metadataBool("isFullUrl", from: metadataText),
+            customUserAgent: Self.metadataString("customUserAgent", from: metadataText),
+            requestHeaderOverridesJSON: Self.requestOverrideJSON("headers", from: metadataText),
+            requestBodyOverridesJSON: Self.requestOverrideJSON("body", from: metadataText),
+            promptCacheKey: Self.metadataString("promptCacheKey", from: metadataText),
+            endpointAutoSelect: Self.metadataBool("endpointAutoSelect", from: metadataText),
+            customEndpoints: endpoints,
+            runtimeSettingsJSON: Self.sanitizedSettingsJSON(settings, client: .claude),
+            runtimeMetadataJSON: Self.normalizedJSONObject(metadataText),
             claudeAPIKeyField: keyField,
             claudeHaikuModel: haiku,
             claudeHaikuModelName: haikuName,
@@ -200,6 +251,79 @@ final class CCSwitchProviderImporter {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
         return trimmed
+    }
+
+    private static func metadataObject(from text: String) -> [String: Any] {
+        guard let data = text.data(using: .utf8),
+              let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return value
+    }
+
+    private static func metadataString(_ key: String, from text: String) -> String? {
+        nonEmpty(metadataObject(from: text)[key] as? String)
+    }
+
+    private static func metadataBool(_ key: String, from text: String) -> Bool? {
+        metadataObject(from: text)[key] as? Bool
+    }
+
+    private static func metadataInt(_ key: String, from text: String) -> Int? {
+        (metadataObject(from: text)[key] as? NSNumber)?.intValue
+    }
+
+    private static func apiFormat(from text: String, client: AIClient) -> AIUpstreamAPIFormat {
+        metadataString("apiFormat", from: text).flatMap(AIUpstreamAPIFormat.init(rawValue:))
+            ?? .defaultValue(for: client)
+    }
+
+    private static func promptCacheRouting(from text: String) -> AIPromptCacheRouting? {
+        metadataString("promptCacheRouting", from: text).flatMap(AIPromptCacheRouting.init(rawValue:))
+    }
+
+    private static func requestOverrideJSON(_ key: String, from text: String) -> String? {
+        guard let overrides = metadataObject(from: text)["localProxyRequestOverrides"] as? [String: Any],
+              let value = overrides[key],
+              JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let result = String(data: data, encoding: .utf8) else { return nil }
+        return result
+    }
+
+    private static func normalizedJSONObject(_ text: String) -> String? {
+        let object = metadataObject(from: text)
+        guard !object.isEmpty,
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func stringArray(from text: String) -> [String] {
+        guard let data = text.data(using: .utf8),
+              let values = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+        return values
+    }
+
+    private static func sanitizedSettingsJSON(_ settings: [String: Any], client: AIClient) -> String? {
+        var sanitized = settings
+        switch client {
+        case .claude:
+            if var env = sanitized["env"] as? [String: Any] {
+                ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY"]
+                    .forEach { env.removeValue(forKey: $0) }
+                sanitized["env"] = env
+            }
+        case .codex:
+            if var auth = sanitized["auth"] as? [String: Any] {
+                auth.removeValue(forKey: "OPENAI_API_KEY")
+                sanitized["auth"] = auth
+            }
+            if let config = sanitized["config"] as? String {
+                sanitized["config"] = config.components(separatedBy: .newlines)
+                    .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("experimental_bearer_token") }
+                    .joined(separator: "\n")
+            }
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: sanitized, options: [.sortedKeys]) else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 }
 

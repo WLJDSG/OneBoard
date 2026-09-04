@@ -211,6 +211,23 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 8. ✅ 对齐 CC Switch 新版 Claude 槽位：补齐 Fable、角色显示名、子代理模型与 `[1M]` 配置说明
 9. ✅ AI 模型列表复用官方 Codex 账号额度快照并提供刷新；第三方无查询契约时明确降级
 
+### 2026-09-04：供应商编辑页信息架构优化 ✅
+
+1. ✅ 直接核对本地 CC Switch 源码，将编辑页拆分为基本信息、连接鉴权和 Claude 高级模型槽位
+2. ✅ 增加供应商备注与官网链接，API Key 支持默认遮蔽、主动显隐和直接更新
+3. ✅ 鉴权字段移入高级选项并补充 `AUTH_TOKEN` / `API_KEY` 选择说明
+4. ✅ 供应商元数据和 API Key 继续只写 OneBoard SQLite，不接入钥匙串
+5. ✅ 对齐角色表格、一键设置、默认兜底模型与独立 1M 开关
+
+### 2026-09-04：CC Switch Codex / Claude 独立代理迁移 ✅
+
+1. ✅ 固定 CC Switch MIT 源码提交，构建无界面 Rust sidecar 并随 OneBoard.app 打包
+2. ✅ sidecar 使用内存数据库；供应商、代理元数据和 API Key 只由 OneBoard SQLite 持久化
+3. ✅ 接入 Anthropic / OpenAI Chat / OpenAI Responses / Gemini Native 转换、SSE 与请求覆盖
+4. ✅ 增加完整 URL、User-Agent、备用端点、测速择优、缓存路由和 Codex→Anthropic 选项
+5. ✅ 客户端活动配置只写本地代理和 `PROXY_MANAGED`，保留稳定备份与原子写入
+6. ✅ 请求级验证 Claude→Chat 与 Codex→Anthropic 双向转换、真实 Key 注入和覆盖规则
+
 
 
 ### 第八阶段：截图模块深度优化 ✅

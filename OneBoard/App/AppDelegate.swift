@@ -34,6 +34,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = GatewayProfileStore.shared.initializeDefaultsIfNeeded()
         Task { @MainActor in
             _ = CodexAccountViewModel.shared
+            AIModelSwitcherViewModel.shared.resumeProxyIfNeeded()
         }
         setupDefaultSettings()
 
@@ -78,6 +79,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        AIProxyCoordinator.shared.stop()
         PasteboardMonitor.shared.stop()
         DragDetector.shared.stop()
         print("[AppDelegate] OneBoard 已退出")

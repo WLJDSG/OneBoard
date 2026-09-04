@@ -159,15 +159,19 @@ SQLite 账号凭据
 
 ### AI 模型供应商切换
 
-- `AIProviderProfile`、当前标记与 API Key 统一存入 OneBoard SQLite；API Key 位于 `private_records/ai_provider_api_key`，普通配置状态位于 `application_state`。
+- `AIProviderProfile`（含备注与官网）、当前标记与 API Key 统一存入 OneBoard SQLite；API Key 位于 `private_records/ai_provider_api_key`，普通配置状态位于 `application_state`，不得接入 macOS Keychain。
 - Codex 写入器仅合并 `~/.codex/config.toml`：更新顶层 `model_provider` / `model`，并管理唯一 `[model_providers.oneboard]` 表；其他顶层字段和 TOML 表原样保留。
 - 自定义 Codex 表使用 `wire_api = "responses"`、`requires_openai_auth = false` 和 provider-scoped `experimental_bearer_token`；官方配置移除 OneBoard 表和 `model_provider`，但不修改账号认证缓存。
 - Claude Code 写入器解析 `~/.claude/settings.json`（兼容已存在的 `claude.json`），仅替换 `env` 中 OneBoard 管理的 `ANTHROPIC_*` API/模型键，其他 JSON 字段和环境变量保留。
 - Claude 受管模型键覆盖 `ANTHROPIC_MODEL`、Haiku/Sonnet/Opus/Fable 的模型 ID 与可选 `*_MODEL_NAME`，以及 `CLAUDE_CODE_SUBAGENT_MODEL`；Haiku/Sonnet/Opus 空值回退默认模型，Fable 空值先回退 Opus 再回退默认模型。
+- `ANTHROPIC_AUTH_TOKEN` 与 `ANTHROPIC_API_KEY` 只是同一 SQLite 密钥切换时的目标环境变量；编辑页默认前者并将选择收纳在高级选项，保存位置不随字段选择改变。
+- `ProxySidecar/` 固定依赖 CC Switch MIT 源码提交并产出 `Contents/Helpers/oneboard-ai-proxy`。sidecar 只使用 `Database::memory()`，通过 stdin 接收 OneBoard SQLite 快照，通过 stdout 返回动态监听端口，不读写 `~/.cc-switch`。
+- 自定义供应商切换先启动/替换 sidecar，再把 Claude 指向本地根地址、Codex 指向本地 `/v1`；两者只写 `PROXY_MANAGED` 占位认证。真实 Key 仅存在于 OneBoard SQLite 与代理进程内存。
+- 代理运行时复用 CC Switch 的 Claude/Codex 协议转换、SSE、请求头/请求体覆盖、完整 URL及端点策略；客户端配置备份、原子写入和恢复仍由 OneBoard 管理。
 - 模型页额度展示只复用 `CodexAccountProfile.status` 中当前活动官方账号的快照；第三方供应商没有受信任的原生查询契约时显示“未配置查询”，不得执行从 CC Switch 静默导入的 JavaScript 用量脚本。
 - 两种写入都拒绝符号链接，使用 Foundation atomic replace，将目标文件设为 `0600`；首次写入创建 `<filename>.oneboard-backup` 且后续不覆盖。
 - 切换仅影响新启动的 Codex / Claude Code 会话，不主动终止正在运行的 CLI 或桌面任务。
-- CC Switch 导入器以只读方式打开 `~/.cc-switch/cc-switch.db`，只接收 Codex / Claude；API Key 直接写入 `private_records`，完整导入 Claude 角色模型与显示名，空白或缺少必要字段的配置显式跳过。
+- CC Switch 导入器以只读方式打开 `~/.cc-switch/cc-switch.db`，只接收 Codex / Claude；API Key 直接写入 `private_records`，导入 Claude 角色模型、显示名、代理元数据和备用端点，保存运行快照前剥离其中的明文 Key；空白或缺少必要字段的配置显式跳过。
 - 数据库目录固定为 `0700`，主库及已存在的 WAL/SHM 固定为 `0600`；测试必须注入临时数据库、认证文件和可控进程生命周期，禁止读取或修改用户真实认证缓存。
 
 ### 文件摇晃检测降级

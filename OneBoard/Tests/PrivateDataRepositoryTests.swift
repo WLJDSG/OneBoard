@@ -43,9 +43,11 @@ final class PrivateDataRepositoryTests: XCTestCase {
             try db.execute(sql: """
                 CREATE TABLE providers (
                     id TEXT, app_type TEXT, name TEXT, settings_config TEXT,
+                    website_url TEXT, notes TEXT, meta TEXT NOT NULL DEFAULT '{}',
                     is_current BOOLEAN, sort_index INTEGER, created_at INTEGER
                 )
                 """)
+            try db.execute(sql: "CREATE TABLE provider_endpoints (provider_id TEXT, app_type TEXT, url TEXT)")
             let codexSettings: [String: Any] = [
                 "auth": ["OPENAI_API_KEY": "codex-key"],
                 "config": "model_provider = \"relay\"\nmodel = \"gpt-test\"\n[model_providers.relay]\nbase_url = \"https://relay.example\"\n",
@@ -65,12 +67,18 @@ final class PrivateDataRepositoryTests: XCTestCase {
                 ],
             ]
             try db.execute(
-                sql: "INSERT INTO providers VALUES (?, 'codex', 'Codex Relay', ?, 1, 0, 1)",
-                arguments: ["codex-id", try json(codexSettings)]
+                sql: "INSERT INTO providers VALUES (?, 'codex', 'Codex Relay', ?, NULL, NULL, ?, 1, 0, 1)",
+                arguments: [
+                    "codex-id", try json(codexSettings),
+                    "{\"apiFormat\":\"openai_chat\",\"customUserAgent\":\"Relay-Test\"}",
+                ]
             )
             try db.execute(
-                sql: "INSERT INTO providers VALUES (?, 'claude', 'Claude Relay', ?, 1, 0, 1)",
+                sql: "INSERT INTO providers VALUES (?, 'claude', 'Claude Relay', ?, NULL, NULL, '{}', 1, 0, 1)",
                 arguments: ["claude-id", try json(claudeSettings)]
+            )
+            try db.execute(
+                sql: "INSERT INTO provider_endpoints VALUES ('codex-id', 'codex', 'https://backup.example/v1')"
             )
         }
         let store = AIProviderStore(repository: context.repository, legacyDefaults: UserDefaults())
@@ -89,6 +97,11 @@ final class PrivateDataRepositoryTests: XCTestCase {
         let claude = try XCTUnwrap(store.profiles.first { $0.client == .claude })
         XCTAssertEqual(try vault.load(for: codex.id), "codex-key")
         XCTAssertEqual(try vault.load(for: claude.id), "claude-key")
+        XCTAssertEqual(codex.apiFormat, .openAIChat)
+        XCTAssertEqual(codex.customUserAgent, "Relay-Test")
+        XCTAssertEqual(codex.customEndpoints, ["https://backup.example/v1"])
+        XCTAssertFalse(codex.runtimeSettingsJSON?.contains("codex-key") ?? true)
+        XCTAssertFalse(claude.runtimeSettingsJSON?.contains("claude-key") ?? true)
         XCTAssertEqual(claude.claudeHaikuModel, "haiku-test")
         XCTAssertEqual(claude.claudeHaikuModelName, "Fast")
         XCTAssertEqual(claude.claudeSonnetModel, "sonnet-test")
@@ -98,6 +111,25 @@ final class PrivateDataRepositoryTests: XCTestCase {
         XCTAssertEqual(claude.claudeSubagentModel, "subagent-test")
         XCTAssertEqual(store.activeID(for: .codex), codex.id)
         XCTAssertEqual(store.activeID(for: .claude), claude.id)
+    }
+
+    func testProviderPresentationMetadataPersistsInSQLite() throws {
+        let context = try makeContext()
+        let store = AIProviderStore(repository: context.repository, legacyDefaults: UserDefaults())
+        let profile = AIProviderProfile(
+            client: .claude,
+            title: "Relay",
+            note: "Company account",
+            websiteURL: "https://relay.example/docs",
+            baseURL: "https://relay.example",
+            model: "claude-test"
+        )
+
+        store.save(profile)
+
+        let saved = try XCTUnwrap(store.profiles.first)
+        XCTAssertEqual(saved.note, "Company account")
+        XCTAssertEqual(saved.websiteURL, "https://relay.example/docs")
     }
 
     private func makeContext() throws -> (directory: URL, repository: PrivateDataRepository) {

@@ -1,8 +1,14 @@
 import Foundation
 
 protocol AIModelConfigurationWriting {
-    func apply(_ profile: AIProviderProfile, apiKey: String?) throws
+    func apply(_ profile: AIProviderProfile, apiKey: String?, routing: AIProxyRouting?) throws
     func restoreBackup(for client: AIClient) throws
+}
+
+extension AIModelConfigurationWriting {
+    func apply(_ profile: AIProviderProfile, apiKey: String?) throws {
+        try apply(profile, apiKey: apiKey, routing: nil)
+    }
 }
 
 final class AIModelConfigurationWriter: AIModelConfigurationWriting {
@@ -22,12 +28,12 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         self.fileManager = fileManager
     }
 
-    func apply(_ profile: AIProviderProfile, apiKey: String?) throws {
+    func apply(_ profile: AIProviderProfile, apiKey: String?, routing: AIProxyRouting?) throws {
         let profile = try profile.validated()
         if profile.kind == .custom, apiKey?.isEmpty != false { throw AIModelSwitchError.apiKeyMissing }
         switch profile.client {
-        case .codex: try applyCodex(profile, apiKey: apiKey)
-        case .claude: try applyClaude(profile, apiKey: apiKey)
+        case .codex: try applyCodex(profile, apiKey: apiKey, routing: routing)
+        case .claude: try applyClaude(profile, apiKey: apiKey, routing: routing)
         }
     }
 
@@ -41,14 +47,14 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         try atomicWrite(try Data(contentsOf: backup), to: target)
     }
 
-    private func applyCodex(_ profile: AIProviderProfile, apiKey: String?) throws {
+    private func applyCodex(_ profile: AIProviderProfile, apiKey: String?, routing: AIProxyRouting?) throws {
         let existing = try readTextIfPresent(codexConfigURL) ?? ""
         try createBackupIfNeeded(for: codexConfigURL, data: Data(existing.utf8))
-        let output = Self.rewriteCodexConfig(existing, profile: profile, apiKey: apiKey)
+        let output = Self.rewriteCodexConfig(existing, profile: profile, apiKey: apiKey, routing: routing)
         try atomicWrite(Data(output.utf8), to: codexConfigURL)
     }
 
-    private func applyClaude(_ profile: AIProviderProfile, apiKey: String?) throws {
+    private func applyClaude(_ profile: AIProviderProfile, apiKey: String?, routing: AIProxyRouting?) throws {
         let existingData = try readDataIfPresent(claudeSettingsURL)
         let root: [String: Any]
         if let existingData {
@@ -81,8 +87,10 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         Self.setIfPresent(profile.claudeFableModelName, key: "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME", in: &env)
         Self.setIfPresent(profile.claudeSubagentModel, key: "CLAUDE_CODE_SUBAGENT_MODEL", in: &env)
         if profile.kind == .custom, let apiKey {
-            env["ANTHROPIC_BASE_URL"] = profile.baseURL
-            env[profile.claudeAPIKeyField.rawValue] = apiKey
+            env["ANTHROPIC_BASE_URL"] = routing?.baseURL ?? profile.baseURL
+            env[profile.claudeAPIKeyField.rawValue] = routing == nil
+                ? apiKey
+                : AIProxyRouting.placeholderToken
         }
         updated["env"] = env
 
@@ -94,7 +102,12 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         if let value { environment[key] = value }
     }
 
-    static func rewriteCodexConfig(_ existing: String, profile: AIProviderProfile, apiKey: String?) -> String {
+    static func rewriteCodexConfig(
+        _ existing: String,
+        profile: AIProviderProfile,
+        apiKey: String?,
+        routing: AIProxyRouting? = nil
+    ) -> String {
         var lines: [String] = []
         var inManagedTable = false
         var reachedFirstTable = false
@@ -127,10 +140,10 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         if profile.kind == .custom, let apiKey {
             output += "\n[model_providers.oneboard]\n"
             output += "name = \(tomlString(profile.title))\n"
-            output += "base_url = \(tomlString(profile.baseURL))\n"
+            output += "base_url = \(tomlString(routing?.baseURL ?? profile.baseURL))\n"
             output += "wire_api = \"responses\"\n"
             output += "requires_openai_auth = false\n"
-            output += "experimental_bearer_token = \(tomlString(apiKey))\n"
+            output += "experimental_bearer_token = \(tomlString(routing == nil ? apiKey : AIProxyRouting.placeholderToken))\n"
         }
         return output
     }

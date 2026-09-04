@@ -65,14 +65,15 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网�
 
 ### AI 模型与供应商切换
 
-- 分别管理 Codex 和 Claude Code 的官方/自定义 API 配置，支持供应商名称、API 地址、API Key 和底层模型 ID
+- 分别管理 Codex 和 Claude Code 的官方/自定义 API 配置；编辑页按基本信息、连接鉴权、代理转换和高级模型映射分区，支持供应商名称、备注、官网、请求地址、API Key 和底层模型 ID
+- 内置固定版本的 CC Switch MIT Rust 代理核心，支持 Claude/Codex 的 Anthropic、OpenAI Chat、OpenAI Responses（Claude 另支持 Gemini Native）转换、流式响应、完整 URL、自定义 User-Agent、请求头/请求体覆盖和端点测速择优；卸载 CC Switch 后仍可独立运行
 - Claude Code 可分别配置默认、Haiku、Sonnet、Opus、Fable 与子代理模型；角色模型支持自定义显示名和 `[1M]` 上下文标记
 - 设置页可新增、编辑、删除和切换；菜单栏可对 Codex / Claude Code 快速切换
 - 模型配置行展示额度摘要；官方 Codex 复用当前账号的 5 小时/每周真实快照，未配置查询能力的第三方供应商明确显示不可用
 - Codex 仅合并更新 `~/.codex/config.toml`，保留 MCP、项目信任等未知配置，不改动 `auth.json` 和已管理的账号凭据
 - Claude Code 仅合并更新 `~/.claude/settings.json` 的 Anthropic API/模型环境变量，保留 permissions、hooks 等其他字段
-- 配置元数据与 API Key 按 UUID 保存到 OneBoard SQLite；首次切换前创建 `*.oneboard-backup`，支持一键恢复
-- 支持从 `~/.cc-switch/cc-switch.db` 一键导入 Codex / Claude Code 配置，不修改 CC Switch 源数据
+- 配置元数据与 API Key 按 UUID 直接保存到 OneBoard SQLite，不使用 macOS 钥匙串；代理启动时只把 Key 注入进程内存，Codex/Claude 活动配置只写 `PROXY_MANAGED` 占位值；编辑时默认遮蔽密钥并可主动显隐，首次切换前创建 `*.oneboard-backup`
+- 支持从 `~/.cc-switch/cc-switch.db` 一键导入 Codex / Claude Code 配置、代理元数据和备用端点，不修改 CC Switch 源数据；导入完成后运行时不再读取该数据库
 - 第三方 Codex API 活动时，密钥按 Codex 要求写入 provider-scoped `experimental_bearer_token`，配置文件权限设为 `0600`
 
 ### 其他

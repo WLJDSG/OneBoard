@@ -9,6 +9,19 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 LOGIN_ITEMS_DIR="$CONTENTS_DIR/Library/LoginItems"
+HELPERS_DIR="$CONTENTS_DIR/Helpers"
+PROXY_MANIFEST="$ROOT_DIR/ProxySidecar/Cargo.toml"
+PROXY_BINARY="$ROOT_DIR/ProxySidecar/target/release/oneboard-ai-proxy"
+
+echo "Building embedded AI proxy..."
+if [ ! -x "$PROXY_BINARY" ] \
+    || [ "$PROXY_MANIFEST" -nt "$PROXY_BINARY" ] \
+    || [ "$ROOT_DIR/ProxySidecar/Cargo.lock" -nt "$PROXY_BINARY" ] \
+    || [ "$ROOT_DIR/ProxySidecar/src/main.rs" -nt "$PROXY_BINARY" ]; then
+    env -u ONEBOARD_CODESIGN_IDENTITY cargo build --release --locked --manifest-path "$PROXY_MANIFEST"
+else
+    echo "Using current embedded AI proxy binary."
+fi
 
 cd "$PROJECT_DIR"
 : "${ONEBOARD_BUILD_HOME:=/private/tmp/oneboard-home}"
@@ -22,10 +35,14 @@ export CLANG_MODULE_CACHE_PATH="$ONEBOARD_MODULE_CACHE"
 swift build -c release --disable-sandbox
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$HELPERS_DIR"
 
 cp ".build/release/OneBoard" "$MACOS_DIR/OneBoard"
 chmod +x "$MACOS_DIR/OneBoard"
+cp "$PROXY_BINARY" "$HELPERS_DIR/oneboard-ai-proxy"
+chmod +x "$HELPERS_DIR/oneboard-ai-proxy"
+mkdir -p "$RESOURCES_DIR/ThirdPartyNotices"
+cp "$ROOT_DIR/ThirdPartyNotices/CC-Switch-LICENSE.txt" "$RESOURCES_DIR/ThirdPartyNotices/CC-Switch-LICENSE.txt"
 
 # --- Finder Sync Extension ---
 echo "Building Finder Sync Extension..."
@@ -104,6 +121,7 @@ if [ -d "$EXTENSION_DIR" ]; then
     /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "FinderSync/OneBoardFinderSync.entitlements" "$EXTENSION_DIR" || true
 fi
 /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPER_APP" || true
+/usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPERS_DIR/oneboard-ai-proxy" || true
 # 嵌套扩展已经按各自 entitlement 签名；这里不能使用 --deep 重签，
 # 否则会剥掉 Finder 扩展的 app-sandbox entitlement，导致 PlugInKit 拒绝加载。
 /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "Resources/OneBoard.entitlements" "$APP_DIR"

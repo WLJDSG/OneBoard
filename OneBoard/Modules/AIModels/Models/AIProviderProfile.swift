@@ -37,13 +37,65 @@ enum ClaudeAPIKeyField: String, Codable, CaseIterable, Identifiable {
     var title: String { rawValue }
 }
 
+enum AIUpstreamAPIFormat: String, Codable, CaseIterable, Identifiable {
+    case anthropic
+    case openAIChat = "openai_chat"
+    case openAIResponses = "openai_responses"
+    case geminiNative = "gemini_native"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .anthropic: return "Anthropic Messages"
+        case .openAIChat: return "OpenAI Chat Completions"
+        case .openAIResponses: return "OpenAI Responses"
+        case .geminiNative: return "Gemini Native"
+        }
+    }
+
+    static func defaultValue(for client: AIClient) -> AIUpstreamAPIFormat {
+        client == .claude ? .anthropic : .openAIResponses
+    }
+}
+
+enum AIPromptCacheRouting: String, Codable, CaseIterable, Identifiable {
+    case auto
+    case enabled
+    case disabled
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .auto: return "自动"
+        case .enabled: return "启用"
+        case .disabled: return "禁用"
+        }
+    }
+}
+
 struct AIProviderProfile: Codable, Identifiable, Equatable {
     var id: UUID
     var client: AIClient
     var kind: AIProviderKind
     var title: String
+    var note: String?
+    var websiteURL: String?
     var baseURL: String
     var model: String
+    var apiFormat: AIUpstreamAPIFormat?
+    var isFullURL: Bool?
+    var customUserAgent: String?
+    var requestHeaderOverridesJSON: String?
+    var requestBodyOverridesJSON: String?
+    var promptCacheKey: String?
+    var promptCacheRouting: AIPromptCacheRouting?
+    var impersonateClaudeCode: Bool?
+    var maxOutputTokens: Int?
+    var endpointAutoSelect: Bool?
+    var customEndpoints: [String]?
+    var runtimeSettingsJSON: String?
+    var runtimeMetadataJSON: String?
     var claudeAPIKeyField: ClaudeAPIKeyField
     var claudeHaikuModel: String?
     var claudeHaikuModelName: String?
@@ -63,8 +115,23 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         client: AIClient,
         kind: AIProviderKind = .custom,
         title: String,
+        note: String? = nil,
+        websiteURL: String? = nil,
         baseURL: String = "",
         model: String,
+        apiFormat: AIUpstreamAPIFormat? = nil,
+        isFullURL: Bool? = nil,
+        customUserAgent: String? = nil,
+        requestHeaderOverridesJSON: String? = nil,
+        requestBodyOverridesJSON: String? = nil,
+        promptCacheKey: String? = nil,
+        promptCacheRouting: AIPromptCacheRouting? = nil,
+        impersonateClaudeCode: Bool? = nil,
+        maxOutputTokens: Int? = nil,
+        endpointAutoSelect: Bool? = nil,
+        customEndpoints: [String]? = nil,
+        runtimeSettingsJSON: String? = nil,
+        runtimeMetadataJSON: String? = nil,
         claudeAPIKeyField: ClaudeAPIKeyField = .authToken,
         claudeHaikuModel: String? = nil,
         claudeHaikuModelName: String? = nil,
@@ -83,8 +150,23 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         self.client = client
         self.kind = kind
         self.title = title
+        self.note = note
+        self.websiteURL = websiteURL
         self.baseURL = baseURL
         self.model = model
+        self.apiFormat = apiFormat
+        self.isFullURL = isFullURL
+        self.customUserAgent = customUserAgent
+        self.requestHeaderOverridesJSON = requestHeaderOverridesJSON
+        self.requestBodyOverridesJSON = requestBodyOverridesJSON
+        self.promptCacheKey = promptCacheKey
+        self.promptCacheRouting = promptCacheRouting
+        self.impersonateClaudeCode = impersonateClaudeCode
+        self.maxOutputTokens = maxOutputTokens
+        self.endpointAutoSelect = endpointAutoSelect
+        self.customEndpoints = customEndpoints
+        self.runtimeSettingsJSON = runtimeSettingsJSON
+        self.runtimeMetadataJSON = runtimeMetadataJSON
         self.claudeAPIKeyField = claudeAPIKeyField
         self.claudeHaikuModel = claudeHaikuModel
         self.claudeHaikuModelName = claudeHaikuModelName
@@ -103,8 +185,15 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
     func validated() throws -> AIProviderProfile {
         var copy = self
         copy.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.note = Self.trimmedOptional(note)
+        copy.websiteURL = Self.trimmedOptional(websiteURL)
         copy.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.customUserAgent = Self.trimmedOptional(customUserAgent)
+        copy.requestHeaderOverridesJSON = Self.trimmedOptional(requestHeaderOverridesJSON)
+        copy.requestBodyOverridesJSON = Self.trimmedOptional(requestBodyOverridesJSON)
+        copy.promptCacheKey = Self.trimmedOptional(promptCacheKey)
+        copy.customEndpoints = customEndpoints?.compactMap(Self.trimmedOptional).nilIfEmpty
         copy.claudeHaikuModel = Self.trimmedOptional(claudeHaikuModel)
         copy.claudeHaikuModelName = Self.trimmedOptional(claudeHaikuModelName)
         copy.claudeSonnetModel = Self.trimmedOptional(claudeSonnetModel)
@@ -119,20 +208,29 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         guard !copy.model.isEmpty else { throw AIModelSwitchError.invalidProfile("模型 ID 不能为空") }
         guard !copy.title.contains(where: \.isNewline),
               !copy.model.contains(where: \.isNewline),
+              !(copy.note?.contains(where: \.isNewline) ?? false),
               !copy.claudeValues.contains(where: { $0.contains(where: \.isNewline) }) else {
-            throw AIModelSwitchError.invalidProfile("名称、模型 ID 和显示名不能换行")
+            throw AIModelSwitchError.invalidProfile("名称、备注、模型 ID 和显示名不能换行")
+        }
+
+        if let websiteURL = copy.websiteURL {
+            guard Self.isHTTPURL(websiteURL) else {
+                throw AIModelSwitchError.invalidProfile("官网链接必须是有效的 HTTP(S) URL")
+            }
         }
 
         if copy.kind == .custom {
-            guard let components = URLComponents(string: copy.baseURL),
-                  let scheme = components.scheme?.lowercased(),
-                  ["http", "https"].contains(scheme),
-                  components.host != nil else {
+            guard Self.isHTTPURL(copy.baseURL) else {
                 throw AIModelSwitchError.invalidProfile("API 地址必须是有效的 HTTP(S) URL")
             }
         } else {
             copy.baseURL = ""
         }
+        if let value = copy.maxOutputTokens, value <= 0 {
+            throw AIModelSwitchError.invalidProfile("最大输出 Token 必须大于 0")
+        }
+        try Self.validateJSONObject(copy.requestHeaderOverridesJSON, field: "请求头覆盖")
+        try Self.validateJSONObject(copy.requestBodyOverridesJSON, field: "请求体覆盖")
         return copy
     }
 
@@ -151,6 +249,25 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
               !trimmed.isEmpty else { return nil }
         return trimmed
     }
+
+    private static func isHTTPURL(_ value: String) -> Bool {
+        guard let components = URLComponents(string: value),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host != nil else { return false }
+        return true
+    }
+
+    private static func validateJSONObject(_ value: String?, field: String) throws {
+        guard let value, let data = value.data(using: .utf8) else { return }
+        guard (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else {
+            throw AIModelSwitchError.invalidProfile("\(field)必须是 JSON 对象")
+        }
+    }
+}
+
+private extension Array {
+    var nilIfEmpty: Self? { isEmpty ? nil : self }
 }
 
 enum AIModelSwitchError: LocalizedError, Equatable {
@@ -162,6 +279,7 @@ enum AIModelSwitchError: LocalizedError, Equatable {
     case backupMissing(String)
     case storageFailure(String)
     case importFailure(String)
+    case proxyFailure(String)
 
     var errorDescription: String? {
         switch self {
@@ -173,6 +291,7 @@ enum AIModelSwitchError: LocalizedError, Equatable {
         case .backupMissing(let path): return "没有可恢复的备份：\(path)"
         case .storageFailure(let message): return "数据库操作失败：\(message)"
         case .importFailure(let message): return "CC Switch 导入失败：\(message)"
+        case .proxyFailure(let message): return "本地代理失败：\(message)"
         }
     }
 }
