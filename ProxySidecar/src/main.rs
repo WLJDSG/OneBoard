@@ -71,7 +71,7 @@ async fn run() -> Result<()> {
         .await
         .context("更新内存代理配置失败")?;
 
-    let service = ProxyService::new(database);
+    let service = ProxyService::new(database.clone());
     let info = service.start().await.map_err(anyhow::Error::msg)?;
     writeln!(
         std::io::stdout(),
@@ -85,9 +85,48 @@ async fn run() -> Result<()> {
     )?;
     std::io::stdout().flush()?;
 
-    wait_for_shutdown().await?;
+    let mut emitted = std::collections::HashSet::new();
+    let shutdown = wait_for_shutdown();
+    tokio::pin!(shutdown);
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
+    loop {
+        tokio::select! {
+            result = &mut shutdown => { result?; break; }
+            _ = interval.tick() => { emit_usage(&database, &mut emitted)?; }
+        }
+    }
     service.stop().await.map_err(anyhow::Error::msg)?;
+    emit_usage(&database, &mut emitted)?;
     Ok(())
+}
+
+// 只输出计数，不输出提示词、响应正文或认证信息；Swift 持久化至 OneBoard SQLite。
+fn emit_usage(database: &Database, emitted: &mut std::collections::HashSet<String>) -> Result<()> {
+    let mut page = 0;
+    loop {
+        let logs = database.get_request_logs(&Default::default(), page, 200)?;
+        let count = logs.data.len();
+        for log in logs.data {
+            if !emitted.insert(log.request_id.clone()) { continue; }
+            let input = fresh_input(&log.app_type, log.input_token_semantics,
+                log.input_tokens, log.cache_read_tokens, log.cache_creation_tokens);
+            writeln!(std::io::stdout(), "{}", json!({
+                "status": "usage", "id": log.request_id, "providerID": log.provider_id,
+                "timestamp": log.created_at, "input": input, "output": log.output_tokens,
+                "cacheRead": log.cache_read_tokens, "cacheCreation": log.cache_creation_tokens
+            }))?;
+        }
+        if count < 200 { break; }
+        page += 1;
+    }
+    std::io::stdout().flush()?;
+    Ok(())
+}
+
+fn fresh_input(app: &str, semantics: i64, input: u32, read: u32, creation: u32) -> u32 {
+    if app != "codex" || semantics == 2 { return input; }
+    if semantics == 1 { input.saturating_sub(read).saturating_sub(creation) }
+    else { input.saturating_sub(read) }
 }
 
 fn install_crypto_provider() -> Result<()> {
@@ -126,7 +165,15 @@ async fn wait_for_shutdown() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{install_crypto_provider, validate_app_type};
+    use super::{fresh_input, install_crypto_provider, validate_app_type};
+
+    #[test]
+    fn cache_tokens_are_not_counted_twice() {
+        assert_eq!(fresh_input("codex", 1, 100, 60, 10), 30);
+        assert_eq!(fresh_input("codex", 2, 100, 60, 10), 100);
+        assert_eq!(fresh_input("claude", 1, 100, 60, 10), 100);
+    }
+
 
     #[test]
     fn accepts_only_oneboard_supported_apps() {

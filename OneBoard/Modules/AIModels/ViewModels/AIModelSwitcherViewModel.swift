@@ -12,6 +12,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
     private let vault: AIProviderSecretVaulting
     private let writer: AIModelConfigurationWriting
     private let proxyCoordinator: AIProxyCoordinating
+    private let applicationLifecycle: CodexApplicationLifecycleControlling
     private let ccSwitchImporter: CCSwitchProviderImporter
 
     init(
@@ -19,12 +20,14 @@ final class AIModelSwitcherViewModel: ObservableObject {
         vault: AIProviderSecretVaulting = SQLiteAIProviderSecretVault(),
         writer: AIModelConfigurationWriting = AIModelConfigurationWriter(),
         proxyCoordinator: AIProxyCoordinating = AIProxyCoordinator.shared,
+        applicationLifecycle: CodexApplicationLifecycleControlling? = nil,
         ccSwitchImporter: CCSwitchProviderImporter = CCSwitchProviderImporter()
     ) {
         self.store = store
         self.vault = vault
         self.writer = writer
         self.proxyCoordinator = proxyCoordinator
+        self.applicationLifecycle = applicationLifecycle ?? SystemCodexApplicationLifecycleController()
         self.ccSwitchImporter = ccSwitchImporter
         reload()
     }
@@ -46,7 +49,8 @@ final class AIModelSwitcherViewModel: ObservableObject {
         return try? vault.load(for: profile.id)
     }
 
-    func save(_ profile: AIProviderProfile, apiKey: String?) throws {
+    func save(_ profile: AIProviderProfile, apiKey: String?) async throws {
+        let wasActive = store.activeID(for: profile.client) == profile.id
         var validated = try profile.validated()
         validated.updatedAt = Date()
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -60,7 +64,20 @@ final class AIModelSwitcherViewModel: ObservableObject {
         }
         store.save(validated)
         reload()
-        statusMessage = "已保存 \(validated.title)"
+        if wasActive {
+            _ = await switchProfile(id: validated.id)
+        } else {
+            statusMessage = "已保存 \(validated.title)"
+        }
+    }
+
+    func saveAndSwitch(_ profile: AIProviderProfile, apiKey: String?) async throws {
+        try await save(profile, apiKey: apiKey)
+        guard store.activeID(for: profile.client) != profile.id else { return }
+        let message = await switchProfile(id: profile.id)
+        guard store.activeID(for: profile.client) == profile.id else {
+            throw AIModelSwitchError.activationFailed(message)
+        }
     }
 
     func delete(_ profile: AIProviderProfile) {
@@ -75,7 +92,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
     }
 
     @discardableResult
-    func switchProfile(id: UUID) -> String {
+    func switchProfile(id: UUID) async -> String {
         guard let profile = profiles.first(where: { $0.id == id }) else {
             let message = AIModelSwitchError.profileNotFound.localizedDescription
             statusMessage = message
@@ -86,6 +103,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
         let previousActiveIDs = Dictionary(uniqueKeysWithValues: AIClient.allCases.compactMap { client in
             store.activeID(for: client).map { (client, $0) }
         })
+        let codexWasRunning = profile.client == .codex && applicationLifecycle.isRunning
         do {
             let apiKey = profile.kind == .custom ? try vault.load(for: profile.id) : nil
             let routing: AIProxyRouting?
@@ -100,9 +118,30 @@ final class AIModelSwitcherViewModel: ObservableObject {
             } else {
                 routing = nil
             }
+            if codexWasRunning {
+                try await applicationLifecycle.closeAndWait()
+                guard !applicationLifecycle.isRunning else {
+                    throw CodexAccountError.applicationCloseFailed
+                }
+            }
             try writer.apply(profile, apiKey: apiKey, routing: routing)
             store.setActiveID(profile.id, for: profile.client)
-            let message = "已切换 \(profile.client.title) 到 \(profile.title) / \(profile.model)；新会话生效"
+            if codexWasRunning {
+                do {
+                    try await applicationLifecycle.launch()
+                } catch {
+                    let message = "已切换 Codex 到 \(profile.title) / \(profile.model)，但 Codex 重新打开失败，请手动打开"
+                    statusMessage = message
+                    return message
+                }
+            }
+            let suffix: String
+            if profile.client == .codex {
+                suffix = codexWasRunning ? "；Codex 已重新打开" : "；下次启动 Codex 时生效"
+            } else {
+                suffix = "；新会话生效"
+            }
+            let message = "已切换 \(profile.client.title) 到 \(profile.title) / \(profile.model)\(suffix)"
             statusMessage = message
             return message
         } catch {
@@ -111,6 +150,9 @@ final class AIModelSwitcherViewModel: ObservableObject {
                 activeIDs: previousActiveIDs,
                 secretLoader: { try self.vault.load(for: $0) }
             )
+            if codexWasRunning, !applicationLifecycle.isRunning {
+                try? await applicationLifecycle.launch()
+            }
             let message = error.localizedDescription
             statusMessage = message
             return message

@@ -30,7 +30,7 @@ final class AppleTranslationService: TranslationServiceProtocol {
             return translated
         }
 
-        throw TranslationServiceError.translationFailed("Apple Translation 服务层翻译需要 macOS 26+，请切换 Google/DeepSeek，或升级系统后使用。")
+        throw TranslationServiceError.translationFailed("Apple Translation 服务层翻译需要 macOS 26+，请切换 Google/已配置 API，或升级系统后使用。")
     }
 
     private func resolvedSourceLanguage(for text: String, sourceLanguage: String?) throws -> Locale.Language {
@@ -81,12 +81,12 @@ final class GoogleTranslationService: TranslationServiceProtocol {
         guard (200..<300).contains(httpResponse.statusCode) else {
             if httpResponse.statusCode == 429 {
                 throw TranslationServiceError.translationFailed(
-                    "Google 翻译请求过于频繁，当前网络已被 Google 暂时限制。请稍后重试，或切换 Apple/DeepSeek。"
+                    "Google 翻译请求过于频繁，当前网络已被 Google 暂时限制。请稍后重试，或切换 Apple/已配置 API。"
                 )
             }
             if httpResponse.value(forHTTPHeaderField: "Content-Type")?.localizedCaseInsensitiveContains("text/html") == true {
                 throw TranslationServiceError.translationFailed(
-                    "Google 翻译暂时不可用（HTTP \(httpResponse.statusCode)）。请稍后重试，或切换 Apple/DeepSeek。"
+                    "Google 翻译暂时不可用（HTTP \(httpResponse.statusCode)）。请稍后重试，或切换 Apple/已配置 API。"
                 )
             }
             let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
@@ -123,124 +123,6 @@ final class GoogleTranslationService: TranslationServiceProtocol {
     }
 }
 
-/// DeepSeek 翻译服务
-final class DeepSeekTranslationService: TranslationServiceProtocol {
-    func translate(_ text: String, from sourceLanguage: String?, to targetLanguage: String) async throws -> String {
-        try await DeepSeekTranslationClient().translate(
-            text,
-            sourceLanguage: sourceLanguage,
-            targetLanguage: targetLanguage
-        )
-    }
-}
-
-/// DeepSeek 翻译客户端（OpenAI-compatible Chat Completions）
-private struct DeepSeekTranslationClient {
-    private let endpoint = URL(string: "https://api.deepseek.com/chat/completions")!
-    private let model = "deepseek-v4-flash"
-
-    func translate(_ text: String, sourceLanguage: String?, targetLanguage: String) async throws -> String {
-        let apiKey = AppSettings.thirdPartyTranslationAPIKey
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else {
-            throw TranslationServiceError.missingAPIKey
-        }
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 45
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-
-        let payload = DeepSeekRequest(
-            model: model,
-            messages: [
-                .init(
-                    role: "system",
-                    content: "You are a professional translation engine. Translate accurately and return only the translated text. Do not explain."
-                ),
-                .init(
-                    role: "user",
-                    content: makePrompt(text: text, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
-                )
-            ],
-            thinking: .init(type: "disabled"),
-            temperature: 0.2,
-            stream: false
-        )
-        request.httpBody = try JSONEncoder().encode(payload)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TranslationServiceError.translationFailed("DeepSeek 未返回有效响应")
-        }
-
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let message = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
-            throw TranslationServiceError.translationFailed("DeepSeek 翻译失败：\(message)")
-        }
-
-        let decoded = try JSONDecoder().decode(DeepSeekResponse.self, from: data)
-        let translated = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !translated.isEmpty else {
-            throw TranslationServiceError.translationFailed("DeepSeek 返回了空翻译结果")
-        }
-        return translated
-    }
-
-    private func makePrompt(text: String, sourceLanguage: String?, targetLanguage: String) -> String {
-        let source = sourceLanguage ?? "auto-detected language"
-        return """
-        Translate the following text from \(source) to \(languageName(targetLanguage)).
-
-        Text:
-        \(text)
-        """
-    }
-
-    private func languageName(_ code: String) -> String {
-        switch code {
-        case "zh-Hans": return "Simplified Chinese"
-        case "zh-Hant": return "Traditional Chinese"
-        case "en": return "English"
-        case "ja": return "Japanese"
-        case "ko": return "Korean"
-        case "fr": return "French"
-        case "de": return "German"
-        default: return code
-        }
-    }
-}
-
-private struct DeepSeekRequest: Encodable {
-    struct Message: Encodable {
-        let role: String
-        let content: String
-    }
-
-    struct Thinking: Encodable {
-        let type: String
-    }
-
-    let model: String
-    let messages: [Message]
-    let thinking: Thinking
-    let temperature: Double
-    let stream: Bool
-}
-
-private struct DeepSeekResponse: Decodable {
-    struct Choice: Decodable {
-        struct Message: Decodable {
-            let content: String
-        }
-
-        let message: Message
-    }
-
-    let choices: [Choice]
-}
-
 enum TranslationServiceError: LocalizedError {
     case notImplemented
     case missingAPIKey
@@ -251,7 +133,7 @@ enum TranslationServiceError: LocalizedError {
         case .notImplemented:
             return "第三方翻译暂未配置"
         case .missingAPIKey:
-            return "请先在设置中填写 DeepSeek API Key"
+            return "请先在 AI 模型设置中添加并选择 API Key"
         case .translationFailed(let message):
             return message
         }
@@ -267,7 +149,7 @@ enum TranslationServiceFactory {
         case .google:
             return GoogleTranslationService()
         case .deepSeek:
-            return DeepSeekTranslationService()
+            return ConfiguredAITranslationService()
         }
     }
 }

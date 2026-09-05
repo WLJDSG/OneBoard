@@ -228,6 +228,20 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 5. ✅ 客户端活动配置只写本地代理和 `PROXY_MANAGED`，保留稳定备份与原子写入
 6. ✅ 请求级验证 Claude→Chat 与 Codex→Anthropic 双向转换、真实 Key 注入和覆盖规则
 
+### 2026-09-04：Codex API Key 切换重载修复 ✅
+
+1. ✅ 对照 CC Switch 当前供应商更新时同步 Live 配置的行为，补齐 OneBoard 活动供应商保存后的代理重载
+2. ✅ Codex 运行中切换时先关闭并确认旧 app-server 退出，写入完成后自动重新打开
+3. ✅ 编辑页增加“保存并切换”，区分仅保存非活动配置与立即启用
+4. ✅ 增加正常重启、关闭失败回滚、重开失败保留新配置和活动 Key 更新回归测试
+
+### 2026-09-04：Codex 自定义模型目录与配置简化 ✅
+
+1. ✅ 自定义 Codex 供应商切换时生成 OneBoard 受管模型目录，并通过 `model_catalog_json` 让模型选择器展示当前供应商模型
+2. ✅ 切回官方供应商时移除目录覆盖，恢复 Codex 内置模型列表
+3. ✅ DeepSeek 地址自动选择 OpenAI Chat Completions；高级兼容设置和 Claude 模型槽位默认折叠
+4. ✅ 增加配置合并、目录内容、官方恢复和 DeepSeek 协议推荐回归测试
+
 
 
 ### 第八阶段：截图模块深度优化 ✅
@@ -266,3 +280,19 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 10. **Finder 扩展**：分别在受支持的本地目录、本地 Desktop 和符号链接桌面右键 → “新建文件” → 创建 txt/docx/xlsx；确认请求由主应用处理、重名自动递增，且文件在 Finder 中被选中。启用 iCloud 同步的桌面应显示限制说明，不以出现 Finder Sync 菜单作为验收项
 11. **Cmd+Q**：OneBoard 活跃时（设置窗口/浮动面板）Cmd+Q 退出；其他应用活跃时 Cmd+Q 不影响 OneBoard
 12. **Codex 账号切换**：用两个真实测试账号分别在官方网页完成登录与验证码；保存后从设置页和菜单栏发起切换，确认 OneBoard 自动退出 Codex、退出期间不修改认证存储、切换后自动重开并进入目标账号，并验证 file 模式、SQLite 凭据、重命名、删除和彻底卸载清理
+
+## 2026-09-05 模型目录选择与额度说明
+
+验证打开已保存供应商自动获取目录，六个模型槽位均可选择或手动输入；检查 1M 标记不丢失，更换地址/API Key 后旧列表清空。运行全量 swift test、Release 构建、正式打包及 hdiutil verify。
+
+## 2026-09-05 第三方额度、Token 统计与翻译 Key 选择
+
+- 额度：内置 DeepSeek、Sub2API、SiliconFlow、OpenRouter 查询。自动识别官方域名，其他同源地址尝试 Sub2API `/v1/usage`；可在编辑页选择额度接口类型。失败显示 HTTP 状态及服务端原因，旧快照标明时间；不执行导入脚本。
+- 统计：按 API Key 和供应商源分组，展示当日、累计、缓存命中 Token，展开查看输入、输出和缓存写入。相同 Key 的 Codex/Claude 配置共享本地统计，换 Key 后分开计算。
+- 数据源：Sub2API 有历史用量时展示供应商当日/累计快照；OneBoard 本地统计仅覆盖启用后通过内置代理或翻译的请求，按本机时区计算自然日，包含缓存 Token 且不重复相加，不与供应商统计合计。余额接口未返回 Token 时不推算历史 Token。
+- 存储：代理复用 CC Switch 的响应解析，向 stdout 输出无正文、无 Key 的计数事件；主应用写入 oneboard.sqlite 的 ai_usage_events，按请求 ID 去重。Key 仍仅在 SQLite 和代理内存中；正常退出刷新尾部计数，异常强杀可能丢失尚未输出的短暂内存事件。
+- 翻译：设置页选择默认 API Key；翻译窗口可临时切换具体供应商配置，复用其默认模型、连接及协议，支持 Chat Completions、Responses、Anthropic Messages 和 Gemini；不改变 Codex/Claude 活动配置，也不再单独填写 DeepSeek Key。
+
+## 2026-09-05 设置页整体视觉升级
+
+完成设置窗口及全部九类页面、供应商/网关/账号编辑弹窗的统一外观。生成九页浅色/深色预览，检查最小窗口尺寸、空状态、带用量供应商卡片和 OAuth/网关弹窗；临时截图测试不保留在常规测试集中。全量测试和 Release 打包后验证 DMG。

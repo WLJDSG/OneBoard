@@ -10,7 +10,7 @@
 | 全局快捷键 | KeyboardShortcuts | 2.x |
 | 开机自启 | LaunchAtLogin | 4.x |
 | OCR | Apple Vision | macOS 内置 |
-| 翻译 | Apple Translation / Google Web / DeepSeek | macOS 15.0+ |
+| 翻译 | Apple Translation / Google Web / 已配置 API Key | macOS 15.0+ |
 | 截图 | `/usr/sbin/screencapture` + CoreGraphics / AppKit | macOS 内置 |
 | 依赖管理 | Swift Package Manager | 5.9+ |
 
@@ -128,7 +128,7 @@ SQLite 账号凭据
 - adjusting 和 locked 阶段复用同一个 `AnnotationToolbarView`，不得恢复第二套精简 `ScreenshotSelectionToolbarView`。
 - 点击标注工具必须在同一事件链中锁定选区并安装 `AnnotationCanvasView`；第一次落笔发生在画布切换边界时，要把鼠标按下事件转交给 `AnnotationViewModel`，不能吞掉首笔。
 - OCR、翻译、复制、保存和贴图是截图会话输出动作，必须先走完成路径关闭所有遮罩，再打开后续窗口或执行输出。
-- Google 免费 Web 翻译端点返回 `429` 时提示当前网络被临时限流并建议稍后重试或切换 Apple/DeepSeek；非成功 HTML 响应不得把拦截页或 `DOCTYPE` 原文展示在翻译面板。
+- Google 免费 Web 翻译端点返回 `429` 时提示当前网络被临时限流并建议稍后重试或切换 Apple/已配置 API；非成功 HTML 响应不得把拦截页或 `DOCTYPE` 原文展示在翻译面板。
 - `GoogleTranslationService` 的网络会话必须可注入，以便用确定性的 HTTP 响应覆盖限流回归测试。
 
 ### 网关 Helper 安全边界
@@ -160,17 +160,20 @@ SQLite 账号凭据
 ### AI 模型供应商切换
 
 - `AIProviderProfile`（含备注与官网）、当前标记与 API Key 统一存入 OneBoard SQLite；API Key 位于 `private_records/ai_provider_api_key`，普通配置状态位于 `application_state`，不得接入 macOS Keychain。
-- Codex 写入器仅合并 `~/.codex/config.toml`：更新顶层 `model_provider` / `model`，并管理唯一 `[model_providers.oneboard]` 表；其他顶层字段和 TOML 表原样保留。
+- Codex 写入器仅合并 `~/.codex/config.toml`：更新顶层 `model_provider` / `model` / `model_catalog_json`，并管理唯一 `[model_providers.oneboard]` 表；自定义供应商原子生成权限为 `0600` 的 `~/.codex/oneboard-model-catalog.json`，目录只包含当前模型并使用供应商名称作为显示名；切回官方时移除目录覆盖，其他顶层字段和 TOML 表原样保留。
 - 自定义 Codex 表使用 `wire_api = "responses"`、`requires_openai_auth = false` 和 provider-scoped `experimental_bearer_token`；官方配置移除 OneBoard 表和 `model_provider`，但不修改账号认证缓存。
 - Claude Code 写入器解析 `~/.claude/settings.json`（兼容已存在的 `claude.json`），仅替换 `env` 中 OneBoard 管理的 `ANTHROPIC_*` API/模型键，其他 JSON 字段和环境变量保留。
 - Claude 受管模型键覆盖 `ANTHROPIC_MODEL`、Haiku/Sonnet/Opus/Fable 的模型 ID 与可选 `*_MODEL_NAME`，以及 `CLAUDE_CODE_SUBAGENT_MODEL`；Haiku/Sonnet/Opus 空值回退默认模型，Fable 空值先回退 Opus 再回退默认模型。
 - `ANTHROPIC_AUTH_TOKEN` 与 `ANTHROPIC_API_KEY` 只是同一 SQLite 密钥切换时的目标环境变量；编辑页默认前者并将选择收纳在高级选项，保存位置不随字段选择改变。
 - `ProxySidecar/` 固定依赖 CC Switch MIT 源码提交并产出 `Contents/Helpers/oneboard-ai-proxy`。sidecar 只使用 `Database::memory()`，通过 stdin 接收 OneBoard SQLite 快照，通过 stdout 返回动态监听端口，不读写 `~/.cc-switch`。
 - 自定义供应商切换先启动/替换 sidecar，再把 Claude 指向本地根地址、Codex 指向本地 `/v1`；两者只写 `PROXY_MANAGED` 占位认证。真实 Key 仅存在于 OneBoard SQLite 与代理进程内存。
+- Codex Desktop 运行中切换供应商时复用 `CodexApplicationLifecycleControlling`：代理预检成功后关闭主进程并等待直属 app-server 退出，再原子写入配置、提交活动 ID 并重新打开；关闭失败恢复旧代理且不提交活动 ID，重开失败保留已提交的新配置并提示手动打开。
+- 保存当前活动供应商时必须重新执行同一切换链路，使 SQLite 中更新后的 Key/模型同步进入代理内存；非活动配置仍只保存。编辑页另提供“保存并切换”消除保存与启用的歧义。
 - 代理运行时复用 CC Switch 的 Claude/Codex 协议转换、SSE、请求头/请求体覆盖、完整 URL及端点策略；客户端配置备份、原子写入和恢复仍由 OneBoard 管理。
-- 模型页额度展示只复用 `CodexAccountProfile.status` 中当前活动官方账号的快照；第三方供应商没有受信任的原生查询契约时显示“未配置查询”，不得执行从 CC Switch 静默导入的 JavaScript 用量脚本。
+- 编辑器根据主机名识别 `api.deepseek.com` 及其子域并默认选择 OpenAI Chat Completions；协议、User-Agent、备用端点、请求覆盖和缓存路由属于高级兼容项，默认折叠，已保存和导入值不得丢失。
+- 模型页官方额度复用 `CodexAccountProfile.status`；第三方通过内置接口读取，失败保留带时间的旧快照并显示错误，不得执行从 CC Switch 静默导入的 JavaScript 用量脚本。
 - 两种写入都拒绝符号链接，使用 Foundation atomic replace，将目标文件设为 `0600`；首次写入创建 `<filename>.oneboard-backup` 且后续不覆盖。
-- 切换仅影响新启动的 Codex / Claude Code 会话，不主动终止正在运行的 CLI 或桌面任务。
+- Claude Code 切换仅影响新启动的 CLI 会话；Codex Desktop 切换会安全退出并重新打开应用，确保长期驻留的 app-server 重读 provider 配置。
 - CC Switch 导入器以只读方式打开 `~/.cc-switch/cc-switch.db`，只接收 Codex / Claude；API Key 直接写入 `private_records`，导入 Claude 角色模型、显示名、代理元数据和备用端点，保存运行快照前剥离其中的明文 Key；空白或缺少必要字段的配置显式跳过。
 - 数据库目录固定为 `0700`，主库及已存在的 WAL/SHM 固定为 `0600`；测试必须注入临时数据库、认证文件和可控进程生命周期，禁止读取或修改用户真实认证缓存。
 
@@ -226,3 +229,19 @@ SQLite 账号凭据
 4. 避免强制解包，使用 `guard let` / `if let`
 5. 使用 `print` 进行日志输出（后续可替换为 os.Logger）
 6. 中文注释和文档
+
+## 2026-09-05 模型目录选择与额度说明
+
+模型槽位使用 NSComboBox 接入 discoveredModels，通过现有模型基础 ID Binding 保留 1M 标记。API Key、请求地址或完整 URL 设置变更立即失效目录；请求标识阻止旧异步响应回填。
+
+## 2026-09-05 第三方额度、Token 统计与翻译 Key 选择
+
+- 额度：内置 DeepSeek、Sub2API、SiliconFlow、OpenRouter 查询。自动识别官方域名，其他同源地址尝试 Sub2API `/v1/usage`；可在编辑页选择额度接口类型。失败显示 HTTP 状态及服务端原因，旧快照标明时间；不执行导入脚本。
+- 统计：按 API Key 和供应商源分组，展示当日、累计、缓存命中 Token，展开查看输入、输出和缓存写入。相同 Key 的 Codex/Claude 配置共享本地统计，换 Key 后分开计算。
+- 数据源：Sub2API 有历史用量时展示供应商当日/累计快照；OneBoard 本地统计仅覆盖启用后通过内置代理或翻译的请求，按本机时区计算自然日，包含缓存 Token 且不重复相加，不与供应商统计合计。余额接口未返回 Token 时不推算历史 Token。
+- 存储：代理复用 CC Switch 的响应解析，向 stdout 输出无正文、无 Key 的计数事件；主应用写入 oneboard.sqlite 的 ai_usage_events，按请求 ID 去重。Key 仍仅在 SQLite 和代理内存中；正常退出刷新尾部计数，异常强杀可能丢失尚未输出的短暂内存事件。
+- 翻译：设置页选择默认 API Key；翻译窗口可临时切换具体供应商配置，复用其默认模型、连接及协议，支持 Chat Completions、Responses、Anthropic Messages 和 Gemini；不改变 Codex/Claude 活动配置，也不再单独填写 DeepSeek Key。
+
+## 2026-09-05 设置页整体视觉升级
+
+设置专属 SettingsPalette / SettingsBackdrop / SettingsCard / SettingsForm 集中管理视觉。SettingsForm 使用 macOS 15 的 ForEach(sections:) 读取既有 Section，统一卡片、行间距、LabeledContent 和 Toggle 布局；不修改全局 OneBoardColors，避免影响截图与浮动工具。AIProviderSettingsCard 分离展示，保留供应商/本地统计来源及完整折叠明细。

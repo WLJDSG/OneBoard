@@ -12,27 +12,28 @@ struct GatewayProfileEditorView: View {
             Text(viewModel.title.isEmpty ? "新增网关" : "编辑网关")
                 .font(.headline)
 
-            Form {
-                TextField("标题", text: $viewModel.title)
+            SettingsForm {
+                LabeledContent("标题") { TextField("标题", text: $viewModel.title).labelsHidden() }
 
-                Picker("模式", selection: $viewModel.mode) {
+                LabeledContent("模式") {
+                    Picker("模式", selection: $viewModel.mode) {
                     ForEach(GatewaySwitchMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
                     }
+                }.labelsHidden().frame(width: 230)
                 }
 
                 if viewModel.mode == .gatewayAndDNS {
-                    TextField("网关 IP", text: $viewModel.gateway)
+                    LabeledContent("网关 IP") { TextField("网关 IP", text: $viewModel.gateway).labelsHidden() }
                 }
 
-                TextField("DNS（逗号、空格或换行分隔）", text: $viewModel.dnsText, axis: .vertical)
+                LabeledContent("DNS（逗号、空格或换行分隔）") { TextField("DNS（逗号、空格或换行分隔）", text: $viewModel.dnsText, axis: .vertical).labelsHidden() }
                     .lineLimit(3, reservesSpace: true)
 
-                TextField("图标", text: $viewModel.symbolName)
-                TextField("描述", text: $viewModel.description, axis: .vertical)
+                LabeledContent("图标") { TextField("图标", text: $viewModel.symbolName).labelsHidden() }
+                LabeledContent("描述") { TextField("描述", text: $viewModel.description, axis: .vertical).labelsHidden() }
                     .lineLimit(2, reservesSpace: true)
             }
-            .formStyle(.grouped)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -50,10 +51,15 @@ struct GatewayProfileEditorView: View {
                         errorMessage = error.localizedDescription
                     }
                 }
+                .buttonStyle(SettingsActionStyle(prominent: true))
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding()
-        .frame(width: 430, height: 430)
+        .padding(24)
+        .background(SettingsBackdrop())
+        .buttonStyle(SettingsActionStyle())
+        .textFieldStyle(.roundedBorder)
+        .tint(SettingsPalette.accent)
+        .frame(width: 560, height: 600)
     }
 }

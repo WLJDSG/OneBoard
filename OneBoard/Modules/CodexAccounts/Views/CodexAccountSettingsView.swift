@@ -8,7 +8,7 @@ struct CodexAccountSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Form {
+            SettingsForm {
                 Section {
                     LabeledContent("Codex 状态", value: viewModel.isCodexRunning ? "正在运行" : "未运行")
                     LabeledContent("当前账号", value: viewModel.activeProfile?.title ?? "尚未保存")
@@ -37,7 +37,7 @@ struct CodexAccountSettingsView: View {
                 Section {
                     if profilesAreEmpty {
                         Text("还没有保存 Codex 账号")
-                            .foregroundColor(OneBoardColors.textSecondary)
+                            .foregroundColor(SettingsPalette.muted)
                     } else {
                         ForEach(viewModel.profiles) { profile in
                             accountRow(profile)
@@ -72,16 +72,14 @@ struct CodexAccountSettingsView: View {
                     }
                 }
             }
-            .formStyle(.grouped)
 
             if let statusMessage = viewModel.statusMessage {
                 Text(statusMessage)
                     .font(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(SettingsPalette.muted)
                     .padding(.horizontal)
             }
         }
-        .padding()
         .onAppear { viewModel.refreshState() }
         .sheet(isPresented: $isAddingAccount) {
             CodexOAuthAccountView(
@@ -125,29 +123,31 @@ struct CodexAccountSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: viewModel.activeAccountID == profile.id ? "person.crop.circle.fill.badge.checkmark" : "person.crop.circle")
-                    .frame(width: 24)
-                    .foregroundColor(viewModel.activeAccountID == profile.id ? OneBoardColors.success : OneBoardColors.textSecondary)
+                    .font(.system(size: 23))
+                    .frame(width: 44, height: 44)
+                    .background(SettingsPalette.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 13))
+                    .foregroundColor(viewModel.activeAccountID == profile.id ? OneBoardColors.success : SettingsPalette.muted)
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
-                        Text(profile.title)
+                        Text(profile.title).font(.system(size: 15, weight: .semibold))
                         if let planType = profile.planType, !planType.isEmpty {
                             Text(planType.uppercased())
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
-                                .background(OneBoardColors.accent.opacity(0.12), in: Capsule())
-                                .foregroundColor(OneBoardColors.accent)
+                                .background(SettingsPalette.accent.opacity(0.12), in: Capsule())
+                                .foregroundColor(SettingsPalette.accent)
                         }
                     }
                     if let email = profile.email, email != profile.title {
                         Text(email)
                             .font(.caption)
-                            .foregroundColor(OneBoardColors.textSecondary)
+                            .foregroundColor(SettingsPalette.muted)
                     }
                     Text("凭据更新于 \(profile.updatedAt.formatted(date: .abbreviated, time: .shortened))")
                         .font(.caption)
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(SettingsPalette.muted)
                 }
 
                 Spacer()
@@ -157,7 +157,7 @@ struct CodexAccountSettingsView: View {
                 } else if viewModel.pendingAccountID == profile.id {
                     Text("切换中")
                         .font(.caption)
-                        .foregroundColor(OneBoardColors.accent)
+                        .foregroundColor(SettingsPalette.accent)
                 } else if viewModel.activeAccountID == profile.id {
                     Text("当前")
                         .font(.caption)
@@ -192,7 +192,7 @@ struct CodexAccountSettingsView: View {
                     Text("更新于 \(status.fetchedAt.formatted(date: .omitted, time: .shortened))")
                 }
                 .font(.caption)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(SettingsPalette.muted)
             }
 
             if let error = profile.statusError {
@@ -214,9 +214,11 @@ struct CodexAccountSettingsView: View {
             ProgressView(value: Double(window?.remainingPercent ?? 0), total: 100)
             Text(window?.resetAt.map { "重置：\($0.formatted(date: .abbreviated, time: .shortened))" } ?? "重置时间未知")
                 .font(.caption2)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(SettingsPalette.muted)
         }
         .frame(maxWidth: .infinity)
+        .padding(15)
+        .background(SettingsPalette.accent.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func subscriptionText(_ date: Date?) -> String {

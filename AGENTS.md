@@ -38,7 +38,7 @@ OneBoard/                        # SPM 项目根目录
 4. 网关切换、Helper 卸载和 App 内彻底卸载必须先走 `deviceOwnerAuthentication`（Touch ID 优先、登录密码回退）；首次安装/升级 Helper 和初始白名单写入仍在一次系统管理员授权内完成。Helper 缺失或白名单业务拒绝不得回退到管理员密码 shell。
 5. Codex 账号新增必须使用官方浏览器 OAuth（PKCE + state + localhost 回调），直接请求标准 OpenAI 授权端点，不得套用 Codex Desktop 私有中转页或伪装 Desktop 专用参数；授权后的认证缓存只保存到 OneBoard SQLite，不得收集或保存密码、验证码；切换时必须先验证目标凭据、退出 Codex 并确认主进程与旧 app-server 完全结束，再替换认证存储并重新打开 Codex。
 6. Codex 额度、订阅、重置次数与 OAuth token 都存入 `~/Library/Application Support/OneBoard/oneboard.sqlite`；不得使用 macOS Keychain。自动续期必须保留服务端未轮换时的旧 refresh token；当前账号正在 Codex 中运行时不得由 OneBoard 并发刷新，切换目标账号时应在退出当前 Codex 前先校验并续期目标凭据。
-7. AI 模型切换与 Codex 账号切换必须隔离：供应商元数据与 API Key 只存入 OneBoard SQLite，禁止接入 macOS Keychain；内置代理只允许内存接收 Key，客户端配置只写占位认证；Codex 模型切换仅合并模型相关 `config.toml`，Claude Code 仅合并 `settings.json.env` 的受管键（含 Haiku/Sonnet/Opus/Fable/子代理映射）；切换必须先保留未知字段、生成稳定备份并原子写入。模型页只展示可信额度快照，不得静默执行导入的第三方用量脚本或伪造余额。
+7. AI 模型切换与 Codex 账号切换必须隔离：供应商元数据与 API Key 只存入 OneBoard SQLite，禁止接入 macOS Keychain；内置代理只允许内存接收 Key，客户端配置只写占位认证；Codex 模型切换仅合并模型相关 `config.toml`，自定义供应商必须同步生成受管 `model_catalog_json` 目录且切回官方时移除覆盖，运行中必须先确认主进程与旧 app-server 退出、写入后再重新打开，活动配置保存后必须同步重载代理；Claude Code 仅合并 `settings.json.env` 的受管键（含 Haiku/Sonnet/Opus/Fable/子代理映射）；切换必须先保留未知字段、生成稳定备份并原子写入。常用供应商协议应自动识别，高级兼容设置默认折叠；模型页只展示可信额度快照，不得静默执行导入的第三方用量脚本或伪造余额。
 
 ## 构建与打包
 
@@ -72,3 +72,19 @@ bash script/uninstall.sh
 2. 修改后从 `OneBoard/` 运行全量测试和 Release 构建
 3. 修 bug 前查根因并补回归测试，修后重新打包并执行 `hdiutil verify build/OneBoard.dmg`
 4. 行为变化必须同步更新 README、需求/技术/设计/开发步骤、规则文件和当天开发日志
+
+## 2026-09-05 模型目录选择与额度说明
+
+模型槽位下拉目录只使用当前连接与 API Key 的返回结果；连接变更需清空旧目录并拒绝过期响应，选择模型保留独立的 1M 标记。第三方额度未接入时明确说明，不得将其描述为凭据查询失败。
+
+## 2026-09-05 第三方额度、Token 统计与翻译 Key 选择
+
+- 额度：内置 DeepSeek、Sub2API、SiliconFlow、OpenRouter 查询。自动识别官方域名，其他同源地址尝试 Sub2API `/v1/usage`；可在编辑页选择额度接口类型。失败显示 HTTP 状态及服务端原因，旧快照标明时间；不执行导入脚本。
+- 统计：按 API Key 和供应商源分组，展示当日、累计、缓存命中 Token，展开查看输入、输出和缓存写入。相同 Key 的 Codex/Claude 配置共享本地统计，换 Key 后分开计算。
+- 数据源：Sub2API 有历史用量时展示供应商当日/累计快照；OneBoard 本地统计仅覆盖启用后通过内置代理或翻译的请求，按本机时区计算自然日，包含缓存 Token 且不重复相加，不与供应商统计合计。余额接口未返回 Token 时不推算历史 Token。
+- 存储：代理复用 CC Switch 的响应解析，向 stdout 输出无正文、无 Key 的计数事件；主应用写入 oneboard.sqlite 的 ai_usage_events，按请求 ID 去重。Key 仍仅在 SQLite 和代理内存中；正常退出刷新尾部计数，异常强杀可能丢失尚未输出的短暂内存事件。
+- 翻译：设置页选择默认 API Key；翻译窗口可临时切换具体供应商配置，复用其默认模型、连接及协议，支持 Chat Completions、Responses、Anthropic Messages 和 Gemini；不改变 Codex/Claude 活动配置，也不再单独填写 DeepSeek Key。
+
+## 2026-09-05 设置页整体视觉升级
+
+设置页视觉使用独立 SettingsDesign 组件，避免为设置改动截图/悬浮面板的全局颜色。所有设置分类和相关编辑弹窗保持统一卡片与控件布局，保留数据来源、错误提示和已有业务动作；支持深浅色与可调整窗口尺寸。

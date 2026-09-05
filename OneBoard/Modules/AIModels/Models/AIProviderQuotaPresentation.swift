@@ -15,7 +15,7 @@ struct AIProviderQuotaPresentation: Equatable {
         activeCodexAccount: CodexAccountProfile?
     ) -> AIProviderQuotaPresentation {
         guard profile.client == .codex, profile.kind == .official else {
-            return AIProviderQuotaPresentation(text: "额度：未配置查询", tone: .unavailable)
+            return AIProviderQuotaPresentation(text: "额度：暂未接入此供应商查询", tone: .unavailable)
         }
         guard let account = activeCodexAccount else {
             return AIProviderQuotaPresentation(text: "额度：尚未关联 Codex 账号", tone: .unavailable)

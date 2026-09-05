@@ -14,6 +14,7 @@ extension AIModelConfigurationWriting {
 final class AIModelConfigurationWriter: AIModelConfigurationWriting {
     private let codexConfigURL: URL
     private let claudeSettingsURL: URL
+    private let codexModelCatalogURL: URL
     private let fileManager: FileManager
 
     init(
@@ -21,10 +22,13 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
             .appendingPathComponent(".codex", isDirectory: true)
             .appendingPathComponent("config.toml"),
         claudeSettingsURL: URL = AIModelConfigurationWriter.defaultClaudeSettingsURL(),
+        codexModelCatalogURL: URL? = nil,
         fileManager: FileManager = .default
     ) {
         self.codexConfigURL = codexConfigURL
         self.claudeSettingsURL = claudeSettingsURL
+        self.codexModelCatalogURL = codexModelCatalogURL
+            ?? codexConfigURL.deletingLastPathComponent().appendingPathComponent("oneboard-model-catalog.json")
         self.fileManager = fileManager
     }
 
@@ -50,7 +54,20 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
     private func applyCodex(_ profile: AIProviderProfile, apiKey: String?, routing: AIProxyRouting?) throws {
         let existing = try readTextIfPresent(codexConfigURL) ?? ""
         try createBackupIfNeeded(for: codexConfigURL, data: Data(existing.utf8))
-        let output = Self.rewriteCodexConfig(existing, profile: profile, apiKey: apiKey, routing: routing)
+        let modelCatalogPath: String?
+        if profile.kind == .custom {
+            try atomicWrite(try Self.codexModelCatalogData(for: profile), to: codexModelCatalogURL)
+            modelCatalogPath = codexModelCatalogURL.path
+        } else {
+            modelCatalogPath = nil
+        }
+        let output = Self.rewriteCodexConfig(
+            existing,
+            profile: profile,
+            apiKey: apiKey,
+            routing: routing,
+            modelCatalogPath: modelCatalogPath
+        )
         try atomicWrite(Data(output.utf8), to: codexConfigURL)
     }
 
@@ -106,7 +123,8 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         _ existing: String,
         profile: AIProviderProfile,
         apiKey: String?,
-        routing: AIProxyRouting? = nil
+        routing: AIProxyRouting? = nil,
+        modelCatalogPath: String? = nil
     ) -> String {
         var lines: [String] = []
         var inManagedTable = false
@@ -126,7 +144,8 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
             if inManagedTable { continue }
             if !reachedFirstTable,
                Self.isTopLevelAssignment(trimmed, key: "model") ||
-                (!reachedFirstTable && Self.isTopLevelAssignment(trimmed, key: "model_provider")) {
+                (!reachedFirstTable && Self.isTopLevelAssignment(trimmed, key: "model_provider")) ||
+                (!reachedFirstTable && Self.isTopLevelAssignment(trimmed, key: "model_catalog_json")) {
                 continue
             }
             lines.append(line)
@@ -134,7 +153,12 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
 
         while lines.last?.isEmpty == true { lines.removeLast() }
         var prefix = ["model = \(tomlString(profile.model))"]
-        if profile.kind == .custom { prefix.insert("model_provider = \"oneboard\"", at: 0) }
+        if profile.kind == .custom {
+            if let modelCatalogPath {
+                prefix.insert("model_catalog_json = \(tomlString(modelCatalogPath))", at: 0)
+            }
+            prefix.insert("model_provider = \"oneboard\"", at: 0)
+        }
         var output = prefix.joined(separator: "\n") + "\n"
         if !lines.isEmpty { output += "\n" + lines.joined(separator: "\n") + "\n" }
         if profile.kind == .custom, let apiKey {
@@ -146,6 +170,34 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
             output += "experimental_bearer_token = \(tomlString(routing == nil ? apiKey : AIProxyRouting.placeholderToken))\n"
         }
         return output
+    }
+
+    private static func codexModelCatalogData(for profile: AIProviderProfile) throws -> Data {
+        let reasoningLevels: [[String: Any]] = [
+            ["effort": "low", "description": "Fast responses with lighter reasoning"],
+            ["effort": "medium", "description": "Balances speed and reasoning depth"],
+            ["effort": "high", "description": "Greater reasoning depth"],
+        ]
+        let model: [String: Any] = [
+            "slug": profile.model,
+            "display_name": profile.title,
+            "description": "OneBoard 配置的模型：\(profile.model)",
+            "default_reasoning_level": "medium",
+            "supported_reasoning_levels": reasoningLevels,
+            "shell_type": "unified_exec",
+            "visibility": "list",
+            "supported_in_api": true,
+            "priority": 0,
+            "support_verbosity": false,
+            "truncation_policy": ["mode": "tokens", "limit": 10_000],
+            "experimental_supported_tools": [],
+            "base_instructions": codexCustomModelBaseInstructions,
+        ]
+        let data = try JSONSerialization.data(
+            withJSONObject: ["models": [model]],
+            options: [.prettyPrinted, .sortedKeys]
+        )
+        return data + Data([0x0A])
     }
 
     private static func isTopLevelAssignment(_ line: String, key: String) -> Bool {
@@ -227,4 +279,8 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
         "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
         "CLAUDE_CODE_SUBAGENT_MODEL",
     ]
+
+    private static let codexCustomModelBaseInstructions = """
+    You are Codex, a coding agent. Follow developer and user instructions, use tools to inspect and modify the workspace, verify your work, and report results concisely.
+    """
 }

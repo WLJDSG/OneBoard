@@ -120,7 +120,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         guard let value = sender.representedObject as? String,
               let profileID = UUID(uuidString: value) else { return }
         Task { @MainActor in
-            let message = AIModelSwitcherViewModel.shared.switchProfile(id: profileID)
+            let message = await AIModelSwitcherViewModel.shared.switchProfile(id: profileID)
             let alert = NSAlert()
             alert.messageText = "AI 模型"
             alert.informativeText = message

@@ -25,11 +25,23 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         let output = try String(contentsOf: context.codexURL, encoding: .utf8)
         XCTAssertTrue(output.contains("model_provider = \"oneboard\""))
         XCTAssertTrue(output.contains("model = \"gpt-test\""))
+        XCTAssertTrue(output.contains("model_catalog_json = \"\(context.catalogURL.path)\""))
         XCTAssertTrue(output.contains("model_reasoning_effort = \"high\""))
         XCTAssertTrue(output.contains("[projects.\"/tmp/example\"]"))
         XCTAssertTrue(output.contains("[model_providers.oneboard]"))
         XCTAssertTrue(output.contains("experimental_bearer_token = \"secret-token\""))
         XCTAssertFalse(FileManager.default.fileExists(atPath: context.directory.appendingPathComponent("auth.json").path))
+
+        let catalog = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: context.catalogURL)) as? [String: Any]
+        )
+        let models = try XCTUnwrap(catalog["models"] as? [[String: Any]])
+        XCTAssertEqual(models.count, 1)
+        XCTAssertEqual(models[0]["slug"] as? String, "gpt-test")
+        XCTAssertEqual(models[0]["display_name"] as? String, "Relay")
+        XCTAssertEqual(models[0]["visibility"] as? String, "list")
+        XCTAssertEqual(models[0]["default_reasoning_level"] as? String, "medium")
+        XCTAssertFalse(String(data: try Data(contentsOf: context.catalogURL), encoding: .utf8)!.contains("secret-token"))
     }
 
     func testCodexOfficialSwitchRemovesManagedProviderAndKeepsOtherTables() throws {
@@ -37,6 +49,7 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         let existing = """
         model_provider = "oneboard"
         model = "old-model"
+        model_catalog_json = "\(context.catalogURL.path)"
 
         [model_providers.oneboard]
         name = "Relay"
@@ -54,6 +67,7 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         let output = try String(contentsOf: context.codexURL, encoding: .utf8)
         XCTAssertTrue(output.contains("model = \"gpt-official\""))
         XCTAssertFalse(output.contains("model_provider ="))
+        XCTAssertFalse(output.contains("model_catalog_json ="))
         XCTAssertFalse(output.contains("[model_providers.oneboard]"))
         XCTAssertFalse(output.contains("secret-token"))
         XCTAssertTrue(output.contains("[mcp_servers.demo]"))
@@ -274,7 +288,7 @@ final class AIModelConfigurationWriterTests: XCTestCase {
 
         XCTAssertEqual(
             AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: nil),
-            AIProviderQuotaPresentation(text: "额度：未配置查询", tone: .unavailable)
+            AIProviderQuotaPresentation(text: "额度：暂未接入此供应商查询", tone: .unavailable)
         )
     }
 
@@ -316,6 +330,21 @@ final class AIModelConfigurationWriterTests: XCTestCase {
     func testCustomProfileRequiresHTTPURL() {
         let profile = AIProviderProfile(client: .codex, title: "Bad", baseURL: "file:///tmp/api", model: "gpt-test")
         XCTAssertThrowsError(try profile.validated())
+    }
+
+    func testDeepSeekUsesChatCompletionsWithoutOpeningAdvancedSettings() {
+        XCTAssertEqual(
+            AIUpstreamAPIFormat.recommendedValue(for: .codex, baseURL: "https://api.deepseek.com"),
+            .openAIChat
+        )
+        XCTAssertEqual(
+            AIUpstreamAPIFormat.recommendedValue(for: .codex, baseURL: "https://relay.example/v1"),
+            .openAIResponses
+        )
+        XCTAssertEqual(
+            AIUpstreamAPIFormat.recommendedValue(for: .claude, baseURL: "https://api.deepseek.com"),
+            .anthropic
+        )
     }
 
     func testProviderWebsiteRequiresHTTPURLAndMetadataIsTrimmed() throws {
@@ -369,18 +398,25 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         writer: AIModelConfigurationWriter,
         directory: URL,
         codexURL: URL,
-        claudeURL: URL
+        claudeURL: URL,
+        catalogURL: URL
     ) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         let codexURL = directory.appendingPathComponent("config.toml")
         let claudeURL = directory.appendingPathComponent("settings.json")
+        let catalogURL = directory.appendingPathComponent("oneboard-model-catalog.json")
         return (
-            AIModelConfigurationWriter(codexConfigURL: codexURL, claudeSettingsURL: claudeURL),
+            AIModelConfigurationWriter(
+                codexConfigURL: codexURL,
+                claudeSettingsURL: claudeURL,
+                codexModelCatalogURL: catalogURL
+            ),
             directory,
             codexURL,
-            claudeURL
+            claudeURL,
+            catalogURL
         )
     }
 }

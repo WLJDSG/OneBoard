@@ -57,6 +57,15 @@ enum AIUpstreamAPIFormat: String, Codable, CaseIterable, Identifiable {
     static func defaultValue(for client: AIClient) -> AIUpstreamAPIFormat {
         client == .claude ? .anthropic : .openAIResponses
     }
+
+    static func recommendedValue(for client: AIClient, baseURL: String) -> AIUpstreamAPIFormat {
+        guard client == .codex,
+              let host = URLComponents(string: baseURL)?.host?.lowercased(),
+              host == "deepseek.com" || host.hasSuffix(".deepseek.com") else {
+            return defaultValue(for: client)
+        }
+        return .openAIChat
+    }
 }
 
 enum AIPromptCacheRouting: String, Codable, CaseIterable, Identifiable {
@@ -83,6 +92,7 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
     var websiteURL: String?
     var baseURL: String
     var model: String
+    var quotaAPI: AIQuotaAPI?
     var apiFormat: AIUpstreamAPIFormat?
     var isFullURL: Bool?
     var customUserAgent: String?
@@ -119,6 +129,7 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         websiteURL: String? = nil,
         baseURL: String = "",
         model: String,
+        quotaAPI: AIQuotaAPI? = nil,
         apiFormat: AIUpstreamAPIFormat? = nil,
         isFullURL: Bool? = nil,
         customUserAgent: String? = nil,
@@ -154,6 +165,7 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         self.websiteURL = websiteURL
         self.baseURL = baseURL
         self.model = model
+        self.quotaAPI = quotaAPI
         self.apiFormat = apiFormat
         self.isFullURL = isFullURL
         self.customUserAgent = customUserAgent
@@ -280,6 +292,7 @@ enum AIModelSwitchError: LocalizedError, Equatable {
     case storageFailure(String)
     case importFailure(String)
     case proxyFailure(String)
+    case activationFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -292,6 +305,7 @@ enum AIModelSwitchError: LocalizedError, Equatable {
         case .storageFailure(let message): return "数据库操作失败：\(message)"
         case .importFailure(let message): return "CC Switch 导入失败：\(message)"
         case .proxyFailure(let message): return "本地代理失败：\(message)"
+        case .activationFailed(let message): return message
         }
     }
 }

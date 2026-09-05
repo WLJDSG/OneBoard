@@ -5,6 +5,7 @@ import Translation
 
 @MainActor
 final class TranslationPanelViewModel: ObservableObject {
+    @Published var selectedProviderID: String
     @Published var sourceText: String
     @Published var translatedText: String
     @Published var sourceLanguage: TranslationLanguage
@@ -28,6 +29,7 @@ final class TranslationPanelViewModel: ObservableObject {
         pasteboardWriter: @escaping @MainActor (String) -> Void = TranslationPanelViewModel.writeStringToGeneralPasteboard,
         defaults: UserDefaults = .standard
     ) {
+        self.selectedProviderID = defaults.string(forKey: ConfiguredAITranslationService.selectionKey) ?? ""
         self.sourceText = sourceText
         translatedText = ""
         sourceLanguage = TranslationLanguage.sourceDefault(defaults: defaults)
@@ -64,7 +66,9 @@ final class TranslationPanelViewModel: ObservableObject {
         let requestedSourceLanguage = sourceLanguage
         let requestedTargetLanguage = targetLanguage
         let requestedServiceType = translationServiceType
-        let translationService = translationServiceProvider(requestedServiceType)
+        let translationService: TranslationServiceProtocol = requestedServiceType == .deepSeek && !usesInjectedTranslationService
+            ? ConfiguredAITranslationService(providerID: UUID(uuidString: selectedProviderID))
+            : translationServiceProvider(requestedServiceType)
         let shouldInferAppleSource = requestedServiceType == .apple && !usesInjectedTranslationService
         let inferredSourceLanguage = shouldInferAppleSource ? TranslationLanguage.inferredSource(for: trimmedText) : nil
         let effectiveSourceLanguage = sourceLanguage == .auto ? inferredSourceLanguage : sourceLanguage
@@ -141,6 +145,16 @@ final class TranslationPanelViewModel: ObservableObject {
         translatedText = ""
         errorMessage = nil
         isTranslating = false
+    }
+
+    func selectProvider(_ id: String) async {
+        selectedProviderID = id
+        translationServiceType = .deepSeek
+        translationRequestID += 1
+        pendingAppleRequest = nil
+        translatedText = ""
+        errorMessage = nil
+        if !sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { await translate() }
     }
 
     func selectService(_ serviceType: TranslationServiceType) async {
@@ -239,7 +253,7 @@ final class TranslationPanelViewModel: ObservableObject {
     private func appleTranslationErrorMessage(_ error: Error) -> String {
         let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if message.isEmpty || message == "无法翻译" {
-            return "Apple Translation 暂时无法翻译当前内容，请手动选择源语言，或切换 Google/DeepSeek。"
+            return "Apple Translation 暂时无法翻译当前内容，请手动选择源语言，或切换 Google/已配置 API。"
         }
         return "Apple Translation：\(message)"
     }

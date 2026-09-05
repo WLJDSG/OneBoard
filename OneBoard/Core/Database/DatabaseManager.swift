@@ -42,6 +42,9 @@ final class DatabaseManager {
             try V5_CreatePrivateDataTables.migrate(db)
         }
 
+        migrator.registerMigration("v6_ai_usage_events") { db in
+            try AIUsageStore.migrate(db)
+        }
         try migrator.migrate(queue)
         try secureDatabaseFiles(at: dbPath)
         self.dbQueue = queue

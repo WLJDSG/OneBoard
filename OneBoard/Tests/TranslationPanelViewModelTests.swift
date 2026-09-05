@@ -131,15 +131,6 @@ final class TranslationPanelViewModelTests: XCTestCase {
     func testDeepSeekMissingAPIKeyKeepsErrorMessageAndEmptyTranslation() async {
         let defaults = makeDefaults()
         defaults.set(TranslationServiceType.deepSeek.rawValue, forKey: Constants.UserDefaultsKeys.translationServiceType)
-        let oldAPIKey = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)
-        UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)
-        defer {
-            if let oldAPIKey {
-                UserDefaults.standard.set(oldAPIKey, forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.thirdPartyTranslationAPIKey)
-            }
-        }
         let viewModel = TranslationPanelViewModel(sourceText: "hello", defaults: defaults)
         viewModel.translatedText = "old"
 
@@ -147,7 +138,7 @@ final class TranslationPanelViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.translationServiceType, .deepSeek)
         XCTAssertEqual(viewModel.translatedText, "")
-        XCTAssertEqual(viewModel.errorMessage, "请先在设置中填写 DeepSeek API Key")
+        XCTAssertEqual(viewModel.errorMessage, "请先选择已添加的 API Key")
         XCTAssertFalse(viewModel.isTranslating)
     }
 

@@ -29,7 +29,7 @@ final class GoogleTranslationServiceTests: XCTestCase {
         } catch {
             XCTAssertEqual(
                 error.localizedDescription,
-                "Google 翻译请求过于频繁，当前网络已被 Google 暂时限制。请稍后重试，或切换 Apple/DeepSeek。"
+                "Google 翻译请求过于频繁，当前网络已被 Google 暂时限制。请稍后重试，或切换 Apple/已配置 API。"
             )
             XCTAssertFalse(error.localizedDescription.contains("DOCTYPE"))
         }

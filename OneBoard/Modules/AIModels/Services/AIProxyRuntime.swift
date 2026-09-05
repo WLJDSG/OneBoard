@@ -54,7 +54,8 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
         }
 
         let payload = try AIProxySnapshotBuilder.makePayload(providers: runtimeProfiles)
-        let ready = try start(payload: payload)
+        let identities = Dictionary(uniqueKeysWithValues: runtimeProfiles.map { ($0.0.id.uuidString, AIUsageIdentity.make(profile: $0.0, key: $0.1)) })
+        let ready = try start(payload: payload, identities: identities)
         let suffix = profile.client == .codex ? "/v1" : ""
         return AIProxyRouting(baseURL: "http://\(ready.address):\(ready.port)\(suffix)")
     }
@@ -91,7 +92,7 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
         )
     }
 
-    private func start(payload: Data) throws -> ReadyMessage {
+    private func start(payload: Data, identities: [String: String]) throws -> ReadyMessage {
         try lock.withLock {
             if let process, process.isRunning {
                 process.terminate()
@@ -126,6 +127,20 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
                   let port = message.port, port > 0 else {
                 process.terminate()
                 throw AIModelSwitchError.proxyFailure(message.message ?? "代理启动失败")
+            }
+            let reader = AIProxyUsageReader(identities: identities)
+            let handle = stdout.fileHandleForReading
+            DispatchQueue.global(qos: .utility).async {
+                while true {
+                    let data = handle.availableData
+                    if data.isEmpty { break }
+                    reader.consume(data)
+                }
+            }
+            // 持续排空 stderr，避免子进程输出填满管道后阻塞。
+            let errorHandle = stderr.fileHandleForReading
+            DispatchQueue.global(qos: .utility).async {
+                while !errorHandle.availableData.isEmpty {}
             }
             return ReadyMessage(address: address, port: port)
         }
@@ -184,7 +199,7 @@ enum AIProxySnapshotBuilder {
         return try JSONSerialization.data(
             withJSONObject: [
                 "listenPort": 15731,
-                "enableLogging": false,
+                "enableLogging": true,
                 "providers": runtimeProviders,
             ],
             options: [.sortedKeys]
@@ -335,5 +350,37 @@ enum AIProxySnapshotBuilder {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "\n", with: "\\n") + "\""
+    }
+}
+
+
+final class AIProxyUsageReader: @unchecked Sendable {
+    private var buffer = Data()
+    private let identities: [String: String]
+    private let runID = UUID().uuidString
+    private let store: AIUsageStore
+    init(identities: [String: String], store: AIUsageStore = .shared) {
+        self.identities = identities
+        self.store = store
+    }
+    func consume(_ data: Data) {
+        buffer.append(data)
+        while let newline = buffer.firstIndex(of: 10) {
+            let line = Data(buffer[..<newline])
+            buffer.removeSubrange(...newline)
+            guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                  object["status"] as? String == "usage",
+                  let provider = object["providerID"] as? String,
+                  let identity = identities[provider],
+                  let id = object["id"] as? String,
+                  let timestamp = object["timestamp"] as? Double else { continue }
+            let event = AIUsageEvent(id: runID + id, credentialID: identity, timestamp: timestamp,
+                input: (object["input"] as? NSNumber)?.int64Value ?? 0,
+                output: (object["output"] as? NSNumber)?.int64Value ?? 0,
+                cacheRead: (object["cacheRead"] as? NSNumber)?.int64Value ?? 0,
+                cacheCreation: (object["cacheCreation"] as? NSNumber)?.int64Value ?? 0)
+            do { try store.record(event) }
+            catch { NSLog("OneBoard: 用量统计保存失败：%@", error.localizedDescription) }
+        }
     }
 }

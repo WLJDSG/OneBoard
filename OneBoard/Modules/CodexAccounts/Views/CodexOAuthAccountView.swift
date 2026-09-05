@@ -19,9 +19,9 @@ struct CodexOAuthAccountView: View {
                 .buttonStyle(.borderless)
             }
 
-            Form {
+            SettingsForm {
                 Section("待授权账号") {
-                    TextField("OpenAI 账号邮箱", text: $email)
+                    LabeledContent("OpenAI 账号邮箱") { TextField("OpenAI 账号邮箱", text: $email).labelsHidden() }
                         .textContentType(.emailAddress)
                         .disabled(viewModel.isAuthorizing)
                 }
@@ -29,7 +29,7 @@ struct CodexOAuthAccountView: View {
                 Section {
                     Text("点击下方按钮后，在浏览器中完成 OpenAI 账号 OAuth 授权。密码和验证码只在 OpenAI 官方页面输入。")
                         .font(.callout)
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(SettingsPalette.muted)
 
                     Button {
                         Task {
@@ -59,7 +59,7 @@ struct CodexOAuthAccountView: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                     .font(.caption.monospaced())
-                                    .foregroundColor(OneBoardColors.textSecondary)
+                                    .foregroundColor(SettingsPalette.muted)
                                 Button {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(url.absoluteString, forType: .string)
@@ -74,12 +74,11 @@ struct CodexOAuthAccountView: View {
                     Text("OAuth 授权")
                 }
             }
-            .formStyle(.grouped)
 
             if let status = viewModel.statusMessage {
                 Text(status)
                     .font(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(SettingsPalette.muted)
             }
 
             HStack {
@@ -87,7 +86,10 @@ struct CodexOAuthAccountView: View {
                 Button(viewModel.isAuthorizing ? "取消授权" : "取消", action: close)
             }
         }
-        .padding(22)
+        .padding(24)
+        .background(SettingsBackdrop())
+        .textFieldStyle(.roundedBorder)
+        .tint(SettingsPalette.accent)
         .frame(width: 560, height: 430)
     }
 

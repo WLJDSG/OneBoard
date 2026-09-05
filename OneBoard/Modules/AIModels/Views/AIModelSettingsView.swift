@@ -3,80 +3,104 @@ import SwiftUI
 struct AIModelSettingsView: View {
     @StateObject private var viewModel = AIModelSwitcherViewModel.shared
     @StateObject private var codexAccountViewModel = CodexAccountViewModel.shared
+    @StateObject private var usageViewModel = AIUsageViewModel()
     @State private var selectedClient: AIClient = .codex
     @State private var editingProfile: AIProviderProfile?
     @State private var isAddingProfile = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("工具", selection: $selectedClient) {
-                ForEach(AIClient.allCases) { client in
-                    Label(client.title, systemImage: client.systemImage).tag(client)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                HStack(spacing: 4) {
+                    ForEach(AIClient.allCases) { client in
+                        Button { selectedClient = client } label: {
+                            Label(client.title, systemImage: client.systemImage)
+                                .font(.system(size: 12, weight: .semibold))
+                                .padding(.horizontal, 17).padding(.vertical, 10)
+                                .foregroundStyle(selectedClient == client ? SettingsPalette.accent : .secondary)
+                                .background(selectedClient == client ? SettingsPalette.accent.opacity(0.09) : .clear,
+                                            in: Capsule())
+                        }.buttonStyle(.plain)
+                    }
                 }
+                .padding(4)
+                .background(.background, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.05)))
+                Spacer()
+                Button { isAddingProfile = true } label: {
+                    Label("添加供应商", systemImage: "plus")
+                }.buttonStyle(SettingsActionStyle(prominent: true))
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
+            .padding(.horizontal, 28)
 
-            Form {
-                Section {
-                    if viewModel.profiles(for: selectedClient).isEmpty {
-                        Text("暂无配置，请先新增官方或自定义 API 配置。")
-                            .foregroundColor(OneBoardColors.textSecondary)
-                    }
-                    ForEach(viewModel.profiles(for: selectedClient)) { profile in
-                        profileRow(profile)
-                    }
-                    Button {
-                        isAddingProfile = true
-                    } label: {
-                        Label("新增模型配置", systemImage: "plus")
-                    }
-                } header: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text("\(selectedClient.title) 供应商")
+                        Text("供应商").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                        Text("\(viewModel.profiles(for: selectedClient).count)")
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Color.primary.opacity(0.045), in: Capsule())
                         Spacer()
-                        if selectedClient == .codex {
-                            Button {
-                                Task { await codexAccountViewModel.refreshAllAccountStatuses() }
-                            } label: {
-                                Label("刷新额度", systemImage: "arrow.clockwise")
+                        Button {
+                            Task {
+                                async let official: Void = codexAccountViewModel.refreshAllAccountStatuses()
+                                await usageViewModel.refresh(viewModel.profiles)
+                                await official
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(!codexAccountViewModel.refreshingAccountIDs.isEmpty)
+                        } label: {
+                            Label(usageViewModel.isRefreshing ? "正在刷新…" : "刷新额度与用量", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(SettingsPalette.accent)
+                        .disabled(usageViewModel.isRefreshing || !codexAccountViewModel.refreshingAccountIDs.isEmpty)
+                    }
+                    .padding(.horizontal, 4)
+                    if viewModel.profiles(for: selectedClient).isEmpty {
+                        SettingsCard {
+                            VStack(spacing: 12) {
+                                Image(systemName: "square.stack.3d.up").font(.system(size: 30)).foregroundStyle(SettingsPalette.accent)
+                                Text("连接你的第一个供应商").font(.headline)
+                                Text("添加 API Key，开始管理模型、额度与用量。")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                Button("添加供应商") { isAddingProfile = true }
+                                    .buttonStyle(SettingsActionStyle(prominent: true))
+                            }.frame(maxWidth: .infinity).padding(36)
                         }
                     }
-                }
-
-                Section {
-                    Button {
-                        viewModel.importFromCCSwitch()
-                    } label: {
-                        Label("从 CC Switch 导入", systemImage: "square.and.arrow.down")
+                    ForEach(viewModel.profiles(for: selectedClient)) { profile in profileRow(profile) }
+                    HStack(spacing: 14) {
+                        Button { viewModel.importFromCCSwitch() } label: {
+                            Label("从 CC Switch 导入", systemImage: "square.and.arrow.down")
+                        }
+                        Spacer()
+                        Button("恢复初次切换前备份") { viewModel.restoreBackup(for: selectedClient) }
+                            .disabled(viewModel.isSwitching)
                     }
-                    Button("恢复初次切换前备份") {
-                        viewModel.restoreBackup(for: selectedClient)
+                    .buttonStyle(SettingsActionStyle())
+                    .padding(.top, 8)
+                    Text(backupHelp).font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(3)
+                    if let message = viewModel.statusMessage {
+                        Label(message, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
                     }
-                    .disabled(viewModel.isSwitching)
-                } footer: {
-                    Text(backupHelp)
-                        .font(.caption)
-                        .foregroundColor(OneBoardColors.textSecondary)
                 }
-            }
-            .formStyle(.grouped)
-
-            if let message = viewModel.statusMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
-                    .padding(.horizontal)
-            }
+                .padding(.horizontal, 28)
+                .padding(.top, 4)
+                .padding(.bottom, 28)
+            }.scrollIndicators(.hidden)
         }
-        .padding()
         .onAppear { codexAccountViewModel.refreshState() }
+        .task { await usageViewModel.refresh(viewModel.profiles) }
+        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            usageViewModel.loadLocal(viewModel.profiles)
+        }
         .sheet(isPresented: $isAddingProfile) {
             AIProviderEditorView(client: selectedClient, profile: nil, savedAPIKey: nil) { profile, key in
-                try viewModel.save(profile, apiKey: key)
+                try await viewModel.save(profile, apiKey: key)
+                isAddingProfile = false
+            } onSaveAndSwitch: { profile, key in
+                try await viewModel.saveAndSwitch(profile, apiKey: key)
                 isAddingProfile = false
             } onCancel: {
                 isAddingProfile = false
@@ -88,7 +112,10 @@ struct AIModelSettingsView: View {
                 profile: profile,
                 savedAPIKey: viewModel.savedAPIKey(for: profile)
             ) { updated, key in
-                try viewModel.save(updated, apiKey: key)
+                try await viewModel.save(updated, apiKey: key)
+                editingProfile = nil
+            } onSaveAndSwitch: { updated, key in
+                try await viewModel.saveAndSwitch(updated, apiKey: key)
                 editingProfile = nil
             } onCancel: {
                 editingProfile = nil
@@ -96,52 +123,20 @@ struct AIModelSettingsView: View {
         }
     }
 
-    @ViewBuilder
     private func profileRow(_ profile: AIProviderProfile) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: profile.kind == .official ? "building.columns" : "point.3.connected.trianglepath.dotted")
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(profile.title)
-                if let note = profile.note {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundColor(OneBoardColors.textSecondary)
-                        .lineLimit(1)
-                }
-                Text(profile.kind == .official ? profile.model : "\(profile.model) · \(profile.baseURL)")
-                    .font(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
-                    .lineLimit(1)
-                let quota = AIProviderQuotaPresentation.make(
-                    profile: profile,
-                    activeCodexAccount: codexAccountViewModel.activeProfile
-                )
-                Text(quota.text)
-                    .font(.caption2)
-                    .foregroundColor(quotaColor(quota.tone))
-                    .lineLimit(1)
-            }
-            Spacer()
-            if viewModel.activeID(for: selectedClient) == profile.id {
-                Image(systemName: "checkmark.circle.fill").foregroundColor(OneBoardColors.success)
-            }
-            Button("切换") { viewModel.switchProfile(id: profile.id) }
-                .disabled(viewModel.isSwitching || viewModel.activeID(for: selectedClient) == profile.id)
-            Button("编辑") { editingProfile = profile }
-            Button(role: .destructive) { viewModel.delete(profile) } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-        }
-    }
-
-    private func quotaColor(_ tone: AIProviderQuotaPresentation.Tone) -> Color {
-        switch tone {
-        case .normal: return OneBoardColors.success
-        case .unavailable: return OneBoardColors.textSecondary
-        case .warning: return OneBoardColors.warning
-        }
+        AIProviderSettingsCard(
+            profile: profile,
+            active: viewModel.activeID(for: selectedClient) == profile.id,
+            switching: viewModel.isSwitching,
+            snapshot: usageViewModel.snapshots[profile.id],
+            error: usageViewModel.errors[profile.id],
+            today: usageViewModel.localToday[profile.id],
+            total: usageViewModel.localTotal[profile.id],
+            officialQuota: AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: codexAccountViewModel.activeProfile),
+            onSwitch: { Task { await viewModel.switchProfile(id: profile.id) } },
+            onEdit: { editingProfile = profile },
+            onDelete: { viewModel.delete(profile) }
+        )
     }
 
     private var backupHelp: String {
@@ -157,7 +152,8 @@ struct AIModelSettingsView: View {
 private struct AIProviderEditorView: View {
     let client: AIClient
     let profile: AIProviderProfile?
-    let onSave: (AIProviderProfile, String?) throws -> Void
+    let onSave: (AIProviderProfile, String?) async throws -> Void
+    let onSaveAndSwitch: (AIProviderProfile, String?) async throws -> Void
     let onCancel: () -> Void
 
     @State private var kind: AIProviderKind
@@ -166,6 +162,7 @@ private struct AIProviderEditorView: View {
     @State private var websiteURL: String
     @State private var baseURL: String
     @State private var model: String
+    @State private var quotaAPI: AIQuotaAPI
     @State private var apiFormat: AIUpstreamAPIFormat
     @State private var isFullURL: Bool
     @State private var customUserAgent: String
@@ -181,10 +178,12 @@ private struct AIProviderEditorView: View {
     @State private var isTestingEndpoint = false
     @State private var discoveredModels: [String] = []
     @State private var isFetchingModels = false
+    @State private var modelRequestID = UUID()
+    @State private var isSaving = false
     @State private var apiKey: String
     @State private var isAPIKeyVisible = false
-    @State private var isAdvancedExpanded = true
-    @State private var isProxyAdvancedExpanded = true
+    @State private var isAdvancedExpanded = false
+    @State private var isProxyAdvancedExpanded = false
     @State private var keyField: ClaudeAPIKeyField
     @State private var haikuModel: String
     @State private var haikuModelName: String
@@ -201,12 +200,14 @@ private struct AIProviderEditorView: View {
         client: AIClient,
         profile: AIProviderProfile?,
         savedAPIKey: String?,
-        onSave: @escaping (AIProviderProfile, String?) throws -> Void,
+        onSave: @escaping (AIProviderProfile, String?) async throws -> Void,
+        onSaveAndSwitch: @escaping (AIProviderProfile, String?) async throws -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.client = client
         self.profile = profile
         self.onSave = onSave
+        self.onSaveAndSwitch = onSaveAndSwitch
         self.onCancel = onCancel
         _kind = State(initialValue: profile?.kind ?? .custom)
         _title = State(initialValue: profile?.title ?? "")
@@ -214,7 +215,11 @@ private struct AIProviderEditorView: View {
         _websiteURL = State(initialValue: profile?.websiteURL ?? "")
         _baseURL = State(initialValue: profile?.baseURL ?? "")
         _model = State(initialValue: profile?.model ?? "")
-        _apiFormat = State(initialValue: profile?.apiFormat ?? .defaultValue(for: client))
+        _quotaAPI = State(initialValue: profile?.quotaAPI ?? .auto)
+        _apiFormat = State(
+            initialValue: profile?.apiFormat
+                ?? .recommendedValue(for: client, baseURL: profile?.baseURL ?? "")
+        )
         _isFullURL = State(initialValue: profile?.isFullURL ?? false)
         _customUserAgent = State(initialValue: profile?.customUserAgent ?? "")
         _requestHeadersJSON = State(initialValue: profile?.requestHeaderOverridesJSON ?? "")
@@ -243,15 +248,15 @@ private struct AIProviderEditorView: View {
             HStack(spacing: 12) {
                 Image(systemName: client.systemImage)
                     .font(.title2)
-                    .foregroundColor(OneBoardColors.accent)
+                    .foregroundColor(SettingsPalette.accent)
                     .frame(width: 44, height: 44)
-                    .background(OneBoardColors.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                    .background(SettingsPalette.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile == nil ? "新增 \(client.title) 供应商" : "编辑 \(client.title) 供应商")
                         .font(.title3.weight(.semibold))
                     Text("配置供应商连接、鉴权和模型映射")
                         .font(.caption)
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(SettingsPalette.muted)
                 }
                 Spacer()
             }
@@ -302,16 +307,18 @@ private struct AIProviderEditorView: View {
                                 editorRow("完整 URL") {
                                     Toggle("地址已包含最终 API 路径，不再自动拼接", isOn: $isFullURL)
                                 }
+                                editorRow("额度接口") {
+                                    Picker("额度接口", selection: $quotaAPI) {
+                                        ForEach(AIQuotaAPI.allCases) { Text($0.title).tag($0) }
+                                    }.labelsHidden()
+                                }
                                 editorRow("模型目录") {
                                     HStack {
                                         Button(isFetchingModels ? "获取中…" : "获取模型") { fetchModels() }
                                             .disabled(isFetchingModels || baseURL.isEmpty)
-                                        if !discoveredModels.isEmpty {
-                                            Picker("选择模型", selection: $model) {
-                                                ForEach(discoveredModels, id: \.self) { Text($0).tag($0) }
-                                            }
-                                            .labelsHidden()
-                                        }
+                                        Text("获取后可在各模型下拉框选择，也可手动输入。")
+                                            .font(.caption)
+                                            .foregroundColor(SettingsPalette.muted)
                                     }
                                 }
                                 editorRow("API Key") {
@@ -336,12 +343,12 @@ private struct AIProviderEditorView: View {
 
                             Label("API Key 仅保存到 OneBoard 的 oneboard.sqlite，不使用钥匙串。", systemImage: "externaldrive.badge.checkmark")
                                 .font(.caption)
-                                .foregroundColor(OneBoardColors.textSecondary)
+                                .foregroundColor(SettingsPalette.muted)
                                 .padding(.top, 10)
                             if let endpointTestMessage {
                                 Text(endpointTestMessage)
                                     .font(.caption)
-                                    .foregroundColor(OneBoardColors.textSecondary)
+                                    .foregroundColor(SettingsPalette.muted)
                                     .padding(.top, 4)
                             }
                         } label: {
@@ -416,15 +423,15 @@ private struct AIProviderEditorView: View {
                                     }
                                     Text("请求覆盖在协议转换完成后应用。JSON 留空表示不覆盖；备用端点每行一个 URL。")
                                         .font(.caption)
-                                        .foregroundColor(OneBoardColors.textSecondary)
+                                        .foregroundColor(SettingsPalette.muted)
                                 }
                                 .padding(.top, 10)
                             } label: {
-                                Text("代理与协议转换")
+                                Text("仅特殊中转站需要配置")
                                     .font(.body.weight(.medium))
                             }
                         } label: {
-                            Label("CC Switch 兼容能力", systemImage: "arrow.triangle.2.circlepath")
+                            Label("高级兼容设置", systemImage: "slider.horizontal.3")
                         }
                     }
 
@@ -434,7 +441,7 @@ private struct AIProviderEditorView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("空槽位自动使用默认模型；Fable 为空时优先使用 Opus。模型 ID 可带 [1M] 后缀，显示名仅影响 Claude Code 的模型选择界面。")
                                         .font(.caption)
-                                        .foregroundColor(OneBoardColors.textSecondary)
+                                        .foregroundColor(SettingsPalette.muted)
 
                                     HStack {
                                         Text("模型映射")
@@ -456,7 +463,7 @@ private struct AIProviderEditorView: View {
                                             Text("1M")
                                         }
                                         .font(.caption.weight(.medium))
-                                        .foregroundColor(OneBoardColors.textSecondary)
+                                        .foregroundColor(SettingsPalette.muted)
 
                                         modelMappingRow("Sonnet", model: $sonnetModel, name: $sonnetModelName)
                                         modelMappingRow("Opus", model: $opusModel, name: $opusModelName)
@@ -464,12 +471,12 @@ private struct AIProviderEditorView: View {
                                         modelMappingRow("Haiku", model: $haikuModel, name: $haikuModelName, supportsOneM: false)
                                         GridRow {
                                             Text("子代理")
-                                                .foregroundColor(OneBoardColors.textSecondary)
+                                                .foregroundColor(SettingsPalette.muted)
                                                 .frame(width: 92, alignment: .leading)
                                             Text("不显示在 /model 菜单")
                                                 .font(.caption)
-                                                .foregroundColor(OneBoardColors.textSecondary)
-                                            TextField("模型 ID（可选）", text: modelBaseBinding($subagentModel))
+                                                .foregroundColor(SettingsPalette.muted)
+                                            modelSelector($subagentModel)
                                             Toggle("", isOn: oneMBinding($subagentModel))
                                                 .labelsHidden()
                                         }
@@ -480,12 +487,12 @@ private struct AIProviderEditorView: View {
 
                                         GridRow {
                                             Text("默认兜底")
-                                                .foregroundColor(OneBoardColors.textSecondary)
+                                                .foregroundColor(SettingsPalette.muted)
                                                 .frame(width: 92, alignment: .leading)
                                             Text("未匹配角色时使用")
                                                 .font(.caption)
-                                                .foregroundColor(OneBoardColors.textSecondary)
-                                            TextField("第三方端点建议填写", text: modelBaseBinding($model))
+                                                .foregroundColor(SettingsPalette.muted)
+                                            modelSelector($model)
                                             Toggle("", isOn: oneMBinding($model))
                                                 .labelsHidden()
                                         }
@@ -514,11 +521,32 @@ private struct AIProviderEditorView: View {
             HStack {
                 Spacer()
                 Button("取消", action: onCancel)
-                Button("保存") { save() }.keyboardShortcut(.defaultAction)
+                    .disabled(isSaving)
+                Button("保存") { save(activate: false) }
+                    .disabled(isSaving)
+                Button("保存并切换") { save(activate: true) }
+                    .buttonStyle(SettingsActionStyle(prominent: true))
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(isSaving)
             }
             .padding(16)
         }
-        .frame(width: client == .claude ? 820 : 760, height: 800)
+        .background(SettingsBackdrop())
+        .groupBoxStyle(SettingsEditorGroupStyle())
+        .tint(SettingsPalette.accent)
+        .frame(width: client == .claude ? 860 : 780)
+        .frame(minHeight: 600, idealHeight: 740, maxHeight: 800)
+        .onAppear {
+            if kind == .custom && !baseURL.isEmpty && !apiKey.isEmpty { fetchModels() }
+        }
+        .onChange(of: apiKey) { _, _ in invalidateModels() }
+        .onChange(of: isFullURL) { _, _ in invalidateModels() }
+        .onChange(of: baseURL) { _, newValue in
+            invalidateModels()
+            guard profile?.apiFormat == nil,
+                  apiFormat == .defaultValue(for: client) else { return }
+            apiFormat = .recommendedValue(for: client, baseURL: newValue)
+        }
     }
 
     @ViewBuilder
@@ -528,7 +556,7 @@ private struct AIProviderEditorView: View {
     ) -> some View {
         GridRow {
             Text(title)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(SettingsPalette.muted)
                 .frame(width: 92, alignment: .leading)
             content()
                 .frame(maxWidth: .infinity)
@@ -544,19 +572,32 @@ private struct AIProviderEditorView: View {
     ) -> some View {
         GridRow {
             Text(title)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(SettingsPalette.muted)
                 .frame(width: 92, alignment: .leading)
             TextField("显示名（可选）", text: name)
                 .frame(minWidth: 150)
-            TextField("模型 ID（可选）", text: modelBaseBinding(model))
+            modelSelector(model)
             if supportsOneM {
                 Toggle("", isOn: oneMBinding(model))
                     .labelsHidden()
             } else {
                 Text("—")
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(SettingsPalette.muted)
             }
         }
+    }
+
+    private func modelSelector(_ value: Binding<String>) -> some View {
+        AIModelComboBox(text: modelBaseBinding(value), models: discoveredModels)
+            .frame(minWidth: 180, minHeight: 24)
+            .accessibilityLabel("实际请求模型")
+    }
+
+    private func invalidateModels() {
+        modelRequestID = UUID()
+        discoveredModels = []
+        isFetchingModels = false
+        endpointTestMessage = nil
     }
 
     private var firstConfiguredClaudeModel: String? {
@@ -609,48 +650,57 @@ private struct AIProviderEditorView: View {
         return String(trimmed.dropLast(4)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func save() {
-        do {
-            let now = Date()
-            let value = AIProviderProfile(
-                id: profile?.id ?? UUID(),
-                client: client,
-                kind: kind,
-                title: title,
-                note: note,
-                websiteURL: websiteURL,
-                baseURL: baseURL,
-                model: model,
-                apiFormat: apiFormat,
-                isFullURL: isFullURL,
-                customUserAgent: customUserAgent,
-                requestHeaderOverridesJSON: requestHeadersJSON,
-                requestBodyOverridesJSON: requestBodyJSON,
-                promptCacheKey: promptCacheKey,
-                promptCacheRouting: promptCacheRouting,
-                impersonateClaudeCode: impersonateClaudeCode,
-                maxOutputTokens: Int(maxOutputTokens),
-                endpointAutoSelect: endpointAutoSelect,
-                customEndpoints: customEndpointsText.components(separatedBy: .newlines),
-                runtimeSettingsJSON: profile?.runtimeSettingsJSON,
-                runtimeMetadataJSON: profile?.runtimeMetadataJSON,
-                claudeAPIKeyField: keyField,
-                claudeHaikuModel: haikuModel,
-                claudeHaikuModelName: haikuModelName,
-                claudeSonnetModel: sonnetModel,
-                claudeSonnetModelName: sonnetModelName,
-                claudeOpusModel: opusModel,
-                claudeOpusModelName: opusModelName,
-                claudeFableModel: fableModel,
-                claudeFableModelName: fableModelName,
-                claudeSubagentModel: subagentModel,
-                sourceIdentifier: profile?.sourceIdentifier,
-                createdAt: profile?.createdAt ?? now,
-                updatedAt: now
-            )
-            try onSave(value, apiKey.isEmpty ? nil : apiKey)
-        } catch {
-            errorMessage = error.localizedDescription
+    private func save(activate: Bool) {
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            do {
+                let now = Date()
+                let value = AIProviderProfile(
+                    id: profile?.id ?? UUID(),
+                    client: client,
+                    kind: kind,
+                    title: title,
+                    note: note,
+                    websiteURL: websiteURL,
+                    baseURL: baseURL,
+                    model: model,
+                    quotaAPI: quotaAPI,
+                    apiFormat: apiFormat,
+                    isFullURL: isFullURL,
+                    customUserAgent: customUserAgent,
+                    requestHeaderOverridesJSON: requestHeadersJSON,
+                    requestBodyOverridesJSON: requestBodyJSON,
+                    promptCacheKey: promptCacheKey,
+                    promptCacheRouting: promptCacheRouting,
+                    impersonateClaudeCode: impersonateClaudeCode,
+                    maxOutputTokens: Int(maxOutputTokens),
+                    endpointAutoSelect: endpointAutoSelect,
+                    customEndpoints: customEndpointsText.components(separatedBy: .newlines),
+                    runtimeSettingsJSON: profile?.runtimeSettingsJSON,
+                    runtimeMetadataJSON: profile?.runtimeMetadataJSON,
+                    claudeAPIKeyField: keyField,
+                    claudeHaikuModel: haikuModel,
+                    claudeHaikuModelName: haikuModelName,
+                    claudeSonnetModel: sonnetModel,
+                    claudeSonnetModelName: sonnetModelName,
+                    claudeOpusModel: opusModel,
+                    claudeOpusModelName: opusModelName,
+                    claudeFableModel: fableModel,
+                    claudeFableModelName: fableModelName,
+                    claudeSubagentModel: subagentModel,
+                    sourceIdentifier: profile?.sourceIdentifier,
+                    createdAt: profile?.createdAt ?? now,
+                    updatedAt: now
+                )
+                if activate {
+                    try await onSaveAndSwitch(value, apiKey.isEmpty ? nil : apiKey)
+                } else {
+                    try await onSave(value, apiKey.isEmpty ? nil : apiKey)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -703,6 +753,9 @@ private struct AIProviderEditorView: View {
             return
         }
         isFetchingModels = true
+        discoveredModels = []
+        let requestID = UUID()
+        modelRequestID = requestID
         endpointTestMessage = nil
         Task {
             do {
@@ -719,12 +772,14 @@ private struct AIProviderEditorView: View {
                 }
                 let models = Self.parseModelIDs(data)
                 await MainActor.run {
+                    guard modelRequestID == requestID else { return }
                     discoveredModels = models
                     endpointTestMessage = models.isEmpty ? "未识别到模型 ID" : "已获取 \(models.count) 个模型"
                     isFetchingModels = false
                 }
             } catch {
                 await MainActor.run {
+                    guard modelRequestID == requestID else { return }
                     endpointTestMessage = "获取模型失败：\(error.localizedDescription)"
                     isFetchingModels = false
                 }

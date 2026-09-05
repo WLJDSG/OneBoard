@@ -3,6 +3,7 @@ import SwiftUI
 import Translation
 
 struct TranslationPanelView: View {
+    @ObservedObject private var providers = AIModelSwitcherViewModel.shared
     @ObservedObject var viewModel: TranslationPanelViewModel
     let onTranslate: () -> Void
     let onSelectService: (TranslationServiceType) -> Void
@@ -42,19 +43,25 @@ struct TranslationPanelView: View {
             Text("翻译")
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
-            Picker("翻译服务", selection: Binding(
-                get: { viewModel.translationServiceType },
-                set: { onSelectService($0) }
+            Picker("翻译服务 / API Key", selection: Binding(
+                get: { viewModel.translationServiceType == .deepSeek ? viewModel.selectedProviderID : viewModel.translationServiceType.rawValue },
+                set: { value in
+                    if value == "apple" { onSelectService(.apple) }
+                    else if value == "google" { onSelectService(.google) }
+                    else { Task { await viewModel.selectProvider(value) } }
+                }
             )) {
-                ForEach(TranslationServiceType.allCases) { service in
-                    Text(service.displayName).tag(service)
+                Text("Apple").tag("apple")
+                Text("Google").tag("google")
+                Text("选择 API Key").tag("").disabled(true)
+                ForEach(providers.profiles.filter { $0.kind == .custom && providers.hasSavedAPIKey(for: $0) }) { profile in
+                    Text("\(profile.title) · \(profile.client.title)").tag(profile.id.uuidString)
                 }
             }
             .labelsHidden()
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .controlSize(.small)
-            .frame(width: 220, height: 24)
-            .layoutPriority(1)
+            .frame(width: 260, height: 24)
             .disabled(viewModel.isTranslating)
             OneBoardCloseButton(action: onClose)
                 .frame(width: 24, height: 24)
@@ -207,7 +214,7 @@ struct TranslationPanelView: View {
         switch viewModel.translationServiceType {
         case .apple: return "使用系统翻译 · 支持离线"
         case .google: return "Google 翻译 · 免费、无需 API Key"
-        case .deepSeek: return "DeepSeek · 需填写 API Key"
+        case .deepSeek: return "已配置 API · 使用所选供应商的默认模型"
         }
     }
 

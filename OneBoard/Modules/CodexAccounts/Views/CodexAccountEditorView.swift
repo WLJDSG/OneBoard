@@ -12,10 +12,9 @@ struct CodexAccountEditorView: View {
             Text("编辑账号名称")
                 .font(.headline)
 
-            Form {
-                TextField("账号名称", text: $viewModel.title)
+            SettingsForm {
+                LabeledContent("账号名称") { TextField("账号名称", text: $viewModel.title).labelsHidden() }
             }
-            .formStyle(.grouped)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -33,10 +32,15 @@ struct CodexAccountEditorView: View {
                         errorMessage = error.localizedDescription
                     }
                 }
+                .buttonStyle(SettingsActionStyle(prominent: true))
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding()
-        .frame(width: 430, height: 210)
+        .padding(24)
+        .background(SettingsBackdrop())
+        .buttonStyle(SettingsActionStyle())
+        .textFieldStyle(.roundedBorder)
+        .tint(SettingsPalette.accent)
+        .frame(width: 480, height: 270)
     }
 }

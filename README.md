@@ -19,7 +19,7 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网�
 - **标注工具**：矩形、椭圆、箭头、直线、文字（微信风格）、编号圆圈、马赛克
 - **粗细循环**：± 按钮到达边界自动循环
 - **OCR 文字识别**：先结束截图遮罩会话，再显示弹性结果气泡，避免结果被遮罩覆盖
-- **翻译**：Apple Translation / Google / DeepSeek AI；Google 免费端点被限流时显示可操作提示，不展示服务端 HTML
+- **翻译**：Apple Translation / Google / 已配置 API Key；Google 免费端点被限流时显示可操作提示，不展示服务端 HTML
 - **贴图置顶**：截图悬浮在所有窗口之上
 - **撤销/重做**：无限步操作历史
 
@@ -65,12 +65,13 @@ macOS 原生截图、历史剪贴板、文件暂存、Finder 快速新建、网�
 
 ### AI 模型与供应商切换
 
-- 分别管理 Codex 和 Claude Code 的官方/自定义 API 配置；编辑页按基本信息、连接鉴权、代理转换和高级模型映射分区，支持供应商名称、备注、官网、请求地址、API Key 和底层模型 ID
+- 分别管理 Codex 和 Claude Code 的官方/自定义 API 配置；普通用户只需填写供应商、请求地址、API Key 和模型，代理转换与请求覆盖默认收纳在“高级兼容设置”中；DeepSeek 地址自动使用 OpenAI Chat Completions
 - 内置固定版本的 CC Switch MIT Rust 代理核心，支持 Claude/Codex 的 Anthropic、OpenAI Chat、OpenAI Responses（Claude 另支持 Gemini Native）转换、流式响应、完整 URL、自定义 User-Agent、请求头/请求体覆盖和端点测速择优；卸载 CC Switch 后仍可独立运行
 - Claude Code 可分别配置默认、Haiku、Sonnet、Opus、Fable 与子代理模型；角色模型支持自定义显示名和 `[1M]` 上下文标记
-- 设置页可新增、编辑、删除和切换；菜单栏可对 Codex / Claude Code 快速切换
+- 设置页可新增、编辑、删除和切换，并提供“保存并切换”；编辑当前活动配置会立即重载代理；菜单栏可对 Codex / Claude Code 快速切换
 - 模型配置行展示额度摘要；官方 Codex 复用当前账号的 5 小时/每周真实快照，未配置查询能力的第三方供应商明确显示不可用
-- Codex 仅合并更新 `~/.codex/config.toml`，保留 MCP、项目信任等未知配置，不改动 `auth.json` 和已管理的账号凭据
+- Codex 仅合并更新 `~/.codex/config.toml`，保留 MCP、项目信任等未知配置，不改动 `auth.json` 和已管理的账号凭据；自定义供应商同步生成 `~/.codex/oneboard-model-catalog.json`，让 Codex 模型选择器只显示当前供应商模型，切回官方时移除目录覆盖
+- Codex Desktop 运行中切换模型供应商时，OneBoard 会先确认主进程与旧 `app-server` 完全退出，再写入配置并自动重新打开，避免旧进程继续消耗官方账号额度
 - Claude Code 仅合并更新 `~/.claude/settings.json` 的 Anthropic API/模型环境变量，保留 permissions、hooks 等其他字段
 - 配置元数据与 API Key 按 UUID 直接保存到 OneBoard SQLite，不使用 macOS 钥匙串；代理启动时只把 Key 注入进程内存，Codex/Claude 活动配置只写 `PROXY_MANAGED` 占位值；编辑时默认遮蔽密钥并可主动显隐，首次切换前创建 `*.oneboard-backup`
 - 支持从 `~/.cc-switch/cc-switch.db` 一键导入 Codex / Claude Code 配置、代理元数据和备用端点，不修改 CC Switch 源数据；导入完成后运行时不再读取该数据库
@@ -130,3 +131,19 @@ OneBoard/
 - [开发步骤](docs/开发步骤/README.md)
 - [打包与修复流程](docs/打包与修复流程/README.md)
 - [开发日志](开发日志/)
+
+## 2026-09-05 模型目录选择与额度说明
+
+AI 模型编辑页的 Sonnet、Opus、Fable、Haiku、子代理和默认兜底支持可编辑下拉框，使用当前 API Key 获取的模型目录；已保存配置打开时自动获取，也可点击「获取模型」重试。第三方额度使用内置查询接口；刷新额度与用量同时刷新官方账号和第三方供应商。
+
+## 2026-09-05 第三方额度、Token 统计与翻译 Key 选择
+
+- 额度：内置 DeepSeek、Sub2API、SiliconFlow、OpenRouter 查询。自动识别官方域名，其他同源地址尝试 Sub2API `/v1/usage`；可在编辑页选择额度接口类型。失败显示 HTTP 状态及服务端原因，旧快照标明时间；不执行导入脚本。
+- 统计：按 API Key 和供应商源分组，展示当日、累计、缓存命中 Token，展开查看输入、输出和缓存写入。相同 Key 的 Codex/Claude 配置共享本地统计，换 Key 后分开计算。
+- 数据源：Sub2API 有历史用量时展示供应商当日/累计快照；OneBoard 本地统计仅覆盖启用后通过内置代理或翻译的请求，按本机时区计算自然日，包含缓存 Token 且不重复相加，不与供应商统计合计。余额接口未返回 Token 时不推算历史 Token。
+- 存储：代理复用 CC Switch 的响应解析，向 stdout 输出无正文、无 Key 的计数事件；主应用写入 oneboard.sqlite 的 ai_usage_events，按请求 ID 去重。Key 仍仅在 SQLite 和代理内存中；正常退出刷新尾部计数，异常强杀可能丢失尚未输出的短暂内存事件。
+- 翻译：设置页选择默认 API Key；翻译窗口可临时切换具体供应商配置，复用其默认模型、连接及协议，支持 Chat Completions、Responses、Anthropic Messages 和 Gemini；不改变 Codex/Claude 活动配置，也不再单独填写 DeepSeek Key。
+
+## 2026-09-05 设置页整体视觉升级
+
+设置窗口已统一为现代卡片布局：分组悬浮导航、轻渐变背景、圆角卡片、右侧对齐控件和深浅色适配；覆盖全部九个分类及编辑弹窗。窗口支持缩放，默认 1060×760，最小 960×680。

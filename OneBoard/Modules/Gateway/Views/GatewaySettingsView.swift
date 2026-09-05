@@ -7,7 +7,7 @@ struct GatewaySettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Form {
+            SettingsForm {
                 Section {
                     LabeledContent("当前网关", value: viewModel.displayGateway)
                     LabeledContent("网络服务", value: viewModel.displayService.isEmpty ? "未检测到" : viewModel.displayService)
@@ -28,7 +28,7 @@ struct GatewaySettingsView: View {
                                 Text(profile.title)
                                 Text(summary(for: profile))
                                     .font(.caption)
-                                    .foregroundColor(OneBoardColors.textSecondary)
+                                    .foregroundColor(SettingsPalette.muted)
                             }
                             Spacer()
                             if viewModel.activeProfile?.id == profile.id {
@@ -56,16 +56,14 @@ struct GatewaySettingsView: View {
                     Text("网关配置")
                 }
             }
-            .formStyle(.grouped)
 
             if let statusMessage = viewModel.statusMessage {
                 Text(statusMessage)
                     .font(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(SettingsPalette.muted)
                     .padding(.horizontal)
             }
         }
-        .padding()
         .sheet(isPresented: $isAddingProfile) {
             GatewayProfileEditorView(
                 viewModel: GatewayProfileEditorViewModel(),

@@ -15,7 +15,7 @@ enum TranslationServiceType: String, CaseIterable, Identifiable {
         case .google:
             return "Google"
         case .deepSeek:
-            return "DeepSeek"
+            return "已配置 API"
         }
     }
 
@@ -26,7 +26,7 @@ enum TranslationServiceType: String, CaseIterable, Identifiable {
         case .google:
             return "Google 翻译"
         case .deepSeek:
-            return "DeepSeek AI 翻译"
+            return "已配置 API 翻译"
         }
     }
 
