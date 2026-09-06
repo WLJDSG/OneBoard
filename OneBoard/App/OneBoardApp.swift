@@ -56,7 +56,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .todo: return "管理待办提醒、历史保留和面板收起行为。"
         case .calendar: return "设置月历的周起始日和菜单栏入口。"
         case .macStatus: return "选择菜单栏显示的图标与实时指标。"
-        case .iCloud: return "在你的 Mac 之间安全同步 OneBoard 配置。"
+        case .iCloud: return "备份 OneBoard 配置，在重装后恢复。"
         case .about: return "一个轻巧、专注的 macOS 效率工具。"
         }
     }
@@ -112,12 +112,16 @@ public final class SettingsWindowManager: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.minSize = NSSize(width: 960, height: 680)
-        window.isMovableByWindowBackground = true
+        Self.configureDragging(window)
         window.contentView = hostingView
         window.delegate = self
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
+    }
+
+    static func configureDragging(_ window: NSWindow) {
+        window.isMovableByWindowBackground = false
     }
 
     public func bringToFront() {
@@ -302,6 +306,17 @@ struct SettingsView: View {
                 permissionRow(title: "输入监控", description: "用于文件拖拽摇晃检测等全局输入监听", isGranted: systemCapabilities.inputMonitoringGranted, isRequesting: systemCapabilities.permissionRequestingKind == .inputMonitoring, onRequest: { systemCapabilities.setInputMonitoringEnabled(true) }, onRevoke: { systemCapabilities.setInputMonitoringEnabled(false) })
                 permissionRow(title: "通知", description: "用于待办事项到期提醒", isGranted: systemCapabilities.notificationGranted, isRequesting: systemCapabilities.permissionRequestingKind == .notifications, onRequest: { todoShowNotifications = true; systemCapabilities.setNotificationEnabled(true) }, onRevoke: { todoShowNotifications = false; systemCapabilities.setNotificationEnabled(false) })
             } header: { Text("隐私权限") }
+
+            Section {
+                FolderAuthorizationView()
+            } header: { Text("文件访问与其他授权") }
+
+            Section {
+                Text("Touch ID 或登录密码会在切换网关、卸载 Helper 和彻底卸载时由系统验证，无需预先授权。Codex 使用官方浏览器 OAuth；账号凭据和 AI API Key 在各自设置页管理。")
+                    .font(.callout).foregroundStyle(.secondary)
+                Button("管理 Codex 账号授权") { selectedTabRawValue = SettingsTab.codexAccounts.rawValue }
+                Button("管理供应商 API Key") { selectedTabRawValue = SettingsTab.aiModels.rawValue }
+            } header: { Text("身份验证与服务授权") }
 
             Section {
                 capabilityRow(title: "网关安全 Helper", description: "首次安装需管理员授权；后续切换与卸载使用 Touch ID 或登录密码确认", isGranted: systemCapabilities.gatewayHelperInstalled, onEnable: { systemCapabilities.setGatewayHelperEnabled(true) }, onDisable: { systemCapabilities.setGatewayHelperEnabled(false) })

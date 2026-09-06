@@ -144,6 +144,11 @@ final class CodexAccountViewModel: ObservableObject {
         }
     }
 
+    func reorderAccounts(_ ids: [UUID]) {
+        service.reorderAccounts(ids)
+        refreshState()
+    }
+
     func moveAccount(_ sourceID: UUID, before targetID: UUID) {
         service.moveAccount(sourceID, before: targetID)
         refreshState()

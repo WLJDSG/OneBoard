@@ -32,6 +32,8 @@ final class AnnotationViewModel: ObservableObject {
     private weak var coordinateView: NSView?
     private var allowsWindowDragging = true
     private var localMouseMonitor: Any?
+    private var pendingCalloutRect: CGRect?
+    private var textDragStartRect: CGRect = .zero
     private var startPoint: CGPoint = .zero
     private var lastDragPoint: CGPoint = .zero
     private var dragStartScreenPoint: CGPoint = .zero
@@ -65,6 +67,10 @@ final class AnnotationViewModel: ObservableObject {
         textInputCommitHandler = handler
     }
 
+    func commitPendingTextInput() {
+        if isTextInput { textInputCommitHandler?() }
+    }
+
     func closeWindow() {
         localMouseMonitor.map { NSEvent.removeMonitor($0) }
         localMouseMonitor = nil
@@ -82,7 +88,11 @@ final class AnnotationViewModel: ObservableObject {
             let targetView = self.coordinateView ?? window.contentView
             guard let targetView else { return event }
             let localPoint = targetView.convert(event.locationInWindow, from: nil)
-            guard targetView.bounds.contains(localPoint) else { return event }
+            if event.type == .leftMouseDown {
+                guard targetView.bounds.contains(localPoint) else { return event }
+                if let hit = window.contentView?.hitTest(event.locationInWindow),
+                   hit !== targetView, !hit.isDescendant(of: targetView) { return event }
+            }
             let imagePoint = AnnotationCoordinateMapper.imagePoint(
                 from: localPoint,
                 boundsHeight: targetView.bounds.height,
@@ -114,8 +124,8 @@ final class AnnotationViewModel: ObservableObject {
         }
 
         // 移动/文字模式：检查是否点中了文字标注（可拖动/编辑）
-        if annotationService.selectedTool == .cursor || annotationService.selectedTool == .text {
-            for layer in annotationService.layers.reversed() where layer.tool == .text {
+        if annotationService.selectedTool == .cursor || annotationService.selectedTool == .text || annotationService.selectedTool == .callout {
+            for layer in annotationService.layers.reversed() where layer.tool == .text || layer.tool == .callout {
                 if let handle = textResizeHandle(at: point, in: layer.rect) {
                     selectedTextLayerID = layer.id
                     resizingTextLayerID = layer.id
@@ -129,6 +139,7 @@ final class AnnotationViewModel: ObservableObject {
                 if layer.rect.contains(point) {
                     selectedTextLayerID = layer.id
                     startPoint = point
+                    textDragStartRect = layer.rect
                     isDraggingTextLayer = true
                     return
                 }
@@ -186,10 +197,8 @@ final class AnnotationViewModel: ObservableObject {
             let dx = point.x - startPoint.x
             let dy = point.y - startPoint.y
             var layer = annotationService.layers[index]
-            let origRect = layer.rect
-            layer.rect.origin = CGPoint(x: origRect.origin.x + dx, y: origRect.origin.y + dy)
+            layer.rect.origin = CGPoint(x: textDragStartRect.origin.x + dx, y: textDragStartRect.origin.y + dy)
             annotationService.layers[index] = layer
-            startPoint = point
             return
         }
 
@@ -254,16 +263,36 @@ final class AnnotationViewModel: ObservableObject {
     func commitText(_ text: String) {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isTextInput, !trimmedText.isEmpty else {
-            isTextInput = false
+            cancelTextInput()
             return
         }
-        annotationService.addText(in: textInputRect, text: trimmedText)
+        if let target = pendingCalloutRect {
+            annotationService.addCallout(target: target, label: textInputRect, text: trimmedText)
+        } else { annotationService.addText(in: textInputRect, text: trimmedText) }
+        pendingCalloutRect = nil
+        annotationService.currentDrawingLayer = nil
         selectedTextLayerID = nil
         isTextInput = false
     }
 
     func cancelTextInput() {
         isTextInput = false
+        pendingCalloutRect = nil
+        annotationService.currentDrawingLayer = nil
+    }
+
+    func beginCallout(target: CGRect, canvas: CGSize) {
+        pendingCalloutRect = target
+        textInputRect = CalloutGeometry.textRect(for: target, canvas: canvas, fontSize: annotationService.fontSize)
+        textInputPoint = textInputRect.origin
+        isTextInput = true
+        updateCalloutPreview()
+    }
+
+    func updateCalloutPreview() {
+        guard let target = pendingCalloutRect else { return }
+        annotationService.currentDrawingLayer = AnnotationLayer(tool: .callout, rect: textInputRect,
+            color: annotationService.selectedColor, lineWidth: annotationService.lineWidth, calloutRect: target)
     }
 
     func commitEditText(_ text: String) {
@@ -293,7 +322,7 @@ final class AnnotationViewModel: ObservableObject {
         switch annotationService.selectedTool {
         case .cursor, .text, .number:
             annotationService.currentDrawingLayer = nil
-        case .rectangle:
+        case .rectangle, .callout:
             annotationService.currentDrawingLayer = AnnotationLayer(
                 tool: .rectangle, rect: rect,
                 color: annotationService.selectedColor, lineWidth: annotationService.lineWidth
@@ -329,6 +358,9 @@ final class AnnotationViewModel: ObservableObject {
 
         switch annotationService.selectedTool {
         case .cursor, .text, .number: break
+        case .callout:
+            beginCallout(target: rect, canvas: coordinateView?.bounds.size ?? window?.contentView?.bounds.size ?? CGSize(width: rect.maxX + 200, height: rect.maxY + 100))
+            return
         case .rectangle: annotationService.addRectangle(rect)
         case .ellipse: annotationService.addEllipse(rect)
         case .line: annotationService.addLine(from: startPoint, to: currentPoint)
@@ -357,6 +389,7 @@ final class AnnotationViewModel: ObservableObject {
             22: .text,
             26: .number,
             28: .mosaic,
+            25: .callout,
         ]
         guard let tool = mapping[key] else { return false }
         annotationService.selectedTool = tool
@@ -381,7 +414,7 @@ final class AnnotationViewModel: ObservableObject {
     }
 
     private var expandedTextInputRect: CGRect {
-        textInputRect.insetBy(dx: -textResizeHitWidth, dy: -textResizeHitWidth)
+        textInputRect.insetBy(dx: -16, dy: -16)
     }
 
     private func textResizeHandle(at point: CGPoint, in rect: CGRect) -> TextResizeHandle? {

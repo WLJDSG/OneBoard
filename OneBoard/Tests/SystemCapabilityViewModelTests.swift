@@ -13,10 +13,10 @@ final class SystemCapabilityViewModelTests: XCTestCase {
         XCTAssertFalse(helper.calledOnMainThread)
     }
 
-    func testSystemRequestedTerminationIsAllowed() {
+    func testExplicitQuitDoesNotSchedulePermissionRelaunch() {
         let delegate = AppDelegate()
-
-        XCTAssertEqual(delegate.applicationShouldTerminate(.shared), .terminateNow)
+        delegate.prepareForUserTermination()
+        XCTAssertFalse(delegate.shouldRelaunchAfterTermination)
     }
 
     func testRefreshReadsAllCapabilityStates() async {

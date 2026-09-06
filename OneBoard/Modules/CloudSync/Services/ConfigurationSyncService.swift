@@ -39,8 +39,12 @@ struct ConfigurationSyncService {
             return Date()
         }
         // 先检查备份是否完整/已下载，不能覆盖未下载或无法解析的现有备份。
-        _ = try await cloud.load()
-        try await cloud.save(makeLocalSnapshot())
+        let existing = try await cloud.load()
+        let local = try makeLocalSnapshot()
+        if existing == local {
+            return defaults.object(forKey: Constants.UserDefaultsKeys.iCloudLastSync) as? Date ?? existing!.modifiedAt
+        }
+        try await cloud.save(local)
         return Date()
     }
 

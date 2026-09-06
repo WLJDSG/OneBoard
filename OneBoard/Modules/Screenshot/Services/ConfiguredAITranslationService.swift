@@ -35,36 +35,20 @@ struct ConfiguredAITranslationService: TranslationServiceProtocol {
         let format = profile.apiFormat ?? .recommendedValue(for: profile.client, baseURL: profile.baseURL)
         let prompt = "Translate the following text from \(source ?? "auto-detected language") to \(target). Return only the translation, without explanations.\n\n\(text)"
         var body: [String: Any]
-        let suffix: String
         switch format {
         case .openAIChat:
-            suffix = "chat/completions"
             body = ["model": model, "messages": [["role": "user", "content": prompt]], "stream": false]
         case .openAIResponses:
-            suffix = "responses"
             body = ["model": model, "input": prompt, "stream": false]
         case .anthropic:
-            suffix = "messages"
             body = ["model": model, "messages": [["role": "user", "content": prompt]], "max_tokens": profile.maxOutputTokens ?? 4096, "stream": false]
         case .geminiNative:
-            suffix = "models/\(model):generateContent"
             body = ["contents": [["role": "user", "parts": [["text": prompt]]]]]
         }
-        guard var components = URLComponents(string: profile.baseURL), components.host != nil,
-              ["https", "http"].contains(components.scheme ?? "") else { throw TranslationServiceError.translationFailed("请求地址无效") }
-        if profile.isFullURL != true {
-            var path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            if components.host == "api.deepseek.com", format == .anthropic, path.isEmpty || path == "v1" {
-                path = "anthropic"
-            }
-            let version = format == .geminiNative ? "v1beta" : "v1"
-            if path.isEmpty { path = version }
-            else if path != "v1" && path != "v1beta" && !path.hasSuffix("/v1") && !path.hasSuffix("/v1beta") {
-                path += "/" + version
-            }
-            components.path = "/" + path + "/" + suffix
+        guard let url = AIEndpointResolver.requestURL(baseURL: profile.baseURL, format: format, model: model,
+                                                      legacyFullURL: profile.isFullURL == true) else {
+            throw TranslationServiceError.translationFailed("请求地址无效")
         }
-        guard let url = components.url else { throw TranslationServiceError.translationFailed("请求地址无效") }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 60
@@ -86,7 +70,7 @@ struct ConfiguredAITranslationService: TranslationServiceProtocol {
         }
         // 翻译解析为非流式，避免供应商配置中的 stream 覆盖导致无法解析。
         if format != .geminiNative { body["stream"] = false }
-        if components.host == "api.deepseek.com", format == .openAIChat { body["thinking"] = ["type": "disabled"] }
+        if url.host == "api.deepseek.com", format == .openAIChat { body["thinking"] = ["type": "disabled"] }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
     }

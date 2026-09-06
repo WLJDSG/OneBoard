@@ -1,5 +1,11 @@
 # OneBoard 开发步骤
 
+## 2026-09-06 供应商与截图体验修订
+
+本轮按复现、回归、实现、全量测试、离屏渲染、Release/DMG 验证执行。新增回归集中在 ProviderExperienceRegressionTests、ScreenshotExperienceRegressionTests、CloudSyncAndCalendarTests；ExperienceRenderTests 用 ONEBOARD_EXPERIENCE_RENDER 按需输出图。真实鼠标与系统权限流程需独立验收。
+
+详见[本轮修复记录](../修复记录/2026-09-06-供应商与截图体验.md)。
+
 ## 2026-09-06 回归要求
 
 额度测试覆盖 primary 为周窗口且无 secondary 的 Pro 用例；排序需验证重载后不变；快捷键绑定需验证取消选择不覆盖原值。

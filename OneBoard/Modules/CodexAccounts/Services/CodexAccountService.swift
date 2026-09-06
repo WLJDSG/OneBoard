@@ -33,6 +33,12 @@ final class CodexAccountService {
     var isCodexRunning: Bool { applicationLifecycle.isRunning }
     var hasCurrentAuthCache: Bool { authCacheFile.exists }
 
+    func reorderAccounts(_ ids: [UUID]) {
+        let current = profiles
+        guard ids.count == current.count, Set(ids) == Set(current.map(\.id)) else { return }
+        store.profiles = ids.compactMap { id in current.first { $0.id == id } }
+    }
+
     func moveAccount(_ sourceID: UUID, before targetID: UUID) {
         guard sourceID != targetID else { return }
         var ordered = profiles

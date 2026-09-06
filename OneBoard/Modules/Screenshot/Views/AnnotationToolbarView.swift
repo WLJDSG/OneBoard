@@ -18,7 +18,6 @@ struct AnnotationToolbarView: View {
     let displaySize: CGSize
 
     @State private var showColorPicker: Bool = false
-    @State private var colorSampler: NSColorSampler?
 
     private let toolShortcuts: [AnnotationTool: String] = [
         .cursor: "1",
@@ -29,23 +28,19 @@ struct AnnotationToolbarView: View {
         .text: "6",
         .number: "7",
         .mosaic: "8",
+        .callout: "9",
     ]
 
     var body: some View {
         HStack(spacing: 8) {
             toolGroup
             Divider().frame(height: 20)
-            if Self.showsInlineStyleControls(for: annotationService.selectedTool) {
-                styleGroup
-            }
+            styleGroup
+                .disabled(!Self.showsInlineStyleControls(for: annotationService.selectedTool))
+                .opacity(Self.showsInlineStyleControls(for: annotationService.selectedTool) ? 1 : 0.35)
             iconActionButton("吸取屏幕颜色", icon: "eyedropper") {
-                let sampler = NSColorSampler()
-                colorSampler = sampler
-                sampler.show { color in
-                    Task { @MainActor in
-                        if let color { annotationService.selectedColor = color }
-                        colorSampler = nil
-                    }
+                ScreenshotColorSampler.shared.begin { color in
+                    annotationService.selectedColor = color
                 }
             }
             Divider().frame(height: 20)
@@ -94,7 +89,7 @@ struct AnnotationToolbarView: View {
 
             Text(styleValueText)
                 .oneBoardFont(.monoCaption)
-                .frame(minWidth: 34)
+                .frame(width: 34)
 
             Button(action: { annotationService.incrementStyleValue() }) {
                 Image(systemName: "plus")
@@ -116,7 +111,7 @@ struct AnnotationToolbarView: View {
             return "-"
         case .rectangle, .ellipse, .arrow, .line:
             return "\(Int(annotationService.lineWidth))"
-        case .text:
+        case .text, .callout:
             return "\(Int(annotationService.fontSize))"
         case .number:
             return "\(Int(annotationService.numberBadgeSize))"
@@ -151,22 +146,26 @@ struct AnnotationToolbarView: View {
                 iconActionButton("长截图", icon: "rectangle.expand.vertical") { onLongCapture() }
             }
             iconActionButton("保存到桌面 Cmd+S", icon: "square.and.arrow.down") {
+                viewModel.commitPendingTextInput()
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onSave(rendered)
             }
 
             iconActionButton("贴图", icon: "pin") {
+                viewModel.commitPendingTextInput()
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onPin(rendered)
                 onClose()
             }
 
             iconActionButton("OCR", icon: "text.viewfinder") {
+                viewModel.commitPendingTextInput()
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 handleOCROutput(rendered)
             }
 
             Button {
+                viewModel.commitPendingTextInput()
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 handleTranslationOutput(rendered)
             } label: {
@@ -179,6 +178,7 @@ struct AnnotationToolbarView: View {
             .help("识别选区文字并翻译")
 
             iconActionButton("完成 Enter", icon: "checkmark", prominent: true) {
+                viewModel.commitPendingTextInput()
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onComplete(rendered)
             }

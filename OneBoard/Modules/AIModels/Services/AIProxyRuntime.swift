@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct AIProxyRouting: Equatable {
     let baseURL: String
@@ -64,8 +65,7 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
         lock.withLock {
             guard let process else { return }
             if process.isRunning {
-                process.terminate()
-                process.waitUntilExit()
+                OwnedProcessTermination.stop(process)
             }
             self.process = nil
         }
@@ -95,8 +95,7 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
     private func start(payload: Data, identities: [String: String]) throws -> ReadyMessage {
         try lock.withLock {
             if let process, process.isRunning {
-                process.terminate()
-                process.waitUntilExit()
+                OwnedProcessTermination.stop(process)
             }
 
             guard FileManager.default.isExecutableFile(atPath: processURL.path) else {
@@ -119,13 +118,12 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
             let line = try readHandshake(from: stdout.fileHandleForReading, process: process)
             guard let data = line.data(using: .utf8),
                   let message = try? JSONDecoder().decode(HandshakeMessage.self, from: data) else {
-                let errorText = String(data: stderr.fileHandleForReading.availableData, encoding: .utf8) ?? ""
-                process.terminate()
-                throw AIModelSwitchError.proxyFailure("代理启动响应无效\(errorText.isEmpty ? "" : "：\(errorText)")")
+                OwnedProcessTermination.stop(process)
+                throw AIModelSwitchError.proxyFailure("代理启动响应无效")
             }
             guard message.status == "ready", let address = message.address,
                   let port = message.port, port > 0 else {
-                process.terminate()
+                OwnedProcessTermination.stop(process)
                 throw AIModelSwitchError.proxyFailure(message.message ?? "代理启动失败")
             }
             let reader = AIProxyUsageReader(identities: identities)
@@ -148,7 +146,14 @@ final class AIProxyCoordinator: AIProxyCoordinating, @unchecked Sendable {
 
     private func readHandshake(from handle: FileHandle, process: Process) throws -> String {
         var data = Data()
+        let deadline = Date().addingTimeInterval(10)
         while data.count < 65_536 {
+            var descriptor = pollfd(fd: handle.fileDescriptor, events: Int16(POLLIN), revents: 0)
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0, poll(&descriptor, 1, Int32(remaining * 1_000)) > 0 else {
+                OwnedProcessTermination.stop(process)
+                throw AIModelSwitchError.proxyFailure("代理启动超时")
+            }
             let chunk = try handle.read(upToCount: 1) ?? Data()
             if chunk.isEmpty {
                 if !process.isRunning { break }
@@ -206,7 +211,14 @@ enum AIProxySnapshotBuilder {
         )
     }
 
-    private static func makeProvider(profile: AIProviderProfile, apiKey: String) throws -> [String: Any] {
+    private static func makeProvider(profile original: AIProviderProfile, apiKey: String) throws -> [String: Any] {
+        var profile = original
+        // 模板已确定协议，把解析后的完整地址交给代理，避免兼容前缀再拼一层 v1。
+        if profile.presetID != nil, let format = profile.apiFormat, format != .geminiNative,
+           let endpoint = AIEndpointResolver.requestURL(baseURL: profile.baseURL, format: format, model: profile.model) {
+            profile.baseURL = endpoint.absoluteString
+            profile.isFullURL = true
+        }
         var settings = jsonObject(profile.runtimeSettingsJSON) ?? defaultSettings(profile: profile)
         inject(apiKey: apiKey, into: &settings, profile: profile)
         var metadata = jsonObject(profile.runtimeMetadataJSON) ?? [:]

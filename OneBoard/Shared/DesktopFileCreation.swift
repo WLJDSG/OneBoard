@@ -4,7 +4,9 @@ import AppKit
 enum DesktopFileCreation {
     static func create(kind: FinderFileKind) {
         do {
-            let desktop = try FileManager.default.url(for: .desktopDirectory, in: .userDomainMask,
+            let access = FolderAccessStore().hasRecord(.desktop) ? try FolderAccessStore().resolve(.desktop) : nil
+            defer { withExtendedLifetime(access) {} }
+            let desktop = try access?.url ?? FileManager.default.url(for: .desktopDirectory, in: .userDomainMask,
                                                       appropriateFor: nil, create: false)
             let file = try FinderFileCreator.create(kind: kind, in: desktop.resolvingSymlinksInPath())
             NSWorkspace.shared.activateFileViewerSelecting([file])

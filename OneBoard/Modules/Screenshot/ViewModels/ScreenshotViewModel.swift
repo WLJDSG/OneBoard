@@ -320,7 +320,9 @@ final class ScreenshotViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
         let fileName = "OneBoard Screenshot \(formatter.string(from: date)).png"
-        let desktopURL = FileManager.default.homeDirectoryForCurrentUser
+        let access = try? FolderAccessStore().resolve(.desktop)
+        defer { withExtendedLifetime(access) {} }
+        let desktopURL = access?.url ?? FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Desktop", isDirectory: true)
         let fileURL = desktopURL.appendingPathComponent(fileName)
 

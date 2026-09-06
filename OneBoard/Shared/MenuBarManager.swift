@@ -533,8 +533,9 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         }
     }
 
-    @objc private func quitApp() {
-        AppDelegate.shared?.requestTermination()
+    @MainActor @objc private func quitApp() {
+        if let delegate = AppDelegate.shared { delegate.requestTermination() }
+        else { NSApp.terminate(nil) }
     }
 
     // MARK: - 图标

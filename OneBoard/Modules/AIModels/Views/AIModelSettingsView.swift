@@ -69,15 +69,10 @@ struct AIModelSettingsView: View {
                             }.frame(maxWidth: .infinity).padding(36)
                         }
                     }
-                    ForEach(viewModel.profiles(for: selectedClient)) { profile in
-                        profileRow(profile)
-                            .draggable(profile.id.uuidString)
-                            .dropDestination(for: String.self) { items, _ in
-                                guard let id = items.first.flatMap(UUID.init(uuidString:)) else { return false }
-                                viewModel.moveProfile(id, before: profile.id)
-                                return true
-                            }
-                    }
+                    SettingsReorderList(items: viewModel.profiles(for: selectedClient), title: { $0.title }, onCommit: { ids in
+                        viewModel.reorderProfiles(ids, client: selectedClient)
+                    }) { profile in profileRow(profile) }
+                    .id(selectedClient)
                     HStack(spacing: 14) {
                         Button { viewModel.importFromCCSwitch() } label: {
                             Label("从 CC Switch 导入", systemImage: "square.and.arrow.down")
@@ -159,7 +154,11 @@ struct AIProviderEditorView: View {
     @State private var model: String
     @State private var quotaAPI: AIQuotaAPI
     @State private var apiFormat: AIUpstreamAPIFormat
-    @State private var isFullURL: Bool
+    @State private var selectedPresetID: String
+    @State private var automaticQuota: Bool
+    @State private var quotaURL: String
+    private var selectedPreset: AIProviderPreset? { AIProviderPreset.find(selectedPresetID) }
+    private var isFullURL: Bool { AIEndpointResolver.isComplete(baseURL) || (profile?.isFullURL == true && profile?.baseURL == baseURL) }
     @State private var customUserAgent: String
     @State private var requestHeadersJSON: String
     @State private var requestBodyJSON: String
@@ -218,7 +217,11 @@ struct AIProviderEditorView: View {
             initialValue: profile?.apiFormat
                 ?? .recommendedValue(for: client, baseURL: profile?.baseURL ?? "")
         )
-        _isFullURL = State(initialValue: profile?.isFullURL ?? false)
+        _selectedPresetID = State(initialValue: profile.map { value in
+            value.kind == .official ? "official" : (value.presetID ?? AIProviderPreset.matching(value)?.id ?? "custom")
+        } ?? "custom")
+        _automaticQuota = State(initialValue: profile?.quotaURL == nil)
+        _quotaURL = State(initialValue: profile?.quotaURL ?? "")
         _customUserAgent = State(initialValue: profile?.customUserAgent ?? "")
         _requestHeadersJSON = State(initialValue: profile?.requestHeaderOverridesJSON ?? "")
         _requestBodyJSON = State(initialValue: profile?.requestBodyOverridesJSON ?? "")
@@ -267,9 +270,12 @@ struct AIProviderEditorView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     GroupBox {
                         Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
-                            editorRow("类型") {
-                                Picker("", selection: $kind) {
-                                    ForEach(AIProviderKind.allCases) { kind in Text(kind.title).tag(kind) }
+                            editorRow("供应商") {
+                                Picker("供应商", selection: $selectedPresetID) {
+                                    Text("自定义供应商").tag("custom")
+                                    Text("官方账号登录（不使用 API Key）").tag("official")
+                                    Divider()
+                                    ForEach(AIProviderPreset.all) { preset in Text(preset.title).tag(preset.id) }
                                 }
                                 .labelsHidden()
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -283,11 +289,9 @@ struct AIProviderEditorView: View {
                             editorRow("官网链接") {
                                 TextField("https://provider.example", text: $websiteURL)
                             }
-                            if client == .codex {
-                                editorRow("默认模型") {
-                                    AIModelComboBox(text: $model, models: discoveredModels)
-                                        .frame(minHeight: 24)
-                                }
+                            editorRow("默认模型") {
+                                AIModelComboBox(text: $model, models: discoveredModels)
+                                    .frame(minHeight: 24)
                             }
                         }
                     } label: {
@@ -299,18 +303,43 @@ struct AIProviderEditorView: View {
                             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
                                 editorRow("请求地址") {
                                     HStack {
-                                        TextField("https://api.example.com", text: $baseURL)
+                                        if selectedPreset != nil {
+                                            Text(baseURL).font(.callout).textSelection(.enabled)
+                                            Spacer()
+                                        } else {
+                                            TextField("基础地址或完整请求 URL", text: $baseURL)
+                                        }
                                         Button(isTestingEndpoint ? "测试中…" : "测速") { testEndpoints() }
                                             .disabled(isTestingEndpoint || baseURL.isEmpty)
                                     }
                                 }
-                                editorRow("完整 URL") {
-                                    Toggle("地址已包含最终 API 路径，不再自动拼接", isOn: $isFullURL)
+                                editorRow("地址识别") {
+                                    Text(isFullURL ? "已识别完整请求地址，直接使用" : "已识别基础地址，自动补全请求路径")
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
-                                editorRow("额度接口") {
-                                    Picker("额度接口", selection: $quotaAPI) {
-                                        ForEach(AIQuotaAPI.allCases) { Text($0.title).tag($0) }
-                                    }.labelsHidden()
+                                editorRow("额度查询") {
+                                    if let preset = selectedPreset {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(preset.quota == .none ? "暂未接入，请在供应商控制台查看" : "已自动配置 " + preset.quota.title)
+                                            if let address = presetQuotaURL { Text(address).textSelection(.enabled) }
+                                        }.font(.caption).foregroundStyle(.secondary)
+                                    } else {
+                                        Toggle("自动识别额度接口", isOn: $automaticQuota)
+                                    }
+                                }
+                                if selectedPreset == nil && !automaticQuota {
+                                    editorRow("额度地址") {
+                                        TextField("https://provider.example/v1/usage", text: $quotaURL)
+                                    }
+                                    editorRow("响应格式") {
+                                        Picker("额度响应格式", selection: $quotaAPI) {
+                                            ForEach(AIQuotaAPI.allCases.filter { $0 != .none }) { Text($0.title).tag($0) }
+                                        }.labelsHidden()
+                                    }
+                                    editorRow("查询说明") {
+                                        Text("向此地址发送只读 GET 请求，使用当前 API Key 鉴权；自动格式识别支持已接入的额度响应。")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                                 editorRow("模型目录") {
                                     Button(isFetchingModels ? "获取中…" : "获取模型") { fetchModels() }
@@ -347,7 +376,7 @@ struct AIProviderEditorView: View {
                         }
                     }
 
-                    if kind == .custom {
+                    if kind == .custom && selectedPreset == nil {
                         GroupBox {
                             DisclosureGroup(isExpanded: $isProxyAdvancedExpanded) {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -406,13 +435,13 @@ struct AIProviderEditorView: View {
                                             }
                                         }
                                     }
-                                    Text("请求覆盖在协议转换完成后应用。JSON 留空表示不覆盖；备用端点每行一个 URL。")
+                                    Text("仅当供应商要求特殊协议、鉴权字段或请求头时修改。常规连接无需设置请求覆盖；JSON 留空表示不覆盖，备用端点每行一个 URL。")
                                         .font(.caption)
                                         .foregroundColor(SettingsPalette.muted)
                                 }
                                 .padding(.top, 10)
                             } label: {
-                                Text("仅特殊中转站需要配置")
+                                Text("自定义协议与兼容选项")
                                     .font(.body.weight(.medium))
                             }
                         } label: {
@@ -457,6 +486,12 @@ struct AIProviderEditorView: View {
         .onAppear {
             if kind == .custom && !baseURL.isEmpty && !apiKey.isEmpty { fetchModels() }
         }
+        .onChange(of: selectedPresetID) { _, _ in applyPreset() }
+        .onChange(of: apiFormat) { _, _ in invalidateModels() }
+        .onChange(of: keyField) { _, _ in invalidateModels() }
+        .onChange(of: customUserAgent) { _, _ in invalidateModels() }
+        .onChange(of: requestHeadersJSON) { _, _ in invalidateModels() }
+        .onChange(of: kind) { _, _ in invalidateModels() }
         .onChange(of: apiKey) { _, _ in invalidateModels() }
         .onChange(of: isFullURL) { _, _ in invalidateModels() }
         .onChange(of: baseURL) { _, newValue in
@@ -598,6 +633,9 @@ struct AIProviderEditorView: View {
         Task {
             defer { isSaving = false }
             do {
+                if kind == .custom && selectedPreset == nil && !automaticQuota && quotaURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    throw AIModelSwitchError.invalidProfile("请填写额度地址，或勾选自动识别")
+                }
                 let now = Date()
                 let value = AIProviderProfile(
                     id: profile?.id ?? UUID(),
@@ -608,7 +646,9 @@ struct AIProviderEditorView: View {
                     websiteURL: websiteURL,
                     baseURL: baseURL,
                     model: model,
-                    quotaAPI: quotaAPI,
+                    quotaAPI: selectedPreset?.quota ?? (automaticQuota ? .auto : quotaAPI),
+                    quotaURL: selectedPreset == nil && !automaticQuota ? quotaURL : nil,
+                    presetID: selectedPreset?.id,
                     apiFormat: apiFormat,
                     isFullURL: isFullURL,
                     customUserAgent: customUserAgent,
@@ -620,8 +660,8 @@ struct AIProviderEditorView: View {
                     maxOutputTokens: Int(maxOutputTokens),
                     endpointAutoSelect: endpointAutoSelect,
                     customEndpoints: customEndpointsText.components(separatedBy: .newlines),
-                    runtimeSettingsJSON: profile?.runtimeSettingsJSON,
-                    runtimeMetadataJSON: profile?.runtimeMetadataJSON,
+                    runtimeSettingsJSON: selectedPreset == nil ? profile?.runtimeSettingsJSON : nil,
+                    runtimeMetadataJSON: selectedPreset == nil ? profile?.runtimeMetadataJSON : nil,
                     claudeAPIKeyField: keyField,
                     claudeHaikuModel: haikuModel,
                     claudeHaikuModelName: haikuModelName,
@@ -718,20 +758,15 @@ struct AIProviderEditorView: View {
         let requestID = UUID()
         modelRequestID = requestID
         endpointTestMessage = nil
+        let requestKey = apiKey
+        let requestFormat = apiFormat
+        let requestKeyField = keyField
+        let userAgent = customUserAgent
+        let headers = requestHeadersJSON
         Task {
             do {
-                var request = URLRequest(url: url)
-                request.timeoutInterval = 15
-                if !apiKey.isEmpty {
-                    request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-                    request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-                }
-                if !customUserAgent.isEmpty { request.setValue(customUserAgent, forHTTPHeaderField: "User-Agent") }
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-                    throw AIModelSwitchError.proxyFailure("模型目录返回非 2xx 状态")
-                }
-                let models = Self.parseModelIDs(data)
+                let models = try await AIModelCatalogService().fetch(url: url, format: requestFormat, keyField: requestKeyField,
+                    key: requestKey, userAgent: userAgent, headersJSON: headers)
                 await MainActor.run {
                     guard modelRequestID == requestID else { return }
                     discoveredModels = models
@@ -749,11 +784,44 @@ struct AIProviderEditorView: View {
     }
 
     private var modelCatalogURL: URL? {
-        guard var components = URLComponents(string: baseURL) else { return nil }
-        if isFullURL { return components.url }
-        let path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        components.path = "/" + ([path, "models"].filter { !$0.isEmpty }.joined(separator: "/"))
-        return components.url
+        AIEndpointResolver.catalogURL(baseURL: baseURL, format: apiFormat)
+    }
+
+    static func modelCatalogURL(baseURL: String, isFullURL: Bool = false) -> URL? {
+        AIEndpointResolver.catalogURL(baseURL: baseURL)
+    }
+
+    private var presetQuotaURL: String? {
+        guard let preset = selectedPreset, preset.quota != .none else { return nil }
+        return try? AIProviderUsageService.endpoint(AIProviderProfile(client: client, title: title, baseURL: baseURL, model: model, quotaAPI: preset.quota)).0.absoluteString
+    }
+
+    private func applyPreset() {
+        invalidateModels()
+        errorMessage = nil
+        if selectedPresetID == "custom" { kind = .custom; return }
+        kind = selectedPresetID == "official" ? .official : .custom
+        apiKey = ""
+        model = ""
+        bulkClaudeModel = ""
+        haikuModel = ""; sonnetModel = ""; opusModel = ""; fableModel = ""; subagentModel = ""
+        haikuModelName = ""; sonnetModelName = ""; opusModelName = ""; fableModelName = ""
+        quotaURL = ""; automaticQuota = true
+        customUserAgent = ""; requestHeadersJSON = ""; requestBodyJSON = ""
+        promptCacheKey = ""; promptCacheRouting = .auto; impersonateClaudeCode = false
+        maxOutputTokens = ""; endpointAutoSelect = false; customEndpointsText = ""
+        if let preset = selectedPreset {
+            title = preset.title
+            baseURL = preset.address(for: client)
+            websiteURL = preset.websiteURL
+            apiFormat = preset.apiFormat(for: client)
+            quotaAPI = preset.quota
+            keyField = apiFormat == .anthropic && preset.id == "anthropic" ? .apiKey : .authToken
+        } else {
+            title = client.title + " 官方账号"
+            baseURL = ""; websiteURL = ""
+            apiFormat = .defaultValue(for: client)
+        }
     }
 
     static func parseModelIDs(_ data: Data) -> [String] {

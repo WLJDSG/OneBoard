@@ -138,6 +138,11 @@ final class AnnotationService: ObservableObject {
         appendLayer(layer)
     }
 
+    func addCallout(target: CGRect, label: CGRect, text: String) {
+        appendLayer(AnnotationLayer(tool: .callout, rect: label, color: selectedColor, text: text,
+                                    fontSize: fontSize, lineWidth: lineWidth, calloutRect: target))
+    }
+
     func addMosaic(_ rect: CGRect) {
         let layer = AnnotationLayer(
             tool: .mosaic,
@@ -220,8 +225,8 @@ final class AnnotationService: ObservableObject {
             break
         case .rectangle, .ellipse, .arrow, .line:
             lineWidth = min(12, lineWidth + 1)
-        case .text:
-            fontSize = min(48, fontSize + 2)
+        case .text, .callout:
+            fontSize = fontSize >= 20 ? 1 : max(1, fontSize + 1)
         case .number:
             numberBadgeSize = min(48, numberBadgeSize + 2)
         case .mosaic:
@@ -235,8 +240,8 @@ final class AnnotationService: ObservableObject {
             break
         case .rectangle, .ellipse, .arrow, .line:
             lineWidth = max(1, lineWidth - 1)
-        case .text:
-            fontSize = max(12, fontSize - 2)
+        case .text, .callout:
+            fontSize = fontSize <= 1 ? 20 : min(20, fontSize - 1)
         case .number:
             numberBadgeSize = max(20, numberBadgeSize - 2)
         case .mosaic:
@@ -361,6 +366,17 @@ final class AnnotationService: ObservableObject {
                 drawArrowHead(for: layer, in: ctx)
             }
 
+        case .callout:
+            if let target = layer.calloutRect {
+                ctx.setStrokeColor(layer.color.cgColor)
+                ctx.setLineWidth(layer.lineWidth)
+                ctx.stroke(target)
+                let points = CalloutGeometry.connector(target: target, label: layer.rect)
+                ctx.move(to: points.start); ctx.addLine(to: points.end); ctx.strokePath()
+                var arrow = layer
+                arrow.startPoint = points.start; arrow.endPoint = points.end
+                drawArrowHead(for: arrow, in: ctx)
+            }
         case .text, .number:
             break  // 文字/编号在第二遍渲染中通过 drawTextOrNumberLayer 单独处理
 
@@ -484,7 +500,7 @@ final class AnnotationService: ObservableObject {
     private func drawTextOrNumberLayer(_ layer: AnnotationLayer, scaleX: CGFloat, scaleY: CGFloat,
                                         displayHeight: CGFloat, pixelHeight: CGFloat) {
         switch layer.tool {
-        case .text:
+        case .text, .callout:
             guard let text = layer.text else { return }
             let pixelFontSize = layer.fontSize * scaleY
             let font = NSFont.systemFont(ofSize: pixelFontSize)
@@ -492,15 +508,10 @@ final class AnnotationService: ObservableObject {
                 .font: font,
                 .foregroundColor: layer.color
             ]
-            let textSize = (text as NSString).size(withAttributes: attrs)
             let pixelRect = toPixelRect(layer.rect, scaleX: scaleX, scaleY: scaleY, pixelHeight: pixelHeight)
-            let drawRect = CGRect(
-                x: pixelRect.minX + 4 * scaleX,
-                y: pixelRect.minY,
-                width: max(pixelRect.width - 8 * scaleX, textSize.width),
-                height: textSize.height
-            )
-            (text as NSString).draw(in: drawRect, withAttributes: attrs)
+            let drawRect = pixelRect.insetBy(dx: 4 * scaleX, dy: 0)
+            (text as NSString).draw(with: drawRect, options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attrs)
+
 
         case .number:
             guard let number = layer.numberValue else { return }

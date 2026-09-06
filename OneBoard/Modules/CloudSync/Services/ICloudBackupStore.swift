@@ -7,7 +7,10 @@ struct ICloudBackupStore: CloudConfigurationStoring {
     }
     static var directory: URL { driveRoot.appendingPathComponent("app/oneboard", isDirectory: true) }
     let directory: URL
-    init(directory: URL = Self.directory) { self.directory = directory }
+    private let authorization: AuthorizedFolder?
+    init(directory: URL = Self.directory, authorization: AuthorizedFolder? = nil) {
+        self.directory = directory; self.authorization = authorization
+    }
     var file: URL { directory.appendingPathComponent("configuration.json") }
 
     func load() async throws -> ConfigurationSnapshot? {

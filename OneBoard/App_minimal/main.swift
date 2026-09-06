@@ -20,7 +20,7 @@ app.setActivationPolicy(.accessory)
 let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 MenuBarManager.shared.configure(statusItem: statusItem)
 
-let delegate = AppDelegate()
+let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
 
-app.run()
+withExtendedLifetime(delegate) { app.run() }

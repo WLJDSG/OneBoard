@@ -39,14 +39,8 @@ struct CodexAccountSettingsView: View {
                         Text("还没有保存 Codex 账号")
                             .foregroundColor(SettingsPalette.muted)
                     } else {
-                        ForEach(viewModel.profiles) { profile in
+                        SettingsReorderList(items: viewModel.profiles, title: { $0.title }, onCommit: { viewModel.reorderAccounts($0) }) { profile in
                             accountRow(profile)
-                                .draggable(profile.id.uuidString)
-                                .dropDestination(for: String.self) { items, _ in
-                                    guard let id = items.first.flatMap(UUID.init(uuidString:)) else { return false }
-                                    viewModel.moveAccount(id, before: profile.id)
-                                    return true
-                                }
                         }
                     }
                 } header: {

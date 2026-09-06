@@ -92,6 +92,8 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
     var websiteURL: String?
     var baseURL: String
     var model: String
+    var quotaURL: String?
+    var presetID: String?
     var quotaAPI: AIQuotaAPI?
     var apiFormat: AIUpstreamAPIFormat?
     var isFullURL: Bool?
@@ -130,6 +132,8 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         baseURL: String = "",
         model: String,
         quotaAPI: AIQuotaAPI? = nil,
+        quotaURL: String? = nil,
+        presetID: String? = nil,
         apiFormat: AIUpstreamAPIFormat? = nil,
         isFullURL: Bool? = nil,
         customUserAgent: String? = nil,
@@ -165,6 +169,8 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         self.websiteURL = websiteURL
         self.baseURL = baseURL
         self.model = model
+        self.quotaURL = quotaURL
+        self.presetID = presetID
         self.quotaAPI = quotaAPI
         self.apiFormat = apiFormat
         self.isFullURL = isFullURL
@@ -200,6 +206,11 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
         copy.note = Self.trimmedOptional(note)
         copy.websiteURL = Self.trimmedOptional(websiteURL)
         copy.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.quotaURL = Self.trimmedOptional(quotaURL)
+        if let url = copy.quotaURL, !Self.isHTTPURL(url) {
+            throw AIModelSwitchError.invalidProfile("额度地址必须是有效的 HTTP(S) URL")
+        }
+        copy.isFullURL = AIEndpointResolver.isComplete(copy.baseURL) || isFullURL == true
         copy.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.customUserAgent = Self.trimmedOptional(customUserAgent)
         copy.requestHeaderOverridesJSON = Self.trimmedOptional(requestHeaderOverridesJSON)

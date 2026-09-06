@@ -102,11 +102,8 @@ final class MacStatusModel: ObservableObject {
             }
             network = (incoming, outgoing, now)
         }
-        if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]) {
-            totalDisk = Int64(values.volumeTotalCapacity ?? 0); freeDisk = values.volumeAvailableCapacityForImportantUsage ?? 0
-        }
-        if totalDisk <= 0 || freeDisk <= 0,
-           let attributes = try? FileManager.default.attributesOfFileSystem(forPath: "/") {
+        // 文件系统统计不触发可清理空间计算，避免启动时访问用户受保护目录。
+        if let attributes = try? FileManager.default.attributesOfFileSystem(forPath: "/") {
             totalDisk = (attributes[.systemSize] as? NSNumber)?.int64Value ?? totalDisk
             freeDisk = (attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? freeDisk
         }

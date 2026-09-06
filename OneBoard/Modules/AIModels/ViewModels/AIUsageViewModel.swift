@@ -20,13 +20,15 @@ final class AIUsageViewModel: ObservableObject {
                 continue
             }
             let identity = AIUsageIdentity.make(profile: profile, key: key)
-            if identities[profile.id] != identity {
+            let quotaIdentity = AIUsageIdentity.quota(profile: profile, key: key)
+            if identities[profile.id] != quotaIdentity {
                 errors[profile.id] = nil
-                identities[profile.id] = identity
+                identities[profile.id] = quotaIdentity
             }
             localToday[profile.id] = try? AIUsageStore.shared.totals(credentialID: identity, day: Date())
             localTotal[profile.id] = try? AIUsageStore.shared.totals(credentialID: identity)
-            if let data = try? repository.load(namespace: "ai_quota", recordID: identity),
+            if profile.quotaAPI != AIQuotaAPI.none,
+               let data = try? repository.load(namespace: "ai_quota", recordID: quotaIdentity),
                let snapshot = try? JSONDecoder().decode(AIQuotaSnapshot.self, from: data) {
                 snapshots[profile.id] = snapshot
             } else { snapshots[profile.id] = nil }
@@ -38,12 +40,13 @@ final class AIUsageViewModel: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
         loadLocal(profiles)
-        // 相同源、相同 Key 的 Codex/Claude 配置复用同一查询结果。
+        // 相同源、Key 和额度接口的配置复用查询；手动切换额度地址不得沿用旧快照。
         var fetched: [String: AIQuotaSnapshot] = [:]
         for profile in profiles where profile.kind == .custom {
             do {
                 let key = try vault.load(for: profile.id)
-                let identity = AIUsageIdentity.make(profile: profile, key: key)
+                guard profile.quotaAPI != AIQuotaAPI.none else { errors[profile.id] = nil; continue }
+                let identity = AIUsageIdentity.quota(profile: profile, key: key)
                 let snapshot: AIQuotaSnapshot
                 if let cached = fetched[identity] { snapshot = cached }
                 else {

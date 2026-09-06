@@ -91,6 +91,14 @@ final class AIModelSwitcherViewModel: ObservableObject {
         }
     }
 
+    func reorderProfiles(_ ids: [UUID], client: AIClient) {
+        let current = profiles.filter { $0.client == client }
+        guard ids.count == current.count, Set(ids) == Set(current.map(\.id)) else { return }
+        var remaining = ids.compactMap { id in current.first { $0.id == id } }.makeIterator()
+        store.profiles = profiles.map { $0.client == client ? remaining.next()! : $0 }
+        reload()
+    }
+
     func moveProfile(_ sourceID: UUID, before targetID: UUID) {
         guard sourceID != targetID,
               let source = profiles.first(where: { $0.id == sourceID }),

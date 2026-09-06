@@ -214,7 +214,7 @@ final class AnnotationServiceTests: XCTestCase {
         service.selectedTool = .text
         service.fontSize = 18
         service.incrementStyleValue()
-        XCTAssertEqual(service.fontSize, 20)
+        XCTAssertEqual(service.fontSize, 19)
 
         service.selectedTool = .mosaic
         service.mosaicBlockSize = 6
@@ -222,14 +222,14 @@ final class AnnotationServiceTests: XCTestCase {
         XCTAssertEqual(service.mosaicBlockSize, 8)
     }
 
-    func testDecrementingMinimumTextSizeDoesNotWrapToMaximum() {
+    func testDecrementingTextSizeCanGoBelowTwelve() {
         let service = AnnotationService()
         service.selectedTool = .text
         service.fontSize = 12
 
         service.decrementStyleValue()
 
-        XCTAssertEqual(service.fontSize, 12)
+        XCTAssertEqual(service.fontSize, 11)
     }
 
     private func makeImage(points: CGSize, pixels: CGSize) -> NSImage {

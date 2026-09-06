@@ -104,9 +104,6 @@ struct QuickLaunchSettingsView: View {
     @State private var editing: String?
     @State private var menuKey: String?
     @State private var draft = QuickLaunchBinding()
-    @State private var choosingApps = false
-    @State private var choosingTools = false
-    @State private var choosingShortcuts = false
     @State private var shortcutNames: [String] = []
     private let tools = QuickLaunchBindings.tools.map { ($0.0, $0.1) }
     var body: some View {
@@ -151,7 +148,8 @@ struct QuickLaunchSettingsView: View {
                                         if kind.0 == "file" || kind.0 == "folder" {
                                             DispatchQueue.main.async { chooseFile(for: key, kind: kind.0) }
                                         } else {
-                                            editing = key
+                                            if kind.0 == "shortcut" { loadShortcuts() }
+                                            DispatchQueue.main.async { editing = key }
                                         }
                                     } label: {
                                         Label(kind.1, systemImage: kind.2).frame(maxWidth: .infinity, alignment: .leading).padding(9)
@@ -170,57 +168,29 @@ struct QuickLaunchSettingsView: View {
         .onAppear { QuickLaunchBindings.migrate(); bindings = QuickLaunchBindings.load() }
         .sheet(isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
             if let key = editing {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("配置键位 " + key).font(.title2)
-                    if draft.kind != "web" {
-                    Picker("动作类型", selection: $draft.kind) {
-                        Text("应用").tag("app"); Text("文件").tag("file"); Text("文件夹").tag("folder")
-                        Text("网页").tag("web"); Text("快捷指令").tag("shortcut"); Text("OneBoard 工具").tag("tool")
-                    }.onChange(of: draft.kind) { _, kind in
-                        draft.target = ""
-                        DispatchQueue.main.async {
-                            if kind == "app" { choosingApps = true }
-                            if kind == "tool" { choosingTools = true }
-                            if kind == "shortcut" { loadShortcuts(); choosingShortcuts = true }
+                switch draft.kind {
+                case "app": applicationPicker
+                case "tool": toolPicker
+                case "shortcut": shortcutPicker
+                default:
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("绑定网页 · Option ＋ " + key).font(.title2)
+                        TextField("显示名称", text: $draft.title)
+                        TextField("https://example.com", text: $draft.target)
+                        HStack {
+                            webThumbnail(draft)
+                            Button(draft.imageData == nil ? "选择图片…" : "更换图片…") { chooseWebImage() }
+                            if draft.imageData != nil { Button("使用默认缩略图") { draft.imageData = nil } }
                         }
-                    }
-                    }
-                    TextField("显示名称", text: $draft.title)
-                    if draft.kind == "tool" {
-                        Button(draft.title.isEmpty ? "选择 OneBoard 工具…" : draft.title) { choosingTools = true }
-                    } else if draft.kind == "app" {
-                        Button(draft.title.isEmpty ? "选择应用…" : draft.title) { choosingApps = true }
-                    } else {
-                        TextField(draft.kind == "shortcut" ? "快捷指令名称" : "完整网页地址", text: $draft.target)
-                        if draft.kind == "web" {
-                            HStack {
-                                webThumbnail(draft)
-                                Button(draft.imageData == nil ? "选择图片…" : "更换图片…") { chooseWebImage() }
-                                if draft.imageData != nil { Button("使用默认缩略图") { draft.imageData = nil } }
-                            }
+                        HStack {
+                            Spacer()
+                            Button("取消") { editing = nil }
+                            Button("绑定") { commitDraft() }
+                                .buttonStyle(SettingsActionStyle(prominent: true))
+                                .disabled(!["https", "http"].contains(URL(string: draft.target)?.scheme ?? ""))
                         }
-                        if ["app", "file", "folder"].contains(draft.kind) {
-                            Button("选择…") { chooseFile() }
-                        }
-                    }
-                    Label("Option ＋ " + key, systemImage: "keyboard").font(.headline)
-                    Text("点击保存后生效，快捷键固定为 Option ＋ 当前键位。")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Button("删除绑定") { bindings.removeValue(forKey: key); save(); editing = nil }
-                        Spacer()
-                        Button("取消") { editing = nil }
-                        Button("保存") { bindings[key] = draft; save(); editing = nil }.disabled(draft.target.isEmpty)
-                    }
-                }.textFieldStyle(.roundedBorder).padding(24).frame(width: 440)
-                    .onAppear {
-                        choosingApps = draft.kind == "app"
-                        choosingTools = draft.kind == "tool"
-                        if draft.kind == "shortcut" { loadShortcuts(); choosingShortcuts = true }
-                    }
-                    .sheet(isPresented: $choosingApps) { applicationPicker }
-                    .sheet(isPresented: $choosingTools) { toolPicker }
-                    .sheet(isPresented: $choosingShortcuts) { shortcutPicker }
+                    }.textFieldStyle(.roundedBorder).padding(24).frame(width: 440)
+                }
             }
         }
     }
@@ -228,18 +198,6 @@ struct QuickLaunchSettingsView: View {
         if let data = try? JSONEncoder().encode(bindings) { UserDefaults.standard.set(data, forKey: QuickLaunchBindings.storageKey) }
         QuickLaunchBindings.register()
     }
-    private func chooseFile() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = draft.kind == "folder"
-        panel.canChooseFiles = draft.kind != "folder"
-        panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url {
-            draft.target = url.path
-            if draft.title.isEmpty { draft.title = url.deletingPathExtension().lastPathComponent }
-            commitDraft()
-        }
-    }
-
     private func chooseFile(for key: String, kind: String) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = kind == "folder"
@@ -288,17 +246,17 @@ struct QuickLaunchSettingsView: View {
 
     private var applicationPicker: some View {
         TargetPicker(title: "选择应用", items: installedApplications.map { ($0.path, $0.deletingPathExtension().lastPathComponent, "app.fill") }) { item in
-            draft.target = item.0; draft.title = item.1; choosingApps = false; commitDraft()
+            draft.target = item.0; draft.title = item.1; commitDraft()
         }
     }
     private var toolPicker: some View {
         TargetPicker(title: "选择 OneBoard 工具", items: tools.map { ($0.0, $0.1, toolIcon($0.0)) }) { item in
-            draft.target = item.0; draft.title = item.1; choosingTools = false; commitDraft()
+            draft.target = item.0; draft.title = item.1; commitDraft()
         }
     }
     private var shortcutPicker: some View {
         TargetPicker(title: "选择快捷指令", items: shortcutNames.map { ($0, $0, "sparkles") }) { item in
-            draft.target = item.0; draft.title = item.1; choosingShortcuts = false; commitDraft()
+            draft.target = item.0; draft.title = item.1; commitDraft()
         }
     }
 

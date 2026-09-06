@@ -40,6 +40,7 @@ final class ScreenshotCaptureService: NSObject {
             return nil
         }
 
+        ScreenshotColorSampler.shared.surfaces = captures.compactMap { ScreenshotColorSurface(image: $0.image, frame: $0.screen.frame) }
         // 每块显示器各放一个遮罩窗口；在哪块屏幕框选，就裁哪块屏幕的截图。
         let result: ScreenshotResult? = await withCheckedContinuation { continuation in
             DispatchQueue.main.async { [weak self] in
@@ -104,6 +105,7 @@ final class ScreenshotCaptureService: NSObject {
 
     /// 标注阶段仍复用原框选遮罩；完成或取消整个截图会话时统一关闭。
     func closeOverlay() {
+        ScreenshotColorSampler.shared.surfaces = []
         overlayEventManagers.forEach { $0.cleanup() }
         overlayEventManagers.removeAll()
         overlayWindows.forEach { $0.close() }
@@ -111,7 +113,7 @@ final class ScreenshotCaptureService: NSObject {
     }
 
     /// `screencapture -D` 的编号与 `NSScreen.screens` 顺序一致：主屏为 1，其余屏幕依次递增。
-    private func captureDisplay(displayNumber: Int) async -> NSImage? {
+    func captureDisplay(displayNumber: Int) async -> NSImage? {
         let tmpPath = NSTemporaryDirectory() + "oneboard_display_\(displayNumber)_\(UUID().uuidString).png"
         let exitCode = await Task.detached(priority: .userInitiated) {
             let task = Process()

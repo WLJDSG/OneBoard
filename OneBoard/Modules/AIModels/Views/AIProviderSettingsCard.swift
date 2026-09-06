@@ -62,7 +62,7 @@ struct AIProviderSettingsCard: View {
                         .background(SettingsPalette.accent.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                 } else {
                     HStack {
-                        Label(snapshot?.balance ?? "额度尚未同步", systemImage: "creditcard")
+                        Label(snapshot?.balance ?? (profile.quotaAPI == AIQuotaAPI.none ? "额度请在供应商控制台查看" : "额度尚未同步"), systemImage: "creditcard")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(snapshot == nil ? .secondary : SettingsPalette.ink)
                         Spacer()

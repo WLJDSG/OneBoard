@@ -3,10 +3,11 @@ import CryptoKit
 
 /// 仅调用内置的只读额度接口，不执行导入配置中的脚本。
 enum AIQuotaAPI: String, Codable, CaseIterable, Identifiable {
-    case auto, sub2api, deepseek, siliconflow, openrouter
+    case auto, sub2api, deepseek, siliconflow, openrouter, none
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .none: return "暂未接入额度查询"
         case .auto: return "自动识别"
         case .sub2api: return "Sub2API"
         case .deepseek: return "DeepSeek"
@@ -27,6 +28,12 @@ struct AIQuotaSnapshot: Codable, Equatable {
 }
 
 enum AIUsageIdentity {
+    static func quota(profile: AIProviderProfile, key: String) -> String {
+        let endpoint = try? AIProviderUsageService.endpoint(profile)
+        let value = make(profile: profile, key: key) + "\n" + (endpoint?.0.absoluteString ?? "none") + "\n" + (endpoint?.1.rawValue ?? "none")
+        return SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     static func make(profile: AIProviderProfile, key: String) -> String {
         let parts = URLComponents(string: profile.baseURL)
         let origin = (parts?.host?.lowercased() ?? profile.baseURL) + (parts?.port.map { ":\($0)" } ?? "")
@@ -65,6 +72,14 @@ struct AIProviderUsageService {
             throw AIProviderQuotaError("请求地址无效")
         }
         var api = profile.quotaAPI ?? .auto
+        guard api != .none else { throw AIProviderQuotaError("该供应商暂未接入额度查询；可前往供应商控制台查看") }
+        if let address = profile.quotaURL, !address.isEmpty {
+            guard let custom = URLComponents(string: address), ["https", "http"].contains(custom.scheme ?? ""),
+                  custom.host != nil, custom.user == nil, custom.password == nil, let url = custom.url else {
+                throw AIProviderQuotaError("额度地址无效")
+            }
+            return (url, api)
+        }
         if api == .auto {
             switch host.lowercased() {
             case "api.deepseek.com": api = .deepseek
@@ -110,7 +125,15 @@ struct AIProviderUsageService {
         func amount(_ value: Double, _ unit: String) -> String { String(format: "%.4f %@", value, unit) }
         var balance: String?
         var today: Int64?
-        switch api {
+        let resolvedAPI: AIQuotaAPI
+        if api == .auto {
+            let info = root["data"] as? [String: Any]
+            if root["balance_infos"] != nil { resolvedAPI = .deepseek }
+            else if info?["totalBalance"] != nil { resolvedAPI = .siliconflow }
+            else if info?["total_credits"] != nil { resolvedAPI = .openrouter }
+            else { resolvedAPI = .sub2api }
+        } else { resolvedAPI = api }
+        switch resolvedAPI {
         case .deepseek:
             let infos = root["balance_infos"] as? [[String: Any]] ?? []
             let values = infos.compactMap { info -> String? in
@@ -126,6 +149,7 @@ struct AIProviderUsageService {
             if let info = root["data"] as? [String: Any], let total = number(info["total_credits"]), let used = number(info["total_usage"]) {
                 balance = amount(total - used, "USD")
             }
+        case .none: throw AIProviderQuotaError("该供应商暂未接入额度查询")
         case .auto, .sub2api:
             if (root["isValid"] as? Bool) == false { throw AIProviderQuotaError("供应商返回 Key 无效或不可用") }
             if let remaining = number(root["remaining"]) {

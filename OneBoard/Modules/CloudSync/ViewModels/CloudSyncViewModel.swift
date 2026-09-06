@@ -16,6 +16,7 @@ final class CloudSyncViewModel: ObservableObject {
     private var isApplyingRemote = false
     private var defaultsFingerprint = Data()
     private var needsRestore = false
+    private var synchronizationInProgress = false
 
     init(service: ConfigurationSyncService? = nil) {
         self.service = service
@@ -43,14 +44,12 @@ final class CloudSyncViewModel: ObservableObject {
 
     private func configuredService() throws -> ConfigurationSyncService {
         if let service { return service }
-        guard FileManager.default.fileExists(atPath: ICloudBackupStore.driveRoot.path) else {
-            throw ConfigurationSyncError.iCloudUnavailable
-        }
-        return ConfigurationSyncService(cloud: ICloudBackupStore())
+        let access = try FolderAccessStore().resolve(.iCloud)
+        return ConfigurationSyncService(cloud: ICloudBackupStore(directory: access.url.appendingPathComponent("app/oneboard", isDirectory: true), authorization: access))
     }
 
     func restoreBackup() {
-        guard !isSyncing else { return }
+        guard !synchronizationInProgress else { return }
         needsRestore = true
         UserDefaults.standard.set(true, forKey: Constants.UserDefaultsKeys.iCloudSyncEnabled)
         startPolling()
@@ -58,7 +57,10 @@ final class CloudSyncViewModel: ObservableObject {
     }
 
     func revealBackup() {
-        NSWorkspace.shared.open(ICloudBackupStore.directory)
+        do {
+            let access = try FolderAccessStore().resolve(.iCloud)
+            NSWorkspace.shared.open(access.url.appendingPathComponent("app/oneboard", isDirectory: true))
+        } catch { statusMessage = error.localizedDescription }
     }
 
     private func startPolling() {
@@ -67,21 +69,21 @@ final class CloudSyncViewModel: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
                 guard !Task.isCancelled else { return }
-                await self?.synchronize()
+                await self?.synchronize(showProgress: false)
             }
         }
     }
 
     func startIfEnabled() {
-        // 新安装首次启动发现既有备份时恢复；显式关闭过同步的用户不自动开启。
-        if UserDefaults.standard.object(forKey: Constants.UserDefaultsKeys.iCloudSyncEnabled) == nil,
-           FileManager.default.fileExists(atPath: ICloudBackupStore.directory.path) {
-            UserDefaults.standard.set(true, forKey: Constants.UserDefaultsKeys.iCloudSyncEnabled)
-            Task { await synchronize(preferRemote: true) }
-        }
+        // 不再自动扫描尚未授权的 iCloud 目录。重装恢复由用户明确触发。
         guard isEnabled else { return }
+        guard service != nil || FolderAccessStore().hasRecord(.iCloud) else {
+            statusMessage = FolderAccessError.required("iCloud Drive").localizedDescription
+            return
+        }
+        guard pollingTask == nil else { return }
         startPolling()
-        Task { await synchronize(preferRemote: lastSync == nil) }
+        Task { await synchronize(preferRemote: lastSync == nil, showProgress: false) }
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -115,26 +117,30 @@ final class CloudSyncViewModel: ObservableObject {
         scheduledTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
-            await self?.synchronize()
+            await self?.synchronize(showProgress: false)
         }
     }
 
-    private func synchronize(preferRemote: Bool = false) async {
-        guard isEnabled, !isSyncing else { return }
+    func synchronize(preferRemote: Bool = false, showProgress: Bool = true) async {
+        guard isEnabled, !synchronizationInProgress else { return }
         needsRestore = needsRestore || preferRemote
-        isSyncing = true
-        statusMessage = "正在同步全部配置…"
+        synchronizationInProgress = true
+        if showProgress { isSyncing = true }
+        if showProgress { statusMessage = "正在备份配置…" }
         isApplyingRemote = true
-        defer { isApplyingRemote = false; isSyncing = false }
+        defer { isApplyingRemote = false; synchronizationInProgress = false; if showProgress { isSyncing = false } }
         do {
             let service = try configuredService()
             let restoring = needsRestore
             let date = try await service.backup(restore: restoring)
             needsRestore = false
             defaultsFingerprint = Self.makeDefaultsFingerprint()
-            lastSync = date
-            UserDefaults.standard.set(date, forKey: Constants.UserDefaultsKeys.iCloudLastSync)
-            statusMessage = restoring ? "已恢复或创建 iCloud 配置备份" : "配置已备份到 iCloud Drive/app/oneboard"
+            if lastSync != date {
+                lastSync = date
+                UserDefaults.standard.set(date, forKey: Constants.UserDefaultsKeys.iCloudLastSync)
+            }
+            let message = restoring ? "已恢复或创建 iCloud 配置备份" : "配置已备份到 iCloud Drive/app/oneboard"
+            if statusMessage != message { statusMessage = message }
         } catch {
             statusMessage = error.localizedDescription
         }

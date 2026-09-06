@@ -54,6 +54,8 @@ struct AnnotationCanvasView: View {
                 textEditOverlay
             }
         }
+        .coordinateSpace(name: "annotationCanvas")
+        .transaction { $0.animation = nil }
         .background(WindowAccessor { window in
             canvasWindow = window
         })
@@ -75,7 +77,7 @@ struct AnnotationCanvasView: View {
             }
         }
         .onChange(of: annotationService.selectedTool) { _, tool in
-            guard viewModel.isTextInput, tool != .text else { return }
+            guard viewModel.isTextInput, tool != .text, tool != .callout else { return }
             viewModel.commitText(textFieldValue)
             textFieldValue = ""
         }
@@ -101,7 +103,7 @@ struct AnnotationCanvasView: View {
                             layer: layer,
                             isSelected: viewModel.selectedTextLayerID == layer.id,
                             onDoubleTap: {
-                                if layer.tool == .text {
+                                if layer.tool == .text || layer.tool == .callout {
                                     viewModel.selectedTextLayerID = layer.id
                                     viewModel.enterTextEdit()
                                 }
@@ -175,12 +177,15 @@ struct AnnotationCanvasView: View {
                     .allowsHitTesting(false)
             }
 
-            // 拖拽移动区域（覆盖整个输入框）
-            RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                .fill(Color.clear)
+            // 固定画布坐标系内拖动边框手柄，不覆盖 TextField 的光标和选字操作。
+            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                .font(.system(size: 10)).foregroundStyle(color)
+                .frame(width: 30, height: 16)
+                .background(.regularMaterial, in: Capsule())
                 .contentShape(Rectangle())
+                .position(x: rect.width / 2, y: -8)
                 .gesture(
-                    DragGesture(minimumDistance: 3)
+                    DragGesture(minimumDistance: 3, coordinateSpace: .named("annotationCanvas"))
                         .onChanged { value in
                             isResizingTextInput = true
                             if textInputResizeStartRect == nil {
@@ -209,7 +214,7 @@ struct AnnotationCanvasView: View {
                     .position(handle.position(in: CGRect(origin: .zero, size: rect.size)))
                     .contentShape(Rectangle().size(width: 20, height: 20))
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named("annotationCanvas"))
                             .onChanged { value in
                                 isResizingTextInput = true
                                 if textInputResizeStartRect == nil {
@@ -237,6 +242,7 @@ struct AnnotationCanvasView: View {
         }
         .frame(width: rect.width, height: rect.height)
         .position(x: rect.midX, y: rect.midY)
+        .onChange(of: viewModel.textInputRect) { _, _ in viewModel.updateCalloutPreview() }
     }
 
     // MARK: - 文字编辑浮层 (微信风格)
@@ -473,6 +479,20 @@ struct AnnotationLayerView: View {
             }
             .stroke(Color(nsColor: layer.color), lineWidth: layer.lineWidth)
             .allowsHitTesting(false)
+        case .callout:
+            if let target = layer.calloutRect {
+                Path { path in
+                    path.addRect(target)
+                    let points = CalloutGeometry.connector(target: target, label: layer.rect)
+                    path.move(to: points.start); path.addLine(to: points.end)
+                    let angle = atan2(points.end.y - points.start.y, points.end.x - points.start.x)
+                    for spread in [-CGFloat.pi / 7, CGFloat.pi / 7] {
+                        path.move(to: points.end)
+                        path.addLine(to: CGPoint(x: points.end.x - 12 * cos(angle + spread), y: points.end.y - 12 * sin(angle + spread)))
+                    }
+                }.stroke(Color(nsColor: layer.color), lineWidth: layer.lineWidth).allowsHitTesting(false)
+            }
+            textLayerView
         case .text:
             textLayerView
         case .number:

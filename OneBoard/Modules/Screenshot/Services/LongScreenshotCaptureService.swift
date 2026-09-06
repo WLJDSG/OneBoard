@@ -91,6 +91,7 @@ final class LongScreenshotCaptureService: ObservableObject {
     private var cancelled = false
 
     func capture(initial: NSImage, selectionRect: CGRect) async -> NSImage? {
+        finished = false; cancelled = false; count = 1
         guard let screenIndex = NSScreen.screens.firstIndex(where: { $0.frame.intersects(selectionRect) }) else { return initial }
         let screen = NSScreen.screens[screenIndex]
         let border = NSPanel(contentRect: selectionRect.insetBy(dx: -3, dy: -3), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -115,19 +116,8 @@ final class LongScreenshotCaptureService: ObservableObject {
         previewPanel.level = .floating; previewPanel.isOpaque = false; previewPanel.backgroundColor = .clear
         previewPanel.contentView = NSHostingView(rootView: LongCapturePreview(model: self))
         previewPanel.orderFrontRegardless()
-        let sf = screen.frame
-        let outside = [CGRect(x: sf.minX, y: sf.minY, width: max(0, selectionRect.minX - sf.minX), height: sf.height),
-                       CGRect(x: selectionRect.maxX, y: sf.minY, width: max(0, sf.maxX - selectionRect.maxX), height: sf.height),
-                       CGRect(x: selectionRect.minX, y: sf.minY, width: selectionRect.width, height: max(0, selectionRect.minY - sf.minY)),
-                       CGRect(x: selectionRect.minX, y: selectionRect.maxY, width: selectionRect.width, height: max(0, sf.maxY - selectionRect.maxY))]
-        let shades = outside.filter { $0.width > 0 && $0.height > 0 }.map { rect -> NSPanel in
-            let panel = NSPanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            panel.backgroundColor = .black.withAlphaComponent(0.25); panel.isOpaque = false
-            panel.hasShadow = false
-            panel.ignoresMouseEvents = true; panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
-            panel.orderFrontRegardless(); return panel
-        }
-        defer { border.close(); controls.close(); previewPanel.close(); shades.forEach { $0.close() } }
+        // 长截图期间只保留角标；四块全屏遮罩会形成贯穿屏幕的大框。
+        defer { border.close(); controls.close(); previewPanel.close() }
         // 捕获过滤器只建立一次，永久排除本应用窗口；不再隐藏边框和控件。
         guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
               let screenID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
@@ -147,12 +137,13 @@ final class LongScreenshotCaptureService: ObservableObject {
         preview = output
         while !finished && !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 80_000_000)
-            if cancelled { return nil }
+            if finished || Task.isCancelled { break }
             let cg = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
             let frame = cg.map { NSImage(cgImage: $0, size: selectionRect.size) }
             guard let frame else { message = "抓取失败，请检查屏幕录制权限"; continue }
             let prior = previous
             let shift = await Task.detached(priority: .userInitiated) { LongScreenshotStitcher.verticalShift(prior, frame) }.value
+            if finished || Task.isCancelled { break }
             guard let shift else {
                 message = "未找到重叠，请向上回滚一些，再缓慢向下滚动"
                 continue
@@ -233,7 +224,9 @@ extension LongScreenshotStitcher {
         let left = samples(a), right = samples(b)
         var best = Double.infinity
         var bestShift = 0
-        for shift in 0...Int(Double(h) * 0.85) {
+        var scores: [(Int, Double)] = []
+        // 至少保留 35% 重叠；过短的空白/重复区域不能证明滚动。
+        for shift in 0...Int(Double(h) * 0.65) {
             var error = 0.0
             var contrast = 0.0
             var total = 0.0
@@ -252,17 +245,31 @@ extension LongScreenshotStitcher {
             let variance = contrast / Double(samples) - pow(total / Double(samples), 2)
             guard variance > 0.001 else { continue }
             let score = error / Double(samples)
+            scores.append((shift, score))
             if score < best { best = score; bestShift = shift }
         }
-        return best < 0.015 ? CGFloat(bestShift) * previous.size.height / CGFloat(h) : nil
+        guard best < 0.015 else { return nil }
+        if bestShift == 0 { return 0 }
+        // 重复段落会产生多个同样好的位移。宁可等待用户回滚，也不猜一个偏移追加。
+        let tolerance = max(2, Int(CGFloat(h) / previous.size.height))
+        if let runner = scores.filter({ abs($0.0 - bestShift) > tolerance }).map(\.1).min(), runner < best + 0.003 { return nil }
+        if let stationary = scores.first(where: { $0.0 == 0 })?.1, best > stationary * 0.5 { return nil }
+        return CGFloat(bestShift) * previous.size.height / CGFloat(h)
     }
 
     static func append(_ output: NSImage, frame: NSImage, height: CGFloat) -> NSImage {
-        let result = NSImage(size: CGSize(width: output.size.width, height: output.size.height + height))
-        result.lockFocus()
-        output.draw(in: CGRect(x: 0, y: height, width: output.size.width, height: output.size.height), from: .zero, operation: .copy, fraction: 1)
-        frame.draw(in: CGRect(x: 0, y: 0, width: frame.size.width, height: height), from: CGRect(x: 0, y: 0, width: frame.size.width, height: height), operation: .copy, fraction: 1)
-        result.unlockFocus()
-        return result
+        guard let prior = output.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let next = frame.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              prior.width == next.width, frame.size.height > 0 else { return output }
+        let scale = CGFloat(next.height) / frame.size.height
+        let added = min(next.height, max(0, Int((height * scale).rounded())))
+        guard added > 0, let strip = next.cropping(to: CGRect(x: 0, y: next.height - added, width: next.width, height: added)),
+              let context = CGContext(data: nil, width: prior.width, height: prior.height + added, bitsPerComponent: 8,
+                  bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return output }
+        context.interpolationQuality = .none
+        context.draw(prior, in: CGRect(x: 0, y: added, width: prior.width, height: prior.height))
+        context.draw(strip, in: CGRect(x: 0, y: 0, width: prior.width, height: added))
+        guard let result = context.makeImage() else { return output }
+        return NSImage(cgImage: result, size: CGSize(width: output.size.width, height: output.size.height + CGFloat(added) / scale))
     }
 }

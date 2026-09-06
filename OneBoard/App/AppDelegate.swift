@@ -1,8 +1,11 @@
 import AppKit
 import LaunchAtLogin
 
+@MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     public static private(set) weak var shared: AppDelegate?
+    private var isTerminating = false
+    private var userRequestedTermination = false
     private var configurationSyncObserver: NSObjectProtocol?
 
     public func applicationWillFinishLaunching(_ notification: Notification) {
@@ -95,23 +98,36 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationWillTerminate(_ notification: Notification) {
         if let configurationSyncObserver { NotificationCenter.default.removeObserver(configurationSyncObserver) }
-        AIProxyCoordinator.shared.stop()
         PasteboardMonitor.shared.stop()
         DragDetector.shared.stop()
         print("[AppDelegate] OneBoard 已退出")
     }
 
     public func requestTermination() {
+        prepareForUserTermination()
         NSApp.terminate(nil)
     }
 
+    func prepareForUserTermination() {
+        userRequestedTermination = true
+        PermissionGuideWindowManager.shared.hide()
+    }
+
+    var shouldRelaunchAfterTermination: Bool {
+        !userRequestedTermination && PermissionGuideWindowManager.shared.shouldRelaunchIfTerminated
+    }
+
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // 菜单栏应用在系统权限弹窗中只会收到退出请求，系统不会可靠地再次启动它。
-        // 仅在录屏/输入监控授权流程仍活跃时，安排一个独立进程延迟重新打开。
-        if PermissionGuideWindowManager.shared.shouldRelaunchIfTerminated {
-            scheduleRelaunch()
+        guard !isTerminating else { return .terminateLater }
+        isTerminating = true
+        let relaunch = shouldRelaunchAfterTermination
+        // 代理的请求排空和尾部计数不能阻塞主线程；完成后交还系统退出流程。
+        Task { @MainActor in
+            await Task.detached(priority: .userInitiated) { AIProxyCoordinator.shared.stop() }.value
+            if relaunch { scheduleRelaunch() }
+            sender.reply(toApplicationShouldTerminate: true)
         }
-        return .terminateNow
+        return .terminateLater
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

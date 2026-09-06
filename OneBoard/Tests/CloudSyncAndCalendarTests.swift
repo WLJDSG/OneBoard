@@ -81,3 +81,38 @@ final class CloudSyncAndCalendarTests: XCTestCase {
         XCTAssertNil(try repository.loadState(key: "deleted_state"))
     }
 }
+
+private actor ExperienceBackupStore: CloudConfigurationStoring {
+    var snapshot: ConfigurationSnapshot?
+    var writes = 0
+    func load() async throws -> ConfigurationSnapshot? { snapshot }
+    func save(_ snapshot: ConfigurationSnapshot) async throws { self.snapshot = snapshot; writes += 1 }
+}
+
+extension CloudSyncAndCalendarTests {
+    func testUnchangedBackupDoesNotWriteAgainOrChangeDisplayedDate() async throws {
+        let queue = try DatabaseQueue()
+        try await queue.write { db in
+            try db.create(table: "private_records") { table in
+                table.column("namespace", .text); table.column("record_id", .text)
+                table.column("payload", .blob); table.column("updated_at", .datetime)
+            }
+            try db.create(table: "application_state") { table in
+                table.column("key", .text); table.column("value", .blob); table.column("updated_at", .datetime)
+            }
+        }
+        let suite = "OneBoard.BackupExperience.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = ExperienceBackupStore()
+        let service = ConfigurationSyncService(cloud: store, repository: PrivateDataRepository(queue: queue), defaults: defaults, sharedDefaults: defaults)
+        let date = try await service.backup()
+        defaults.set(date, forKey: Constants.UserDefaultsKeys.iCloudLastSync)
+        let secondDate = try await service.backup()
+        let writes = await store.writes
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(secondDate, date)
+        XCTAssertFalse(FolderAccessStore(defaults: defaults).hasRecord(.iCloud))
+        XCTAssertThrowsError(try FolderAccessStore(defaults: defaults).resolve(.iCloud))
+    }
+}
