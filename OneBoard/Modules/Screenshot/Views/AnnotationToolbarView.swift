@@ -75,7 +75,7 @@ struct AnnotationToolbarView: View {
 
     private var styleGroup: some View {
         HStack(spacing: 7) {
-            colorPickerButton
+            if annotationService.selectedTool != .mosaic { colorPickerButton }
 
             Divider().frame(height: 22)
 
@@ -89,7 +89,7 @@ struct AnnotationToolbarView: View {
 
             Text(styleValueText)
                 .oneBoardFont(.monoCaption)
-                .frame(width: 34)
+                .frame(width: 26, height: 28)
 
             Button(action: { annotationService.incrementStyleValue() }) {
                 Image(systemName: "plus")
@@ -100,8 +100,9 @@ struct AnnotationToolbarView: View {
             .help("增大样式 Right Option")
 
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+        .frame(height: 34)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
 
     }
 
@@ -206,8 +207,13 @@ struct AnnotationToolbarView: View {
             annotationService.selectedTool = tool
             onToolSelected?(tool)
         }) {
-            Image(systemName: tool.iconName)
-                .oneBoardFont(.body)
+            Group {
+                if tool == .text {
+                    Text("T").font(.system(size: 16, weight: .semibold, design: .serif))
+                } else {
+                    Image(systemName: tool.iconName).font(.system(size: 13, weight: .medium))
+                }
+            }
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: OneBoardRadius.sm).fill(
@@ -235,7 +241,7 @@ struct AnnotationToolbarView: View {
                 .overlay(
                     Circle().stroke(Color.white, lineWidth: 1.5)
                 )
-                .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, x: 0, y: OneBoardShadow.sm.y)
+                .frame(width: 28, height: 28, alignment: .center)
         }
         .buttonStyle(.plain)
         .help("选择颜色")
@@ -246,17 +252,18 @@ struct AnnotationToolbarView: View {
 
     private var colorPickerPopover: some View {
         VStack(spacing: 10) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 6), count: 4), spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 8), count: 5), spacing: 6) {
                 ForEach(annotationService.presetColors, id: \.self) { color in
                     Button(action: {
                         annotationService.selectedColor = color
+                        showColorPicker = false
                     }) {
-                        RoundedRectangle(cornerRadius: OneBoardRadius.sm)
+                        Circle()
                             .fill(Color(nsColor: color))
-                            .frame(width: 28, height: 28)
+                            .frame(width: 24, height: 24)
                             .overlay(
-                                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                                    .stroke(Color.white, lineWidth: annotationService.selectedColor == color ? 2 : 0)
+                                Circle()
+                                    .stroke(annotationService.selectedColor == color ? Color.primary : Color.primary.opacity(0.15), lineWidth: annotationService.selectedColor == color ? 2 : 0.5)
                             )
                             .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, x: 0, y: OneBoardShadow.sm.y)
                     }
@@ -278,7 +285,7 @@ struct AnnotationToolbarView: View {
             .padding(.vertical, 2)
         }
         .padding(12)
-        .frame(width: 160)
+        .frame(width: 184)
     }
 
     private func showSystemColorPanel() {

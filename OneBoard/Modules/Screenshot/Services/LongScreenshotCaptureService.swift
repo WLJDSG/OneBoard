@@ -55,6 +55,14 @@ enum LongCaptureOverlayLayout {
         let end: CGPoint
     }
 
+    static func dimPath(in bounds: CGRect, selection: CGRect) -> NSBezierPath {
+        let path = NSBezierPath(rect: bounds)
+        let hole = selection.intersection(bounds)
+        if !hole.isNull { path.appendRect(hole) }
+        path.windingRule = .evenOdd
+        return path
+    }
+
     static func cornerSegments(in rect: CGRect, length: CGFloat = 22) -> [Segment] {
         let length = min(length, rect.width / 2, rect.height / 2)
         return [
@@ -116,8 +124,18 @@ final class LongScreenshotCaptureService: ObservableObject {
         previewPanel.level = .floating; previewPanel.isOpaque = false; previewPanel.backgroundColor = .clear
         previewPanel.contentView = NSHostingView(rootView: LongCapturePreview(model: self))
         previewPanel.orderFrontRegardless()
-        // 长截图期间只保留角标；四块全屏遮罩会形成贯穿屏幕的大框。
-        defer { border.close(); controls.close(); previewPanel.close() }
+        // 每屏一个无边线、无阴影、鼠标透传的暗罩；选区挖空，捕获过滤器排除自身。
+        let masks = NSScreen.screens.map { display -> NSPanel in
+            let mask = NSPanel(contentRect: display.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            mask.isOpaque = false; mask.backgroundColor = .clear; mask.hasShadow = false
+            mask.ignoresMouseEvents = true; mask.level = .floating
+            mask.contentView = LongCaptureDimView(frame: CGRect(origin: .zero, size: display.frame.size),
+                selection: selectionRect.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY))
+            mask.orderFrontRegardless()
+            return mask
+        }
+        border.orderFrontRegardless(); controls.orderFrontRegardless(); previewPanel.orderFrontRegardless()
+        defer { masks.forEach { $0.close() }; border.close(); controls.close(); previewPanel.close() }
         // 捕获过滤器只建立一次，永久排除本应用窗口；不再隐藏边框和控件。
         guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
               let screenID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
@@ -271,5 +289,16 @@ extension LongScreenshotStitcher {
         context.draw(strip, in: CGRect(x: 0, y: 0, width: prior.width, height: added))
         guard let result = context.makeImage() else { return output }
         return NSImage(cgImage: result, size: CGSize(width: output.size.width, height: output.size.height + CGFloat(added) / scale))
+    }
+}
+
+private final class LongCaptureDimView: NSView {
+    let selection: CGRect
+    init(frame: CGRect, selection: CGRect) { self.selection = selection; super.init(frame: frame) }
+    required init?(coder: NSCoder) { fatalError() }
+    override func draw(_ dirtyRect: NSRect) {
+        let path = LongCaptureOverlayLayout.dimPath(in: bounds, selection: selection)
+        NSColor.black.withAlphaComponent(0.42).setFill()
+        path.fill()
     }
 }

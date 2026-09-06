@@ -59,7 +59,13 @@ final class CloudSyncViewModel: ObservableObject {
     func revealBackup() {
         do {
             let access = try FolderAccessStore().resolve(.iCloud)
-            NSWorkspace.shared.open(access.url.appendingPathComponent("app/oneboard", isDirectory: true))
+            let directory = access.url.appendingPathComponent("app/oneboard", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            withExtendedLifetime(access) {
+                if !NSWorkspace.shared.open(directory) {
+                    statusMessage = "Finder 无法打开备份文件夹：" + directory.path
+                }
+            }
         } catch { statusMessage = error.localizedDescription }
     }
 
@@ -72,6 +78,12 @@ final class CloudSyncViewModel: ObservableObject {
                 await self?.synchronize(showProgress: false)
             }
         }
+    }
+
+    func folderAuthorizationDidChange() {
+        guard isEnabled else { return }
+        startPolling()
+        Task { await synchronize(preferRemote: lastSync == nil) }
     }
 
     func startIfEnabled() {

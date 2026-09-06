@@ -4,7 +4,8 @@ import AppKit
 @MainActor
 final class AnnotationService: ObservableObject {
     @Published var layers: [AnnotationLayer] = []
-    @Published private(set) var redoLayers: [AnnotationLayer] = []
+    @Published private var undoSnapshots: [[AnnotationLayer]] = []
+    @Published private var redoSnapshots: [[AnnotationLayer]] = []
     @Published var selectedTool: AnnotationTool = .cursor
     @Published var selectedColor: NSColor = .systemRed {
         didSet {
@@ -29,6 +30,7 @@ final class AnnotationService: ObservableObject {
     @Published var currentDrawingLayer: AnnotationLayer?
 
     private var baseImage: NSImage?
+    private var mosaicDisplaySize: CGSize?
 
     init(baseImage: NSImage? = nil) {
         self.baseImage = baseImage
@@ -38,12 +40,12 @@ final class AnnotationService: ObservableObject {
         self.baseImage = image
     }
 
-    var canUndo: Bool { !layers.isEmpty }
-    var canRedo: Bool { !redoLayers.isEmpty }
+    var canUndo: Bool { !undoSnapshots.isEmpty }
+    var canRedo: Bool { !redoSnapshots.isEmpty }
 
     private func appendLayer(_ layer: AnnotationLayer) {
+        recordUndo()
         layers.append(layer)
-        redoLayers.removeAll()
     }
 
     // MARK: - 添加标注
@@ -187,25 +189,57 @@ final class AnnotationService: ObservableObject {
 
     /// 删除指定图层
     func removeLayer(id: UUID) {
+        guard layers.contains(where: { $0.id == id }) else { return }
+        recordUndo()
         layers.removeAll { $0.id == id }
-        redoLayers.removeAll()
+        normalizeNumbers()
+        redoSnapshots.removeAll()
+    }
+
+    /// 将已有标记移动到指定序位，其他标记自动让位，不产生重复或断号。
+    func updateNumber(id: UUID, value: Int) {
+        var ordered = layers.filter { $0.tool == .number }.sorted { ($0.numberValue ?? 0) < ($1.numberValue ?? 0) }
+        guard (1...max(1, ordered.count)).contains(value), let index = ordered.firstIndex(where: { $0.id == id }) else { return }
+        guard index != value - 1 else { return }
+        recordUndo()
+        let moved = ordered.remove(at: index)
+        ordered.insert(moved, at: value - 1)
+        for (offset, layer) in ordered.enumerated() {
+            if let index = layers.firstIndex(where: { $0.id == layer.id }) { layers[index].numberValue = offset + 1 }
+        }
+        redoSnapshots.removeAll()
+    }
+
+    private func normalizeNumbers() {
+        let ordered = layers.filter { $0.tool == .number }.sorted { ($0.numberValue ?? 0) < ($1.numberValue ?? 0) }
+        for (offset, layer) in ordered.enumerated() {
+            if let index = layers.firstIndex(where: { $0.id == layer.id }) { layers[index].numberValue = offset + 1 }
+        }
     }
 
     // MARK: - 操作
 
+    private func recordUndo() {
+        undoSnapshots.append(layers)
+        redoSnapshots.removeAll()
+    }
+
     func undo() {
-        guard let layer = layers.popLast() else { return }
-        redoLayers.append(layer)
+        guard let previous = undoSnapshots.popLast() else { return }
+        redoSnapshots.append(layers)
+        layers = previous
     }
 
     func redo() {
-        guard let layer = redoLayers.popLast() else { return }
-        layers.append(layer)
+        guard let next = redoSnapshots.popLast() else { return }
+        undoSnapshots.append(layers)
+        layers = next
     }
 
     func removeAll() {
         layers.removeAll()
-        redoLayers.removeAll()
+        undoSnapshots.removeAll()
+        redoSnapshots.removeAll()
     }
 
     // MARK: - 样式控制
@@ -253,7 +287,9 @@ final class AnnotationService: ObservableObject {
 
     /// 将所有标注渲染到图片上
     func renderToImage(baseImage: NSImage, displaySize: CGSize? = nil) -> NSImage {
+        self.baseImage = baseImage
         let outputPointSize = displaySize ?? baseImage.size
+        mosaicDisplaySize = outputPointSize
         let pixelSize = Self.pixelSize(for: baseImage)
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -470,19 +506,15 @@ final class AnnotationService: ObservableObject {
     }
 
     private func drawMosaic(in rect: CGRect, blockSize: CGFloat, context ctx: CGContext) {
-        let cell = max(4, blockSize)
-        ctx.setFillColor(NSColor.black.withAlphaComponent(0.68).cgColor)
-        ctx.fill(rect)
-        for x in stride(from: rect.minX, to: rect.maxX, by: cell) {
-            for y in stride(from: rect.minY, to: rect.maxY, by: cell) {
-                let seed = sin((x + 17) * 12.9898 + (y + 23) * 78.233) * 43758.5453
-                let random = seed - floor(seed)
-                let alpha = 0.38 + random * 0.48
-                let inset: CGFloat = random > 0.55 ? 0 : 1
-                ctx.setFillColor(NSColor.white.withAlphaComponent(alpha).cgColor)
-                ctx.fill(CGRect(x: x + inset, y: y + inset, width: cell + 1 - inset, height: cell + 1 - inset))
-            }
-        }
+        guard let baseImage,
+              let image = MosaicPixels.make(image: baseImage, displaySize: mosaicDisplaySize ?? baseImage.size, rect: rect, blockSize: blockSize) else { return }
+        ctx.saveGState()
+        ctx.clip(to: rect)
+        ctx.interpolationQuality = .none
+        ctx.translateBy(x: rect.minX, y: rect.maxY)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(image, in: CGRect(origin: .zero, size: rect.size))
+        ctx.restoreGState()
     }
 
     // MARK: - 直接像素坐标文字/编号渲染（避免 CTM 双重翻转）

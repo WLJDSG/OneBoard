@@ -1,5 +1,11 @@
 # OneBoard 开发步骤
 
+## 2026-09-07 截图、账号与授权
+
+先用序号删除回归复现断号，再实施修改。SeptemberInteractionRegressionTests 覆盖序号、OAuth 回调、目录解析、候选窗口、马赛克与暗罩。执行全量测试、深浅色离屏渲染、Release 构建及固定证书 DMG 验证。原生交互与账号登录单独标记验收状态。
+
+详见[本轮修复记录](../修复记录/2026-09-07-截图账号与授权.md)。
+
 ## 2026-09-06 供应商与截图体验修订
 
 本轮按复现、回归、实现、全量测试、离屏渲染、Release/DMG 验证执行。新增回归集中在 ProviderExperienceRegressionTests、ScreenshotExperienceRegressionTests、CloudSyncAndCalendarTests；ExperienceRenderTests 用 ONEBOARD_EXPERIENCE_RENDER 按需输出图。真实鼠标与系统权限流程需独立验收。
@@ -367,3 +373,13 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 1. 用拖拽粘贴板夹具验证首帧展开、单次触发和旧文件不误触。
 2. 验证应用/工具选择器、OCR AI 服务选择、菜单栏开关和日历选中态。
 3. 全量运行 SwiftPM 测试、Release 构建、正式打包及 `hdiutil verify`，再进行截图和长截图实机验收。
+
+
+## 2026-09-07 iCloud 授权与 Claude Code 账号
+
+- 文件夹授权按规范化文件系统路径校验，忽略目录 URL 末尾斜杠；授权错误显示在对应行。选择后立即重试已开启的备份，异步读写期间保持安全作用域访问。
+- 授权状态与操作统一样式，文件夹使用已连接状态、更改和断开操作。
+- 新增独立 Claude Code 账号页，复用 AI 模型配置与 SQLite 授权，支持添加、切换、编辑、重新授权和删除；切换后新会话生效。
+- 内置代理检测父进程存活；OneBoard 强退或崩溃后代理自行停止并释放端口，正常退出继续使用既有清理路径。
+
+Claude Code 账号页不展示共享的供应商切换状态，避免串入 Codex 提示；仅显示本页操作错误。

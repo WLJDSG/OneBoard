@@ -32,7 +32,12 @@ struct FolderAccessStore {
         if stale { try save(url, for: kind) }
         return access
     }
+    static func matchesDirectory(_ url: URL, expected: URL) -> Bool {
+        url.resolvingSymlinksInPath().standardizedFileURL.path == expected.resolvingSymlinksInPath().standardizedFileURL.path
+    }
     func save(_ url: URL, for kind: OneBoardFolderAccess) throws {
+        let access = AuthorizedFolder(url: url)
+        defer { withExtendedLifetime(access) {} }
         let data = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
         defaults.set(data, forKey: kind.bookmarkKey)
     }
@@ -48,35 +53,48 @@ enum FolderAccessError: LocalizedError {
 
 struct FolderAuthorizationView: View {
     @State private var saved: Set<OneBoardFolderAccess> = []
-    @State private var message: String?
+    @State private var messages: [OneBoardFolderAccess: String] = [:]
     var body: some View {
         ForEach(OneBoardFolderAccess.allCases) { kind in
-            HStack(alignment: .top) {
-                Image(systemName: kind == .iCloud ? "icloud" : "folder").frame(width: 22)
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: kind == .iCloud ? "icloud" : "folder")
+                    .font(.system(size: 18)).foregroundStyle(SettingsPalette.accent)
+                    .frame(width: 40, height: 40)
+                    .background(SettingsPalette.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(kind.title).fontWeight(.medium)
+                    HStack(spacing: 8) {
+                        Text(kind.title).fontWeight(.medium)
+                        if saved.contains(kind) {
+                            Label("已连接", systemImage: "checkmark.circle.fill")
+                                .font(.system(size: 10, weight: .medium)).foregroundStyle(SettingsPalette.teal)
+                        }
+                    }
                     Text(kind.purpose).font(.caption).foregroundStyle(.secondary)
-                    Text(saved.contains(kind) ? "已保存本机访问书签" : "尚未选择文件夹").font(.caption).foregroundStyle(.secondary)
+                    if let message = messages[kind] {
+                        Text(message).font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer()
-                Button(saved.contains(kind) ? "重新选择" : "选择文件夹") { choose(kind) }
+                Button(saved.contains(kind) ? "更改文件夹" : "允许访问") { choose(kind) }
+                    .buttonStyle(SettingsActionStyle(prominent: !saved.contains(kind)))
                 if saved.contains(kind) {
-                    Button("移除") {
+                    Button {
                         FolderAccessStore().remove(kind)
                         saved.remove(kind)
+                        messages[kind] = nil
                         if kind == .iCloud { CloudSyncViewModel.shared.setEnabled(false) }
-                    }.buttonStyle(.borderless)
+                    } label: { Image(systemName: "xmark").frame(width: 16, height: 16) }
+                    .buttonStyle(SettingsActionStyle()).help("断开文件夹访问")
                 }
             }.padding(.vertical, 4)
         }
-        Text("其他文件、文件夹、自动化与本地网络访问由 macOS 按实际使用请求；系统没有公开的通用授权状态查询接口。")
+        Text("文件访问用于保存截图与备份；本地网络用于局域网连接；App 管理用于应用内彻底卸载。以下权限由系统按实际操作请求，授权状态请在系统设置中查看。")
             .font(.caption).foregroundStyle(.secondary)
         HStack {
             Button("文件与文件夹权限") { openPrivacy("Privacy_FilesAndFolders") }
-            Button("自动化权限") { openPrivacy("Privacy_Automation") }
+            Button("App 管理") { openPrivacy("Privacy_AppBundles") }
             Button("本地网络权限") { openPrivacy("Privacy_LocalNetwork") }
         }
-        if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
         Text("移除书签会停止 OneBoard 复用该目录访问；如需撤销系统授权，请前往系统设置。")
             .font(.caption).foregroundStyle(.secondary)
         .onAppear { saved = Set(OneBoardFolderAccess.allCases.filter { FolderAccessStore().hasRecord($0) }) }
@@ -94,14 +112,14 @@ struct FolderAuthorizationView: View {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             do {
-                guard url.resolvingSymlinksInPath().standardizedFileURL == kind.expectedURL.resolvingSymlinksInPath().standardizedFileURL else {
-                    message = "请选择\(kind.title)，备份与截图位置保持不变。"; return
+                guard FolderAccessStore.matchesDirectory(url, expected: kind.expectedURL) else {
+                    messages[kind] = "请选择\(kind.title)，备份与截图位置保持不变。"; return
                 }
                 try FolderAccessStore().save(url, for: kind)
                 saved.insert(kind)
-                message = "已保存\(kind.title)访问，下次无需重复选择。"
-                if kind == .iCloud { CloudSyncViewModel.shared.startIfEnabled() }
-            } catch { message = error.localizedDescription }
+                messages[kind] = nil
+                if kind == .iCloud { CloudSyncViewModel.shared.folderAuthorizationDidChange() }
+            } catch { messages[kind] = error.localizedDescription }
         }
     }
 }

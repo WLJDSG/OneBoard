@@ -45,6 +45,8 @@ final class CodexAccountViewModel: ObservableObject {
         profiles.first { $0.id == pendingAccountID }
     }
 
+    private(set) var lastAuthorizedAccountID: UUID?
+
     @discardableResult
     func authorizeAccount(email: String) async -> Bool {
         guard !isAuthorizing else { return false }
@@ -70,6 +72,7 @@ final class CodexAccountViewModel: ObservableObject {
                 requestedEmail: requestedEmail,
                 credential: credential
             )
+            lastAuthorizedAccountID = profile.id
             authorizationURL = nil
             statusMessage = "已授权并保存 \(profile.title)"
             refreshState()

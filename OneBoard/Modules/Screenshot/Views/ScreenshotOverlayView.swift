@@ -192,6 +192,7 @@ final class ScreenshotOverlayContentView: NSView {
         let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
         addTrackingArea(area)
         hoverTrackingArea = area
+        refreshPointerHover()
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -203,8 +204,9 @@ final class ScreenshotOverlayContentView: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
-        hoveredWindowRect = nil
-        needsDisplay = true
+        // 激活遮罩/重建 tracking area 可能迟到一个退出事件。以当前指针位置为准，
+        // 不要求用户先移出再移入窗口才能恢复预选。
+        refreshPointerHover()
     }
 
     private func updateWindowHover(at point: CGPoint) {

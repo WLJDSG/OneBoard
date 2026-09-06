@@ -18,7 +18,7 @@ final class ExperienceRenderTests: XCTestCase {
         for dark in [false, true] {
             let editor = AIProviderEditorView(client: .claude, profile: nil, savedAPIKey: nil, onSave: { _, _ in }, onSaveAndSwitch: { _, _ in }, onCancel: {})
             try render(editor, size: CGSize(width: 860, height: 820), dark: dark, path: directory + "/provider-\(dark).png")
-            for tool in [AnnotationTool.cursor, .text, .callout] {
+            for tool in [AnnotationTool.cursor, .text, .callout, .number, .mosaic] {
                 annotations.selectedTool = tool
                 let toolbar = AnnotationToolbarView(annotationService: annotations, viewModel: model, onComplete: { _ in }, onSave: { _ in }, onPin: { _ in }, onOCR: { _ in }, onTranslate: { _ in }, onLongCapture: {}, onClose: {}, baseImage: image, displaySize: image.size)
                 try render(toolbar, size: CGSize(width: 900, height: 80), dark: dark, path: directory + "/toolbar-\(tool.rawValue)-\(dark).png")
@@ -27,6 +27,21 @@ final class ExperienceRenderTests: XCTestCase {
         let rendered = annotations.renderToImage(baseImage: image, displaySize: image.size)
         let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(rendered.cgImage(forProposedRect: nil, context: nil, hints: nil)))
         try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: directory + "/callout.png"))
+    }
+
+    // 设置页会启动系统能力检查，单独进程渲染以免污染其他测试的应用生命周期。
+    @MainActor
+    func testRenderAccountAndAuthorizationWhenRequested() throws {
+        guard let directory = ProcessInfo.processInfo.environment["ONEBOARD_SETTINGS_RENDER"] else { throw XCTSkip("按需独立进程渲染设置页") }
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let defaults = UserDefaults(suiteName: "OneBoard.AccessVisualReview")!
+        defer { defaults.removePersistentDomain(forName: "OneBoard.AccessVisualReview") }
+        for dark in [false, true] {
+            for tab in [SettingsTab.authorization, .claudeAccounts] {
+                defaults.set(tab.rawValue, forKey: Constants.UserDefaultsKeys.selectedSettingsTab)
+                try render(SettingsView().defaultAppStorage(defaults), size: CGSize(width: 1060, height: 760), dark: dark, path: directory + "/settings-\(tab.rawValue)-\(dark).png")
+            }
+        }
     }
 
     @MainActor

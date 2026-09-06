@@ -14,7 +14,8 @@ struct ICloudBackupStore: CloudConfigurationStoring {
     var file: URL { directory.appendingPathComponent("configuration.json") }
 
     func load() async throws -> ConfigurationSnapshot? {
-        try await Task.detached {
+        try await Task.detached { [self] in
+            defer { withExtendedLifetime(authorization) {} }
             if FileManager.default.fileExists(atPath: directory.appendingPathComponent(".configuration.json.icloud").path) {
                 try FileManager.default.startDownloadingUbiquitousItem(at: file)
                 throw FolderSyncError.downloading
@@ -39,7 +40,8 @@ struct ICloudBackupStore: CloudConfigurationStoring {
     }
 
     func save(_ snapshot: ConfigurationSnapshot) async throws {
-        try await Task.detached {
+        try await Task.detached { [self] in
+            defer { withExtendedLifetime(authorization) {} }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

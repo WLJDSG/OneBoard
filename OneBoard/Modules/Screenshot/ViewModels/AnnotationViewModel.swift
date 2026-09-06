@@ -27,6 +27,7 @@ final class AnnotationViewModel: ObservableObject {
     @Published var selectedTextLayerID: UUID?
     /// 正在编辑的文字标注 id
     @Published var editingTextLayerID: UUID?
+    @Published var editingNumberLayerID: UUID?
 
     private weak var window: NSWindow?
     private weak var coordinateView: NSView?
@@ -115,7 +116,7 @@ final class AnnotationViewModel: ObservableObject {
 
     private func onMouseDown(at point: CGPoint, event: NSEvent) {
         // 文字标注编辑中 → 不处理鼠标
-        if editingTextLayerID != nil { return }
+        if editingTextLayerID != nil || editingNumberLayerID != nil { return }
         if isTextInput {
             if !expandedTextInputRect.contains(point) {
                 textInputCommitHandler?()
@@ -174,7 +175,11 @@ final class AnnotationViewModel: ObservableObject {
             isTextInput = true
             isDrawing = false
         } else if annotationService.selectedTool == .number {
-            annotationService.addNumber(at: point)
+            if let layer = annotationService.layers.reversed().first(where: { $0.tool == .number && $0.rect.contains(point) }) {
+                editingNumberLayerID = layer.id
+            } else {
+                annotationService.addNumber(at: point)
+            }
             isDrawing = false
             return
         }
@@ -347,7 +352,7 @@ final class AnnotationViewModel: ObservableObject {
         case .mosaic:
             annotationService.currentDrawingLayer = AnnotationLayer(
                 tool: .mosaic, rect: rect,
-                color: annotationService.selectedColor, lineWidth: 0
+                color: .clear, lineWidth: annotationService.mosaicBlockSize
             )
         }
     }

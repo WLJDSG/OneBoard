@@ -73,6 +73,9 @@ struct AIModelSettingsView: View {
                         viewModel.reorderProfiles(ids, client: selectedClient)
                     }) { profile in profileRow(profile) }
                     .id(selectedClient)
+                    if let message = viewModel.statusMessage {
+                        Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
                     HStack(spacing: 14) {
                         Button { viewModel.importFromCCSwitch() } label: {
                             Label("从 CC Switch 导入", systemImage: "square.and.arrow.down")
@@ -129,7 +132,7 @@ struct AIModelSettingsView: View {
             error: usageViewModel.errors[profile.id],
             today: usageViewModel.localToday[profile.id],
             total: usageViewModel.localTotal[profile.id],
-            officialQuota: AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: codexAccountViewModel.activeProfile),
+            officialQuota: AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: profile.officialAccountID == nil ? codexAccountViewModel.activeProfile : codexAccountViewModel.profiles.first { $0.id == profile.officialAccountID }),
             onSwitch: { Task { await viewModel.switchProfile(id: profile.id) } },
             onEdit: { editingProfile = profile },
             onDelete: { viewModel.delete(profile) }
@@ -146,6 +149,10 @@ struct AIProviderEditorView: View {
     let onSaveAndSwitch: (AIProviderProfile, String?) async throws -> Void
     let onCancel: () -> Void
 
+    @State private var showOfficialLogin = false
+    @State private var officialAccountID: UUID?
+    @State private var claudeCredential: ClaudeAccountCredential?
+    @StateObject private var accounts = CodexAccountViewModel.shared
     @State private var kind: AIProviderKind
     @State private var title: String
     @State private var note: String
@@ -206,6 +213,7 @@ struct AIProviderEditorView: View {
         self.onSave = onSave
         self.onSaveAndSwitch = onSaveAndSwitch
         self.onCancel = onCancel
+        _officialAccountID = State(initialValue: profile?.officialAccountID)
         _kind = State(initialValue: profile?.kind ?? .custom)
         _title = State(initialValue: profile?.title ?? "")
         _note = State(initialValue: profile?.note ?? "")
@@ -290,8 +298,33 @@ struct AIProviderEditorView: View {
                                 TextField("https://provider.example", text: $websiteURL)
                             }
                             editorRow("默认模型") {
-                                AIModelComboBox(text: $model, models: discoveredModels)
-                                    .frame(minHeight: 24)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    if discoveredModels.isEmpty {
+                                        TextField("输入模型 ID", text: $model)
+                                        Text(isFetchingModels ? "正在获取模型目录…" : "暂无模型目录，可手动输入模型 ID")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    } else {
+                                        AIModelComboBox(text: $model, models: discoveredModels).frame(minHeight: 24)
+                                        if kind == .official && client == .codex {
+                                            Text("来自本机 Codex 缓存目录，实际可用模型以账号为准").font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            if kind == .official {
+                                editorRow("官方账号") {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        if client == .codex {
+                                            Picker("账号", selection: $officialAccountID) {
+                                                Text("使用 Codex 当前账号").tag(nil as UUID?)
+                                                ForEach(accounts.profiles) { Text($0.title).tag(Optional($0.id)) }
+                                            }.labelsHidden()
+                                        } else {
+                                            Text(claudeCredential != nil || profile?.officialAccountID != nil ? "已保存 Claude Code 授权" : "尚未连接 Claude Code 账号")
+                                        }
+                                        Button("登录官方账号…") { showOfficialLogin = true }
+                                    }
+                                }
                             }
                         }
                     } label: {
@@ -354,6 +387,17 @@ struct AIProviderEditorView: View {
                                                 SecureField("输入供应商 API Key", text: $apiKey)
                                             }
                                         }
+                                        Button {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(apiKey, forType: .string)
+                                        } label: { Image(systemName: "doc.on.doc") }
+                                        .buttonStyle(.borderless).help("复制 API Key").disabled(apiKey.isEmpty)
+                                        Button {
+                                            if let value = NSPasteboard.general.string(forType: .string) {
+                                                apiKey = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            }
+                                        } label: { Image(systemName: "doc.on.clipboard") }
+                                        .buttonStyle(.borderless).help("粘贴 API Key")
                                         Button {
                                             isAPIKeyVisible.toggle()
                                         } label: {
@@ -484,7 +528,29 @@ struct AIProviderEditorView: View {
         .frame(width: client == .claude ? 860 : 780)
         .frame(minHeight: 600, idealHeight: 740, maxHeight: 800)
         .onAppear {
-            if kind == .custom && !baseURL.isEmpty && !apiKey.isEmpty { fetchModels() }
+            accounts.refreshState()
+            if kind == .official { loadOfficialModels() }
+        }
+        .task(id: baseURL + apiKey + apiFormat.rawValue + kind.rawValue) {
+            guard kind == .custom, !baseURL.isEmpty, !apiKey.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            fetchModels()
+        }
+        .sheet(isPresented: $showOfficialLogin) {
+            if client == .codex {
+                CodexOAuthAccountView(viewModel: accounts, onClose: { showOfficialLogin = false }, onAuthorized: { id in
+                    officialAccountID = id
+                    title = accounts.profiles.first { $0.id == id }?.title ?? title
+                    loadOfficialModels()
+                })
+            } else {
+                ClaudeOAuthAccountView(onSave: { credential in
+                    claudeCredential = credential
+                    showOfficialLogin = false
+                    if model.isEmpty { model = "sonnet" }
+                }, onCancel: { showOfficialLogin = false })
+            }
         }
         .onChange(of: selectedPresetID) { _, _ in applyPreset() }
         .onChange(of: apiFormat) { _, _ in invalidateModels() }
@@ -580,6 +646,7 @@ struct AIProviderEditorView: View {
         discoveredModels = []
         isFetchingModels = false
         endpointTestMessage = nil
+        if kind == .official { loadOfficialModels() }
     }
 
     private func applyOneModelToAllRoles() {
@@ -637,7 +704,7 @@ struct AIProviderEditorView: View {
                     throw AIModelSwitchError.invalidProfile("请填写额度地址，或勾选自动识别")
                 }
                 let now = Date()
-                let value = AIProviderProfile(
+                var value = AIProviderProfile(
                     id: profile?.id ?? UUID(),
                     client: client,
                     kind: kind,
@@ -676,6 +743,12 @@ struct AIProviderEditorView: View {
                     createdAt: profile?.createdAt ?? now,
                     updatedAt: now
                 )
+                value.officialAccountID = kind == .official ? officialAccountID : nil
+                if kind == .official, client == .claude, let credential = claudeCredential {
+                    value.officialAccountID = value.id
+                    value = try value.validated()
+                    try ClaudeAccountCredentialStore().save(credential, id: value.id)
+                }
                 if activate {
                     try await onSaveAndSwitch(value, apiKey.isEmpty ? nil : apiKey)
                 } else {
@@ -821,7 +894,13 @@ struct AIProviderEditorView: View {
             title = client.title + " 官方账号"
             baseURL = ""; websiteURL = ""
             apiFormat = .defaultValue(for: client)
+            loadOfficialModels()
+            showOfficialLogin = true
         }
+    }
+
+    private func loadOfficialModels() {
+        discoveredModels = client == .codex ? OfficialModelCatalog.codexModels() : ["sonnet", "opus", "haiku"]
     }
 
     static func parseModelIDs(_ data: Data) -> [String] {

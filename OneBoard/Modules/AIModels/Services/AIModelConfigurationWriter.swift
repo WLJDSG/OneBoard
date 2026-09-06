@@ -109,6 +109,10 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
                 ? apiKey
                 : AIProxyRouting.placeholderToken
         }
+        if profile.kind == .official, profile.officialAccountID != nil {
+            guard let apiKey, !apiKey.isEmpty else { throw AIModelSwitchError.apiKeyMissing }
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = apiKey
+        }
         updated["env"] = env
 
         let data = try JSONSerialization.data(withJSONObject: updated, options: [.prettyPrinted, .sortedKeys])
@@ -265,6 +269,7 @@ final class AIModelConfigurationWriter: AIModelConfigurationWriting {
     }
 
     private static let managedClaudeEnvironmentKeys: Set<String> = [
+        "CLAUDE_CODE_OAUTH_TOKEN",
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_AUTH_TOKEN",
         "ANTHROPIC_API_KEY",

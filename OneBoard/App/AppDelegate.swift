@@ -154,6 +154,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         appMenu.addItem(quitItem)
 
+        let editItem = NSMenuItem(title: "编辑", action: nil, keyEquivalent: "")
+        let editMenu = NSMenu(title: "编辑")
+        for (title, action, key) in [("撤销", "undo:", "z"), ("剪切", "cut:", "x"),
+                                     ("复制", "copy:", "c"), ("粘贴", "paste:", "v"),
+                                     ("全选", "selectAll:", "a")] {
+            editMenu.addItem(NSMenuItem(title: title, action: NSSelectorFromString(action), keyEquivalent: key))
+        }
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
         NSApp.mainMenu = mainMenu
         print("[AppDelegate] 隐藏主菜单已设置（Cmd+Q 修复）")
     }

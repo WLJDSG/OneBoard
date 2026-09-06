@@ -11,6 +11,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
     case hotkeys
     case gateway
     case aiModels
+    case claudeAccounts
     case codexAccounts
     case recognition
     case translation
@@ -30,6 +31,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .hotkeys: return "快捷键"
         case .gateway: return "网关"
         case .aiModels: return "AI 模型"
+        case .claudeAccounts: return "Claude Code 账号"
         case .codexAccounts: return "Codex 账号"
         case .recognition: return "文字识别"
         case .translation: return "翻译"
@@ -49,6 +51,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .hotkeys: return "让常用操作，始终触手可及。"
         case .gateway: return "查看网络状态，快速切换连接配置。"
         case .aiModels: return "连接你的模型供应商，掌握额度与用量。"
+        case .claudeAccounts: return "管理官方登录、切换账号与重新授权。"
         case .codexAccounts: return "统一管理账号、订阅和可用额度。"
         case .recognition: return "选择文字识别服务和默认识别语言。"
         case .translation: return "设置默认翻译服务、API Key 和语言。"
@@ -68,6 +71,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
         case .hotkeys: return "keyboard"
         case .gateway: return "network"
         case .aiModels: return "point.3.connected.trianglepath.dotted"
+        case .claudeAccounts: return "person.crop.rectangle.stack"
         case .codexAccounts: return "person.2"
         case .recognition: return "text.viewfinder"
         case .translation: return "globe"
@@ -173,7 +177,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         navigationGroup("日常工具", tabs: [.general, .recognition, .translation, .todo, .calendar, .files])
-                        navigationGroup("连接与账号", tabs: [.aiModels, .codexAccounts, .gateway])
+                        navigationGroup("连接与账号", tabs: [.aiModels, .codexAccounts, .claudeAccounts, .gateway])
                         navigationGroup("应用", tabs: [.macStatus, .iCloud, .hotkeys, .authorization, .about])
                     }
                 }.scrollIndicators(.hidden)
@@ -260,6 +264,8 @@ struct SettingsView: View {
             AIModelSettingsView()
         case .codexAccounts:
             CodexAccountSettingsView()
+        case .claudeAccounts:
+            ClaudeAccountSettingsView()
         case .recognition:
             ocrSettings
         case .translation:
@@ -315,6 +321,7 @@ struct SettingsView: View {
                 Text("Touch ID 或登录密码会在切换网关、卸载 Helper 和彻底卸载时由系统验证，无需预先授权。Codex 使用官方浏览器 OAuth；账号凭据和 AI API Key 在各自设置页管理。")
                     .font(.callout).foregroundStyle(.secondary)
                 Button("管理 Codex 账号授权") { selectedTabRawValue = SettingsTab.codexAccounts.rawValue }
+                Button("管理 Claude Code 账号授权") { selectedTabRawValue = SettingsTab.claudeAccounts.rawValue }
                 Button("管理供应商 API Key") { selectedTabRawValue = SettingsTab.aiModels.rawValue }
             } header: { Text("身份验证与服务授权") }
 
@@ -339,7 +346,7 @@ struct SettingsView: View {
 
     /// 按钮式权限行：状态 + 操作 分离
     private func permissionRow(title: String, description: String, isGranted: Bool, isRequesting: Bool, onRequest: @escaping () -> Void, onRevoke: @escaping () -> Void) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: isGranted ? "checkmark.circle.fill" : (isRequesting ? "hourglass" : "lock.fill"))
                 .font(.system(size: 18))
                 .foregroundColor(isGranted ? OneBoardColors.success : (isRequesting ? SettingsPalette.accent : SettingsPalette.muted.opacity(0.65)))
@@ -356,14 +363,11 @@ struct SettingsView: View {
             Spacer()
 
             if isGranted {
-                Button("撤销") { onRevoke() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                    .foregroundColor(SettingsPalette.muted.opacity(0.65))
+                Button("撤销授权") { onRevoke() }
+                    .buttonStyle(SettingsActionStyle())
             } else {
                 Button(isRequesting ? "请求中..." : "去开启") { onRequest() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(SettingsActionStyle(prominent: true))
                     .disabled(isRequesting)
             }
         }.padding(.vertical, 4)
@@ -382,7 +386,7 @@ struct SettingsView: View {
 
     /// 系统能力行
     private func capabilityRow(title: String, description: String, isGranted: Bool, onEnable: @escaping () -> Void, onDisable: @escaping () -> Void) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: isGranted ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 18))
                 .foregroundColor(isGranted ? OneBoardColors.success : SettingsPalette.muted.opacity(0.65))

@@ -49,6 +49,16 @@ struct AnnotationCanvasView: View {
                 textInputOverlay
             }
 
+            if let id = viewModel.editingNumberLayerID,
+               let layer = annotationService.layers.first(where: { $0.id == id }) {
+                NumberAnnotationEditor(value: layer.numberValue ?? 1,
+                    maximum: annotationService.layers.filter { $0.tool == .number }.count,
+                    onSave: { annotationService.updateNumber(id: id, value: $0); viewModel.editingNumberLayerID = nil },
+                    onCancel: { viewModel.editingNumberLayerID = nil })
+                    .position(x: min(max(layer.rect.midX, 105), max(105, displaySize.width - 105)),
+                              y: min(max(layer.rect.maxY + 40, 40), max(40, displaySize.height - 40)))
+            }
+
             // 文字标注编辑浮层（编辑已有文字）
             if viewModel.editingTextLayerID != nil {
                 textEditOverlay
@@ -102,6 +112,7 @@ struct AnnotationCanvasView: View {
                         AnnotationLayerView(
                             layer: layer,
                             isSelected: viewModel.selectedTextLayerID == layer.id,
+                            mosaicImage: baseImage,
                             onDoubleTap: {
                                 if layer.tool == .text || layer.tool == .callout {
                                     viewModel.selectedTextLayerID = layer.id
@@ -116,6 +127,7 @@ struct AnnotationCanvasView: View {
                         AnnotationLayerView(
                             layer: drawingLayer,
                             isSelected: false,
+                            mosaicImage: baseImage,
                             onDoubleTap: {}
                         )
                         .opacity(0.7)
@@ -143,7 +155,7 @@ struct AnnotationCanvasView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .frame(width: rect.width, height: rect.height, alignment: .topLeading)
-                .background(Color.white.opacity(0.0001))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                 .focused($isTextFieldFocused)
                 .onSubmit {
                     viewModel.commitText(textFieldValue)
@@ -173,7 +185,7 @@ struct AnnotationCanvasView: View {
             // 打字时显示虚线边框
             if isTextFieldFocused {
                 RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                    .stroke(color.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    .stroke(Color.accentColor.opacity(0.8), lineWidth: 1)
                     .allowsHitTesting(false)
             }
 
@@ -330,6 +342,10 @@ struct AnnotationCanvasView: View {
     private func handleKeyboardEvent(_ event: NSEvent) -> NSEvent? {
         guard event.window === canvasWindow else { return event }
 
+        if viewModel.editingNumberLayerID != nil {
+            if event.type == .keyDown, event.keyCode == 53 { viewModel.editingNumberLayerID = nil; return nil }
+            return event
+        }
         if viewModel.isTextInput || viewModel.editingTextLayerID != nil {
             if event.type == .keyDown, event.keyCode == 53 {
                 if viewModel.isTextInput {
@@ -432,6 +448,7 @@ private struct WindowAccessor: NSViewRepresentable {
 struct AnnotationLayerView: View {
     let layer: AnnotationLayer
     let isSelected: Bool
+    var mosaicImage: NSImage? = nil
     let onDoubleTap: () -> Void
     @State private var isHoveringText: Bool = false
 
@@ -498,7 +515,7 @@ struct AnnotationLayerView: View {
         case .number:
             numberLayerView
         case .mosaic:
-            MosaicPreview()
+            MosaicPreview(image: mosaicImage, rect: layer.rect, blockSize: layer.lineWidth)
                 .frame(width: layer.rect.width, height: layer.rect.height)
                 .position(x: layer.rect.midX, y: layer.rect.midY)
                 .allowsHitTesting(false)
@@ -663,22 +680,37 @@ private enum CanvasResizeHandle: CaseIterable {
 }
 
 private struct MosaicPreview: View {
+    let image: NSImage?
+    let rect: CGRect
+    let blockSize: CGFloat
     var body: some View {
-        Canvas { context, size in
-            let cell: CGFloat = 6
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(0.68)))
-            for x in stride(from: CGFloat.zero, to: size.width, by: cell) {
-                for y in stride(from: CGFloat.zero, to: size.height, by: cell) {
-                    let seed = sin((x + 17) * 12.9898 + (y + 23) * 78.233) * 43758.5453
-                    let random = seed - floor(seed)
-                    let alpha = 0.38 + random * 0.48
-                    let inset = random > 0.55 ? CGFloat(0) : CGFloat(1)
-                    context.fill(
-                        Path(CGRect(x: x + inset, y: y + inset, width: cell + 1 - inset, height: cell + 1 - inset)),
-                        with: .color(.white.opacity(alpha))
-                    )
-                }
-            }
+        if let image, let pixels = MosaicPixels.make(image: image, displaySize: image.size, rect: rect, blockSize: blockSize) {
+            Image(decorative: pixels, scale: 1).interpolation(.none).resizable()
+        } else {
+            Rectangle().fill(Color.gray)
         }
+    }
+}
+
+private struct NumberAnnotationEditor: View {
+    @State var value: Int
+    let maximum: Int
+    let onSave: (Int) -> Void
+    let onCancel: () -> Void
+    @FocusState private var focused: Bool
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("序号").font(.caption)
+            TextField("序号", value: $value, format: .number)
+                .textFieldStyle(.roundedBorder).frame(width: 44).focused($focused)
+                .onSubmit { if (1...maximum).contains(value) { onSave(value) } }
+            Button { onCancel() } label: { Image(systemName: "xmark") }
+            Button { onSave(value) } label: { Image(systemName: "checkmark") }
+                .disabled(!(1...maximum).contains(value))
+        }.buttonStyle(.borderless).padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.1)))
+            .help("输入 1 到 \(maximum)，其他序号自动调整")
+            .onAppear { focused = true }
     }
 }

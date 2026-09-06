@@ -119,6 +119,7 @@ struct AIProviderProfile: Codable, Identifiable, Equatable {
     var claudeFableModelName: String?
     var claudeSubagentModel: String?
     var sourceIdentifier: String?
+    var officialAccountID: UUID?
     var createdAt: Date
     var updatedAt: Date
 

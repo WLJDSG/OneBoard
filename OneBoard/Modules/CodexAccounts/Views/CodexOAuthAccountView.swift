@@ -4,6 +4,7 @@ import SwiftUI
 struct CodexOAuthAccountView: View {
     @ObservedObject var viewModel: CodexAccountViewModel
     let onClose: () -> Void
+    var onAuthorized: ((UUID) -> Void)? = nil
 
     @State private var email = ""
 
@@ -34,6 +35,7 @@ struct CodexOAuthAccountView: View {
                     Button {
                         Task {
                             if await viewModel.authorizeAccount(email: email) {
+                                if let id = viewModel.lastAuthorizedAccountID { onAuthorized?(id) }
                                 onClose()
                             }
                         }

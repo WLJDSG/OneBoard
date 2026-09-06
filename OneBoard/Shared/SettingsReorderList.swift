@@ -94,7 +94,7 @@ private struct SettingsReorderDrop: DropDelegate {
 }
 
 private struct SettingsReorderHandle: NSViewRepresentable {
-    static let pasteboardType = NSPasteboard.PasteboardType("com.oneboard.settings-reorder")
+    static let pasteboardType = NSPasteboard.PasteboardType.string
     let title: String
     let id: UUID
     let onBegin: () -> Void

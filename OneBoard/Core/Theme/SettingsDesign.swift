@@ -116,6 +116,7 @@ struct SettingsNavigationItem: View {
                     .font(.system(size: 15, weight: .medium))
                     .frame(width: 22)
                 Text(tab.title).font(.system(size: 13, weight: selected ? .semibold : .medium))
+                    .lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
                 if selected {
                     Circle().fill(SettingsPalette.accent).frame(width: 5, height: 5)

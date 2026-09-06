@@ -33,9 +33,9 @@ enum AnnotationTool: String, CaseIterable {
         case .ellipse: return "circle"
         case .arrow: return "arrow.up.right"
         case .line: return "line.diagonal"
-        case .text: return "character.textbox"
+        case .text: return "textformat"
         case .number: return "1.circle"
-        case .mosaic: return "checkerboard.rectangle"
+        case .mosaic: return "square.grid.3x3.fill"
         case .callout: return "rectangle.and.pencil.and.ellipsis"
         }
     }

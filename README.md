@@ -1,5 +1,11 @@
 # OneBoard
 
+## 2026-09-07 截图、账号与授权
+
+长截图恢复选区外透传暗罩；API Key 提供复制粘贴；官方账号入口支持 Codex 与 Claude Code 浏览器授权；供应商拖拽载荷、编号连续重排、马赛克原图像素块和工具栏视觉已调整。正式包使用固定开发证书，具体系统权限弹窗仍需安装验收。
+
+详见[本轮修复记录](docs/修复记录/2026-09-07-截图账号与授权.md)。
+
 ## 2026-09-06 供应商与截图体验修订
 
 供应商预设与额度自动/手动配置、直接绑定选择器、授权页目录书签，以及截图字号循环、框选箭头文字标注、实时 RGB 取色（⌘C 复制）已更新。长截图仅保留四角提示，不再用四块暗色遮罩形成大框。
@@ -141,7 +147,7 @@ cd OneBoard
 swift test --disable-sandbox
 swift build -c release --disable-sandbox
 cd ..
-ONEBOARD_CODESIGN_IDENTITY=- script/package_app.sh
+script/package_app.sh
 hdiutil verify build/OneBoard.dmg
 ```
 
@@ -231,3 +237,13 @@ AI 模型编辑页的 Sonnet、Opus、Fable、Haiku、子代理和默认兜底�
 - Finder：右键菜单新增“在当前路径打开终端”；扩展只生成 `oneboard://open-terminal` 请求，主应用负责调用系统 Terminal。
 - 长截图：截图框选后可选择“长截图”，自动向下滚动最多 8 屏、检测到底并拼接，完成后进入原有标注/保存路径；需要屏幕录制和辅助功能权限。
 - 翻译：设置页分为系统、Google、自定义 API；自定义 API 支持常见预设、Base URL、API Key、模型获取、手动模型与连接测试。
+
+
+## 2026-09-07 iCloud 授权与 Claude Code 账号
+
+- 文件夹授权按规范化文件系统路径校验，忽略目录 URL 末尾斜杠；授权错误显示在对应行。选择后立即重试已开启的备份，异步读写期间保持安全作用域访问。
+- 授权状态与操作统一样式，文件夹使用已连接状态、更改和断开操作。
+- 新增独立 Claude Code 账号页，复用 AI 模型配置与 SQLite 授权，支持添加、切换、编辑、重新授权和删除；切换后新会话生效。
+- 内置代理检测父进程存活；OneBoard 强退或崩溃后代理自行停止并释放端口，正常退出继续使用既有清理路径。
+
+Claude Code 账号页不展示共享的供应商切换状态，避免串入 Codex 提示；仅显示本页操作错误。

@@ -8,6 +8,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
     @Published private(set) var isSwitching = false
     @Published var statusMessage: String?
 
+    private var officialCredentialRefreshTask: Task<Void, Never>?
     private let store: AIProviderStore
     private let vault: AIProviderSecretVaulting
     private let writer: AIModelConfigurationWriting
@@ -31,6 +32,8 @@ final class AIModelSwitcherViewModel: ObservableObject {
         self.ccSwitchImporter = ccSwitchImporter
         reload()
     }
+
+    deinit { officialCredentialRefreshTask?.cancel() }
 
     func profiles(for client: AIClient) -> [AIProviderProfile] {
         profiles.filter { $0.client == client }
@@ -83,6 +86,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
     func delete(_ profile: AIProviderProfile) {
         do {
             try vault.delete(for: profile.id)
+            if profile.client == .claude, let id = profile.officialAccountID { try ClaudeAccountCredentialStore().delete(id: id) }
             store.delete(id: profile.id)
             reload()
             statusMessage = "已删除 \(profile.title)；当前活动配置文件未改动"
@@ -114,6 +118,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
 
     @discardableResult
     func switchProfile(id: UUID) async -> String {
+        guard !isSwitching else { return "正在切换，请稍后重试" }
         guard let profile = profiles.first(where: { $0.id == id }) else {
             let message = AIModelSwitchError.profileNotFound.localizedDescription
             statusMessage = message
@@ -126,9 +131,24 @@ final class AIModelSwitcherViewModel: ObservableObject {
         })
         let codexWasRunning = profile.client == .codex && applicationLifecycle.isRunning
         do {
-            let apiKey = profile.kind == .custom ? try vault.load(for: profile.id) : nil
+            var apiKey = profile.kind == .custom ? try vault.load(for: profile.id) : nil
+            if profile.kind == .official, let accountID = profile.officialAccountID {
+                if profile.client == .codex {
+                    let accounts = CodexAccountViewModel.shared
+                    if accounts.activeAccountID != accountID {
+                        let message = await accounts.requestSwitch(id: accountID)
+                        guard accounts.activeAccountID == accountID else { throw AIModelSwitchError.activationFailed(message) }
+                    }
+                } else {
+                    let store = ClaudeAccountCredentialStore()
+                    guard let saved = try store.load(id: accountID) else { throw AIProviderQuotaError("请重新登录 Claude Code 官方账号") }
+                    let fresh = try await ClaudeAccountAuthorization().refreshed(saved)
+                    try store.save(fresh, id: accountID)
+                    apiKey = fresh.accessToken
+                }
+            }
             let routing: AIProxyRouting?
-            if let apiKey {
+            if profile.kind == .custom, let apiKey {
                 routing = try proxyCoordinator.prepare(
                     switching: profile,
                     apiKey: apiKey,
@@ -191,6 +211,7 @@ final class AIModelSwitcherViewModel: ObservableObject {
     }
 
     func resumeProxyIfNeeded() {
+        startOfficialCredentialRefresh()
         let activeProfiles = AIClient.allCases.compactMap { client -> AIProviderProfile? in
             guard let id = store.activeID(for: client) else { return nil }
             return profiles.first { $0.id == id && $0.kind == .custom }
@@ -218,6 +239,24 @@ final class AIModelSwitcherViewModel: ObservableObject {
             }
         } catch {
             statusMessage = "恢复本地代理失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// 仅续期活动 Claude 账号，新会话读取更新后的官方 OAuth token。
+    private func startOfficialCredentialRefresh() {
+        guard officialCredentialRefreshTask == nil else { return }
+        officialCredentialRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if let self, !self.isSwitching,
+                   let activeID = self.store.activeID(for: .claude),
+                   let profile = self.profiles.first(where: { $0.id == activeID && $0.kind == .official }),
+                   let accountID = profile.officialAccountID,
+                   let credential = try? ClaudeAccountCredentialStore().load(id: accountID),
+                   credential.expiresAt.timeIntervalSinceNow < 300 {
+                    _ = await self.switchProfile(id: profile.id)
+                }
+                try? await Task.sleep(for: .seconds(240))
+            }
         }
     }
 

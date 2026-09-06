@@ -37,6 +37,7 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
+    let parent_pid = parent_process_id();
     install_crypto_provider()?;
 
     let mut payload = String::new();
@@ -92,12 +93,25 @@ async fn run() -> Result<()> {
     loop {
         tokio::select! {
             result = &mut shutdown => { result?; break; }
-            _ = interval.tick() => { emit_usage(&database, &mut emitted)?; }
+            _ = interval.tick() => {
+                if parent_has_exited(parent_pid, parent_process_id()) { break; }
+                emit_usage(&database, &mut emitted)?;
+            }
         }
     }
     service.stop().await.map_err(anyhow::Error::msg)?;
     emit_usage(&database, &mut emitted)?;
     Ok(())
+}
+
+// 父应用被强退时也停止监听，避免孤儿代理占住固定端口。
+fn parent_process_id() -> i32 {
+    extern "C" { fn getppid() -> i32; }
+    unsafe { getppid() }
+}
+
+fn parent_has_exited(original: i32, current: i32) -> bool {
+    current <= 1 || original != current
 }
 
 // 只输出计数，不输出提示词、响应正文或认证信息；Swift 持久化至 OneBoard SQLite。
@@ -166,6 +180,14 @@ async fn wait_for_shutdown() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{fresh_input, install_crypto_provider, validate_app_type};
+
+    #[test]
+    fn detects_orphaned_proxy() {
+        assert!(!super::parent_has_exited(123, 123));
+        assert!(super::parent_has_exited(123, 1));
+        assert!(super::parent_has_exited(1, 1));
+        assert!(super::parent_has_exited(123, 456));
+    }
 
     #[test]
     fn cache_tokens_are_not_counted_twice() {
