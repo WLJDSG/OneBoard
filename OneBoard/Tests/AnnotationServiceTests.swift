@@ -222,14 +222,20 @@ final class AnnotationServiceTests: XCTestCase {
         XCTAssertEqual(service.mosaicBlockSize, 8)
     }
 
-    func testDecrementingTextSizeCanGoBelowTwelve() {
+    func testTextAndCalloutSizesStayBetweenFifteenAndTwentyFive() {
         let service = AnnotationService()
-        service.selectedTool = .text
-        service.fontSize = 12
-
-        service.decrementStyleValue()
-
-        XCTAssertEqual(service.fontSize, 11)
+        for tool in [AnnotationTool.text, .callout] {
+            service.selectedTool = tool
+            service.fontSize = 18
+            service.decrementStyleValue()
+            XCTAssertEqual(service.fontSize, 17)
+            for _ in 0..<20 { service.decrementStyleValue() }
+            XCTAssertEqual(service.fontSize, 15)
+            for _ in 0..<20 { service.incrementStyleValue() }
+            XCTAssertEqual(service.fontSize, 25)
+            service.decrementStyleValue()
+            XCTAssertEqual(service.fontSize, 24)
+        }
     }
 
     private func makeImage(points: CGSize, pixels: CGSize) -> NSImage {

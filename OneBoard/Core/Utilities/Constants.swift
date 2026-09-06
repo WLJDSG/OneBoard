@@ -56,7 +56,6 @@ enum Constants {
         static let hasCompletedOnboarding = "has_completed_onboarding"
         static let accessibilityPermissionEnabled = "accessibility_permission_enabled"
         static let screenRecordingPermissionEnabled = "screen_recording_permission_enabled"
-        static let inputMonitoringPermissionEnabled = "input_monitoring_permission_enabled"
         static let notificationPermissionEnabled = "notification_permission_enabled"
         static let gatewayProfiles = "gateway_profiles"
         static let codexAccountProfiles = "codex_account_profiles"

@@ -66,3 +66,91 @@ struct FileDropTarget: NSViewRepresentable {
         }
     }
 }
+
+/// SwiftUI 会把透明 Representable 的命中收回到 HostingView；显式转交原生拖放区域。
+final class FileShelfHostingView<Content: View>: NSHostingView<Content> {
+    private weak var activeDestination: FileDropTarget.Destination?
+    private let fallbackDestination = FileDropTarget.Destination()
+    var receiveFiles: (([URL]) -> Void)? {
+        didSet { fallbackDestination.receive = { [weak self] in self?.receiveFiles?($0) } }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        registerForDraggedTypes([.fileURL, .init("NSFilenamesPboardType")])
+    }
+
+    private func destination(at windowPoint: CGPoint) -> FileDropTarget.Destination? {
+        func find(in view: NSView) -> FileDropTarget.Destination? {
+            guard !view.isHidden else { return nil }
+            if let destination = view as? FileDropTarget.Destination,
+               view.bounds.contains(view.convert(windowPoint, from: nil)) { return destination }
+            return view.subviews.reversed().lazy.compactMap { find(in: $0) }.first
+        }
+        return find(in: self) ?? (receiveFiles == nil ? nil : fallbackDestination)
+    }
+
+    // NSHostingView 自己实现了拖放回调，只转交 hitTest 不会进入原生 Destination。
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let next = destination(at: sender.draggingLocation)
+        if activeDestination !== next { activeDestination?.draggingExited(sender) }
+        activeDestination = next
+        return next?.draggingEntered(sender) ?? []
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        activeDestination?.draggingExited(sender)
+        activeDestination = nil
+    }
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        destination(at: sender.draggingLocation)?.prepareForDragOperation(sender) ?? false
+    }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        defer { draggingExited(sender) }
+        return destination(at: sender.draggingLocation)?.performDragOperation(sender) ?? false
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let hit = super.hitTest(point) else { return nil }
+        func receiver(in view: NSView) -> NSView? {
+            guard !view.isHidden else { return nil }
+            if view is FileDropTarget.Destination || view is FileDragSource.Source {
+                let local = view.convert(point, from: superview ?? self)
+                return view.bounds.contains(local) ? view : nil
+            }
+            return view.subviews.reversed().lazy.compactMap { receiver(in: $0) }.first
+        }
+        return receiver(in: self) ?? hit
+    }
+}
+
+/// 拖出写入 NSURL，由 Finder 决定复制目标，不能把文件内容或文本路径当成文件拖拽。
+struct FileDragSource: NSViewRepresentable {
+    let url: URL
+    func makeNSView(context: Context) -> Source { Source() }
+    func updateNSView(_ view: Source, context: Context) { view.url = url }
+
+    final class Source: NSView, NSDraggingSource {
+        var url: URL?
+        private var startEvent: NSEvent?
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) { startEvent = event }
+        override func mouseUp(with event: NSEvent) { startEvent = nil }
+        override func mouseDragged(with event: NSEvent) {
+            guard let start = startEvent, let url,
+                  !DragDetector.supportedDraggedFileURLs([url]).isEmpty else { return }
+            guard hypot(event.locationInWindow.x - start.locationInWindow.x,
+                        event.locationInWindow.y - start.locationInWindow.y) >= 3 else { return }
+            startEvent = nil
+            let point = convert(event.locationInWindow, from: nil)
+            beginDraggingSession(with: [Self.draggingItem(url: url, at: point)], event: event, source: self)
+        }
+        static func draggingItem(url: URL, at point: CGPoint) -> NSDraggingItem {
+            let item = NSDraggingItem(pasteboardWriter: url as NSURL)
+            item.setDraggingFrame(CGRect(x: point.x - 16, y: point.y - 16, width: 32, height: 32),
+                                  contents: NSWorkspace.shared.icon(forFile: url.path))
+            return item
+        }
+        func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
+    }
+}

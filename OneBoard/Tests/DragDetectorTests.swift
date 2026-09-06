@@ -18,13 +18,6 @@ final class DragDetectorTests: XCTestCase {
         XCTAssertTrue(detector.updateDragState(changeCount: board.changeCount + 1, types: [.fileURL], urls: [file]), "再次拖动同一文件仍有效")
     }
 
-    func testPollingFallbackRemainsEnabledWithoutInputMonitoringPermission() {
-        let strategy = DragDetector.startupStrategy(inputMonitoringGranted: false)
-
-        XCTAssertTrue(strategy.startPolling)
-        XCTAssertFalse(strategy.startEventTap)
-    }
-
     func testDragTypeFilteringOnlyAcceptsFileURLs() {
         XCTAssertTrue(DragDetector.supportsDraggedFileTypes([.fileURL]))
         XCTAssertTrue(DragDetector.supportsDraggedFileTypes([NSPasteboard.PasteboardType("NSFilenamesPboardType")]))

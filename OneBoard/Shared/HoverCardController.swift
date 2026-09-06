@@ -40,7 +40,9 @@ final class HoverCardController: ObservableObject {
             window.isReleasedWhenClosed = false; window.hidesOnDeactivate = false
             window.hasShadow = true
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.contentView = NSHostingView(rootView: content().clipShape(RoundedRectangle(cornerRadius: 22)))
+            window.contentView = NSHostingView(rootView: content()
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)))
             panel = window
         }
         guard let panel else { return }

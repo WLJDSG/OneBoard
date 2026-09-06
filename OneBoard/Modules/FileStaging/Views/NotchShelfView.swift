@@ -1,51 +1,121 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct NotchShelfView: View {
     @ObservedObject var viewModel: FileStagingViewModel
+    var animatesPresentation = false
     @State private var sharingTarget = false
     @State private var stagingTarget = false
+
     var body: some View {
-        VStack(spacing: 12) {
-            Color.black.frame(height: 22)
-            HStack {
-                Label("暂存中转", systemImage: "tray.fill").font(.system(size: 12, weight: .semibold))
-                Text("\(viewModel.stagedFiles.count) 个文件").font(.caption).foregroundStyle(.white.opacity(0.5))
-                Spacer()
-                Button { viewModel.airDrop(viewModel.stagedFiles.map { URL(fileURLWithPath: $0.fileURL) }) } label: { Image(systemName: "airplayaudio") }.help("隔空投送暂存文件")
-                Button { viewModel.hideFloatingShelf() } label: { Image(systemName: "chevron.up") }.help("收起")
-            }.buttonStyle(.plain)
-            HStack(spacing: 10) {
-                zone("隔空投送", icon: "airplayaudio", targeted: sharingTarget)
-                    .overlay(FileDropTarget(targeted: $sharingTarget) { viewModel.airDrop($0) }.frame(maxWidth: .infinity, maxHeight: .infinity))
-                zone("拖入暂存", icon: "tray.and.arrow.down", targeted: stagingTarget)
-                    .overlay(FileDropTarget(targeted: $stagingTarget) { urls in urls.forEach { viewModel.addFile(url: $0) } }.frame(maxWidth: .infinity, maxHeight: .infinity))
-            }
-            ScrollView(.horizontal) {
-                HStack(spacing: 10) {
-                    ForEach(viewModel.stagedFiles) { file in
-                        HStack(spacing: 6) {
-                            Image(nsImage: NSWorkspace.shared.icon(forFile: file.fileURL)).resizable().frame(width: 24, height: 24)
-                            Text(file.fileName).font(.system(size: 10)).lineLimit(1).frame(maxWidth: 110)
-                            Button { Task { await viewModel.removeFile(file) } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.white.opacity(0.4)) }.buttonStyle(.plain)
-                        }.padding(7).background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
-                            .onDrag { NSItemProvider(contentsOf: URL(fileURLWithPath: file.fileURL)) ?? NSItemProvider() }
-                    }
-                }
-            }.scrollIndicators(.hidden)
-        }.padding(.horizontal, 16).padding(.bottom, 14).frame(width: 440, height: 220)
-            .foregroundStyle(.white)
-            .background(LinearGradient(colors: [.black, Color(red: 0.09, green: 0.08, blue: 0.17)], startPoint: .top, endPoint: .bottom))
-            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 24, bottomTrailingRadius: 24))
-            .ignoresSafeArea()
-            .alert("隔空投送", isPresented: Binding(get: { viewModel.sharingError != nil }, set: { if !$0 { viewModel.sharingError = nil } })) {
-                Button("好") { viewModel.sharingError = nil }
-            } message: { Text(viewModel.sharingError ?? "") }
+        GeometryReader { geometry in
+            shelfContent
+                .scaleEffect(x: geometry.size.width / NotchShelfAnimationLayout.expandedSize.width,
+                             y: geometry.size.height / NotchShelfAnimationLayout.expandedSize.height,
+                             anchor: .topLeading)
+        }
+        .scaleEffect(
+            x: animatesPresentation && !viewModel.isShelfExpanded ? NotchShelfAnimationLayout.collapsedScale.width : 1,
+            y: animatesPresentation && !viewModel.isShelfExpanded ? NotchShelfAnimationLayout.collapsedScale.height : 1,
+            anchor: .top)
     }
-    private func zone(_ title: String, icon: String, targeted: Bool) -> some View {
-        Label(title, systemImage: icon).font(.system(size: 12, weight: .medium))
-            .frame(maxWidth: .infinity).frame(height: 54)
-            .background(targeted ? Color.blue.opacity(0.5) : .white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(targeted ? 0.5 : 0.1)))
+
+    private var shelfContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Color.clear.frame(height: 18)
+            HStack(spacing: 8) {
+                Image(systemName: "tray.fill").foregroundStyle(Color(red: 0.64, green: 0.75, blue: 1))
+                Text("文件暂存").font(.system(size: 14, weight: .semibold))
+                Text("\(viewModel.stagedFiles.count)").font(.system(size: 10, weight: .medium, design: .rounded))
+                    .padding(.horizontal, 7).padding(.vertical, 3).background(.white.opacity(0.09), in: Capsule())
+                Spacer()
+
+            }
+            HStack(spacing: 10) {
+                zone("拖入暂存", subtitle: "放在这里，随时拖走", icon: "tray.and.arrow.down", targeted: stagingTarget, accent: true)
+                    .overlay(FileDropTarget(targeted: $stagingTarget) { urls in urls.forEach { viewModel.addFile(url: $0) } })
+                zone("隔空投送", subtitle: "AirDrop", icon: "airplayaudio", targeted: sharingTarget, accent: false)
+                    .frame(width: 124)
+                    .overlay(FileDropTarget(targeted: $sharingTarget) { viewModel.airDrop($0) })
+            }
+            if viewModel.stagedFiles.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.on.doc").font(.system(size: 22, weight: .light)).foregroundStyle(.white.opacity(0.2))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("给文件一个临时落脚点").font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.55))
+                        Text("拖到这里，再拖入访达或其他应用").font(.system(size: 10)).foregroundStyle(.white.opacity(0.3))
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(viewModel.stagedFiles) { file in
+                            HStack(spacing: 8) {
+                                HStack(spacing: 8) {
+                                    Image(nsImage: NSWorkspace.shared.icon(forFile: file.fileURL)).resizable().frame(width: 30, height: 30)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(file.fileName).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                                        Text(ByteCountFormatter.string(fromByteCount: file.fileSize, countStyle: .file))
+                                            .font(.system(size: 9)).foregroundStyle(.white.opacity(0.4))
+                                    }.frame(width: 90, alignment: .leading)
+                                }.padding(.vertical, 10).overlay(FileDragSource(url: URL(fileURLWithPath: file.fileURL)))
+                                Button { Task { await viewModel.removeFile(file) } } label: {
+                                    Image(systemName: "xmark").font(.system(size: 9)).foregroundStyle(.white.opacity(0.35)).frame(width: 20, height: 30)
+                                }.buttonStyle(.plain).help("移出暂存，不删除原文件")
+                            }.padding(.leading, 10).padding(.trailing, 4)
+                                .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }.scrollIndicators(.hidden).frame(maxHeight: .infinity)
+            }
+        }
+        .padding(.horizontal, 26).padding(.bottom, 16)
+        .frame(width: NotchShelfAnimationLayout.expandedSize.width, height: NotchShelfAnimationLayout.expandedSize.height)
+        .foregroundStyle(.white)
+        .background(LinearGradient(colors: [.black, Color(white: 0.075)], startPoint: .top, endPoint: .bottom))
+        .clipShape(NotchShelfShape())
+        .ignoresSafeArea()
+        .alert("文件暂存", isPresented: Binding(get: { viewModel.stagingError != nil }, set: { if !$0 { viewModel.stagingError = nil } })) {
+            Button("好") { viewModel.stagingError = nil }
+        } message: { Text(viewModel.stagingError ?? "") }
+        .alert("隔空投送", isPresented: Binding(get: { viewModel.sharingError != nil }, set: { if !$0 { viewModel.sharingError = nil } })) {
+            Button("好") { viewModel.sharingError = nil }
+        } message: { Text(viewModel.sharingError ?? "") }
+    }
+
+    private func zone(_ title: String, subtitle: String, icon: String, targeted: Bool, accent: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).font(.system(size: 20, weight: .light))
+                .foregroundStyle(accent ? Color(red: 0.65, green: 0.77, blue: 1) : .white.opacity(0.65))
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title).font(.system(size: 12, weight: .semibold))
+                Text(subtitle).font(.system(size: 9)).foregroundStyle(.white.opacity(0.4))
+            }
+        }.frame(maxWidth: .infinity).frame(height: 68)
+            .background(targeted ? Color.blue.opacity(0.22) : .white.opacity(accent ? 0.07 : 0.035), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(targeted ? Color.blue.opacity(0.8) : .white.opacity(0.08)))
+    }
+}
+
+/// 顶部内凹肩线与屏幕边缘相切，避免面板像直角矩形贴在刘海下方。
+private struct NotchShelfShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let shoulder: CGFloat = 12
+        let corner: CGFloat = 24
+        let left = rect.minX + shoulder
+        let right = rect.maxX - shoulder
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addCurve(to: CGPoint(x: right, y: rect.minY + shoulder),
+            control1: CGPoint(x: right, y: rect.minY), control2: CGPoint(x: right, y: rect.minY + 4))
+        path.addLine(to: CGPoint(x: right, y: rect.maxY - corner))
+        path.addQuadCurve(to: CGPoint(x: right - corner, y: rect.maxY), control: CGPoint(x: right, y: rect.maxY))
+        path.addLine(to: CGPoint(x: left + corner, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: left, y: rect.maxY - corner), control: CGPoint(x: left, y: rect.maxY))
+        path.addLine(to: CGPoint(x: left, y: rect.minY + shoulder))
+        path.addCurve(to: CGPoint(x: rect.minX, y: rect.minY),
+            control1: CGPoint(x: left, y: rect.minY + 4), control2: CGPoint(x: left, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }

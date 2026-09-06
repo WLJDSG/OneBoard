@@ -1,7 +1,6 @@
 import AppKit
 import FinderSync
 import SwiftUI
-import IOKit.hid
 import UserNotifications
 
 // MARK: - 权限管理器
@@ -12,9 +11,6 @@ final class PermissionManager {
 
     var hasAccessibilityPermission: Bool { AXIsProcessTrusted() }
     var hasScreenRecordingPermission: Bool { CGPreflightScreenCaptureAccess() }
-    var hasInputMonitoringPermission: Bool {
-        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
-    }
 
     func hasNotificationPermission() async -> Bool {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -27,10 +23,6 @@ final class PermissionManager {
 
     @MainActor func promptScreenRecordingPermission() {
         promptPermission(.screenRecording)
-    }
-
-    @MainActor func promptInputMonitoringPermission() {
-        promptPermission(.inputMonitoring)
     }
 
     @MainActor func promptNotificationPermission() {
@@ -48,8 +40,6 @@ final class PermissionManager {
             urlStr = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
         case .screenRecording:
             urlStr = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-        case .inputMonitoring:
-            urlStr = "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         case .notifications:
             urlStr = "x-apple.systempreferences:com.apple.preference.notifications"
         }
@@ -76,8 +66,6 @@ final class PermissionManager {
             service = "Accessibility"
         case .screenRecording:
             service = "ScreenCapture"
-        case .inputMonitoring:
-            service = "ListenEvent"
         case .notifications:
             service = "UserNotifications"
         }
@@ -100,7 +88,6 @@ final class PermissionManager {
         let keys = Constants.UserDefaultsKeys.self
         UserDefaults.standard.set(hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
         UserDefaults.standard.set(hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
-        UserDefaults.standard.set(hasInputMonitoringPermission, forKey: keys.inputMonitoringPermissionEnabled)
     }
 
     private func resetPrivacyAuthorization(service: String, bundleID: String) throws {
@@ -180,14 +167,12 @@ extension Notification.Name {
 enum OneBoardPermissionKind: Equatable {
     case accessibility
     case screenRecording
-    case inputMonitoring
     case notifications
 
     var title: String {
         switch self {
         case .accessibility: return "辅助功能"
         case .screenRecording: return "屏幕录制"
-        case .inputMonitoring: return "输入监控"
         case .notifications: return "通知"
         }
     }
@@ -196,7 +181,6 @@ enum OneBoardPermissionKind: Equatable {
         switch self {
         case .accessibility: return "accessibility"
         case .screenRecording: return "record.circle"
-        case .inputMonitoring: return "keyboard.badge.eye"
         case .notifications: return "bell.badge"
         }
     }
@@ -206,8 +190,6 @@ enum OneBoardPermissionKind: Equatable {
         case .accessibility:
             return "把 OneBoard 拖到右侧列表，打开开关"
         case .screenRecording:
-            return "把 OneBoard 拖到右侧列表，打开开关后重启 App"
-        case .inputMonitoring:
             return "把 OneBoard 拖到右侧列表，打开开关后重启 App"
         case .notifications:
             return "在系统设置里允许 OneBoard 发送通知"
@@ -230,7 +212,7 @@ final class PermissionGuideWindowManager {
     var hasActiveFlow: Bool { currentKind != nil }
     var shouldRelaunchIfTerminated: Bool {
         guard !isRevoke else { return false }
-        return currentKind == .screenRecording || currentKind == .inputMonitoring
+        return currentKind == .screenRecording
     }
 
     private init() {}
@@ -323,7 +305,6 @@ final class PermissionGuideWindowManager {
         switch kind {
         case .accessibility:    granted = PermissionManager.shared.hasAccessibilityPermission
         case .screenRecording:  granted = PermissionManager.shared.hasScreenRecordingPermission
-        case .inputMonitoring:  granted = PermissionManager.shared.hasInputMonitoringPermission
         case .notifications:
             Task { @MainActor in
                 let granted = await PermissionManager.shared.hasNotificationPermission()

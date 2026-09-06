@@ -34,6 +34,7 @@ final class AnnotationViewModel: ObservableObject {
     private var allowsWindowDragging = true
     private var localMouseMonitor: Any?
     private var pendingCalloutRect: CGRect?
+    private var textTransformOriginal: AnnotationLayer?
     private var textDragStartRect: CGRect = .zero
     private var startPoint: CGPoint = .zero
     private var lastDragPoint: CGPoint = .zero
@@ -127,7 +128,8 @@ final class AnnotationViewModel: ObservableObject {
         // 移动/文字模式：检查是否点中了文字标注（可拖动/编辑）
         if annotationService.selectedTool == .cursor || annotationService.selectedTool == .text || annotationService.selectedTool == .callout {
             for layer in annotationService.layers.reversed() where layer.tool == .text || layer.tool == .callout {
-                if let handle = textResizeHandle(at: point, in: layer.rect) {
+                if selectedTextLayerID == layer.id, let handle = textResizeHandle(at: point, in: layer.rect) {
+                    textTransformOriginal = layer
                     selectedTextLayerID = layer.id
                     resizingTextLayerID = layer.id
                     resizingTextHandle = handle
@@ -137,8 +139,11 @@ final class AnnotationViewModel: ObservableObject {
                     return
                 }
 
-                if layer.rect.contains(point) {
-                    selectedTextLayerID = layer.id
+                let moveHandle = CGRect(x: layer.rect.midX - 15, y: layer.rect.minY - 16, width: 30, height: 16)
+                if layer.rect.contains(point) || (selectedTextLayerID == layer.id && moveHandle.contains(point)) {
+                    selectTextLayer(layer)
+                    if event.clickCount >= 2 { enterTextEdit(); return }
+                    textTransformOriginal = layer
                     startPoint = point
                     textDragStartRect = layer.rect
                     isDraggingTextLayer = true
@@ -231,6 +236,7 @@ final class AnnotationViewModel: ObservableObject {
     private func onMouseUp(at point: CGPoint, event: NSEvent) {
         if isResizingTextLayer {
             resizeTextLayer(id: resizingTextLayerID, to: point)
+            finishTextTransform()
             isResizingTextLayer = false
             resizingTextLayerID = nil
             resizingTextHandle = nil
@@ -242,6 +248,7 @@ final class AnnotationViewModel: ObservableObject {
             // 仅选中，不拖拽
         }
         if isDraggingTextLayer {
+            finishTextTransform()
             isDraggingTextLayer = false
             return
         }
@@ -257,10 +264,45 @@ final class AnnotationViewModel: ObservableObject {
         commitDrawing()
     }
 
-    /// 双击文字标注进入编辑
+    private func selectTextLayer(_ layer: AnnotationLayer) {
+        selectedTextLayerID = layer.id
+        annotationService.selectedTool = layer.tool
+        annotationService.fontSize = layer.fontSize
+        annotationService.selectedColor = layer.color
+    }
+
+    private func finishTextTransform() {
+        guard let original = textTransformOriginal,
+              let changed = annotationService.layers.first(where: { $0.id == original.id }) else { return }
+        textTransformOriginal = nil
+        annotationService.commitTextChange(from: original, to: changed)
+    }
+
+    /// 双击复用首次输入的原位编辑器，不再另开一张编辑卡片。
     func enterTextEdit() {
-        guard let layerID = selectedTextLayerID else { return }
+        guard !isTextInput, let layerID = selectedTextLayerID,
+              let layer = annotationService.layers.first(where: { $0.id == layerID }) else { return }
+        selectTextLayer(layer)
+        isDraggingTextLayer = false
+        textTransformOriginal = nil
         editingTextLayerID = layerID
+        textInputRect = layer.rect
+        textInputPoint = layer.rect.origin
+        isTextInput = true
+    }
+
+    var initialTextValue: String {
+        annotationService.layers.first(where: { $0.id == editingTextLayerID })?.text ?? ""
+    }
+
+    func applySelectedTextStyle() {
+        guard !isTextInput, let id = selectedTextLayerID,
+              let original = annotationService.layers.first(where: { $0.id == id }),
+              annotationService.selectedTool == original.tool else { return }
+        var changed = original
+        changed.fontSize = annotationService.fontSize
+        changed.color = annotationService.selectedColor
+        annotationService.commitTextChange(from: original, to: changed)
     }
 
     // MARK: - 文字输入
@@ -271,16 +313,26 @@ final class AnnotationViewModel: ObservableObject {
             cancelTextInput()
             return
         }
-        if let target = pendingCalloutRect {
+        if let id = editingTextLayerID,
+           let original = annotationService.layers.first(where: { $0.id == id }) {
+            var changed = original
+            changed.text = trimmedText
+            changed.rect = textInputRect
+            changed.fontSize = annotationService.fontSize
+            changed.color = annotationService.selectedColor
+            annotationService.commitTextChange(from: original, to: changed)
+        } else if let target = pendingCalloutRect {
             annotationService.addCallout(target: target, label: textInputRect, text: trimmedText)
         } else { annotationService.addText(in: textInputRect, text: trimmedText) }
         pendingCalloutRect = nil
+        editingTextLayerID = nil
         annotationService.currentDrawingLayer = nil
         selectedTextLayerID = nil
         isTextInput = false
     }
 
     func cancelTextInput() {
+        editingTextLayerID = nil
         isTextInput = false
         pendingCalloutRect = nil
         annotationService.currentDrawingLayer = nil
@@ -300,18 +352,9 @@ final class AnnotationViewModel: ObservableObject {
             color: annotationService.selectedColor, lineWidth: annotationService.lineWidth, calloutRect: target)
     }
 
-    func commitEditText(_ text: String) {
-        guard let id = editingTextLayerID, !text.isEmpty else {
-            editingTextLayerID = nil
-            return
-        }
-        annotationService.updateTextLayer(id: id, text: text)
-        editingTextLayerID = nil
-    }
+    func commitEditText(_ text: String) { commitText(text) }
 
-    func cancelEditText() {
-        editingTextLayerID = nil
-    }
+    func cancelEditText() { cancelTextInput() }
 
     func deleteSelectedTextLayer() {
         guard let id = selectedTextLayerID else { return }
@@ -423,7 +466,7 @@ final class AnnotationViewModel: ObservableObject {
     }
 
     private func textResizeHandle(at point: CGPoint, in rect: CGRect) -> TextResizeHandle? {
-        let handles = TextResizeHandle.allCases.map { handle in
+        let handles = [TextResizeHandle.bottomRight].map { handle in
             (handle, handle.hitRect(in: rect, hitWidth: textResizeHitWidth))
         }
         return handles.first { $0.1.contains(point) }?.0

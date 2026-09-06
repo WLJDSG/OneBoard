@@ -32,10 +32,5 @@
         <string>CloudKit</string>
     </array>
 
-    <!-- Apple Events（用于粘贴到其他应用） -->
-    <key>com.apple.security.temporary-exception.apple-events</key>
-    <array>
-        <string>com.apple.finder</string>
-    </array>
 </dict>
 </plist>

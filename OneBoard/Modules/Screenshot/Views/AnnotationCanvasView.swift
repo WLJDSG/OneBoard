@@ -59,10 +59,6 @@ struct AnnotationCanvasView: View {
                               y: min(max(layer.rect.maxY + 40, 40), max(40, displaySize.height - 40)))
             }
 
-            // 文字标注编辑浮层（编辑已有文字）
-            if viewModel.editingTextLayerID != nil {
-                textEditOverlay
-            }
         }
         .coordinateSpace(name: "annotationCanvas")
         .transaction { $0.animation = nil }
@@ -86,6 +82,8 @@ struct AnnotationCanvasView: View {
                 self.keyMonitor = nil
             }
         }
+        .onChange(of: annotationService.fontSize) { _, _ in viewModel.applySelectedTextStyle() }
+        .onChange(of: annotationService.selectedColor) { _, _ in viewModel.applySelectedTextStyle() }
         .onChange(of: annotationService.selectedTool) { _, tool in
             guard viewModel.isTextInput, tool != .text, tool != .callout else { return }
             viewModel.commitText(textFieldValue)
@@ -111,8 +109,9 @@ struct AnnotationCanvasView: View {
                     ForEach(annotationService.layers) { layer in
                         AnnotationLayerView(
                             layer: layer,
-                            isSelected: viewModel.selectedTextLayerID == layer.id,
+                            isSelected: viewModel.selectedTextLayerID == layer.id && viewModel.editingTextLayerID != layer.id,
                             mosaicImage: baseImage,
+                            hidesText: viewModel.editingTextLayerID == layer.id,
                             onDoubleTap: {
                                 if layer.tool == .text || layer.tool == .callout {
                                     viewModel.selectedTextLayerID = layer.id
@@ -130,7 +129,7 @@ struct AnnotationCanvasView: View {
                             mosaicImage: baseImage,
                             onDoubleTap: {}
                         )
-                        .opacity(0.7)
+                        .opacity(drawingLayer.tool == .mosaic ? 1 : 0.7)
                     }
                 }
                 .frame(width: fitted.width, height: fitted.height)
@@ -152,17 +151,16 @@ struct AnnotationCanvasView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: fontSize))
                 .foregroundColor(color)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, 6)
                 .padding(.vertical, 4)
                 .frame(width: rect.width, height: rect.height, alignment: .topLeading)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                 .focused($isTextFieldFocused)
                 .onSubmit {
                     viewModel.commitText(textFieldValue)
                     textFieldValue = ""
                 }
                 .onAppear {
-                    textFieldValue = ""
+                    textFieldValue = viewModel.initialTextValue
                     DispatchQueue.main.async {
                         isTextFieldFocused = true
                     }
@@ -170,9 +168,7 @@ struct AnnotationCanvasView: View {
                 .onChange(of: annotationService.fontSize) { _, newSize in
                     // 字体变化时调整输入框大小
                     if !isResizingTextInput {
-                        let newWidth = max(newSize * 8, 120)
-                        let newHeight = max(newSize * 1.8, 30)
-                        viewModel.textInputRect.size = CGSize(width: newWidth, height: newHeight)
+                        viewModel.textInputRect.size.height = max(newSize * 1.8, 30)
                     }
                 }
                 .onChange(of: isTextFieldFocused) { _, focused in
@@ -182,10 +178,11 @@ struct AnnotationCanvasView: View {
                     }
                 }
 
-            // 打字时显示虚线边框
+            // 输入仅显示细定位线，避免整圈边框被误认为最终标注。
             if isTextFieldFocused {
-                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                    .stroke(Color.accentColor.opacity(0.8), lineWidth: 1)
+                Rectangle().fill(color.opacity(0.35))
+                    .frame(width: rect.width, height: 1)
+                    .position(x: rect.width / 2, y: rect.height)
                     .allowsHitTesting(false)
             }
 
@@ -219,7 +216,7 @@ struct AnnotationCanvasView: View {
                 )
 
             // 缩放手柄
-            ForEach(CanvasResizeHandle.allCases, id: \.self) { handle in
+            ForEach([CanvasResizeHandle.bottomRight], id: \.self) { handle in
                 Circle()
                     .fill(color)
                     .frame(width: 6, height: 6)
@@ -255,73 +252,6 @@ struct AnnotationCanvasView: View {
         .frame(width: rect.width, height: rect.height)
         .position(x: rect.midX, y: rect.midY)
         .onChange(of: viewModel.textInputRect) { _, _ in viewModel.updateCalloutPreview() }
-    }
-
-    // MARK: - 文字编辑浮层 (微信风格)
-
-    private var textEditOverlay: some View {
-        Group {
-            if let layerID = viewModel.editingTextLayerID,
-               let layer = annotationService.layers.first(where: { $0.id == layerID }) {
-                VStack(spacing: 8) {
-                    TextField("编辑文字…", text: Binding(
-                        get: { layer.text ?? "" },
-                        set: { newValue in
-                            if let idx = annotationService.layers.firstIndex(where: { $0.id == layerID }) {
-                                annotationService.layers[idx].text = newValue
-                            }
-                        }
-                    ))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: layer.fontSize))
-                    .foregroundColor(Color(nsColor: layer.color))
-                    .frame(minWidth: 120, minHeight: 28)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.001))
-                    )
-                    .focused($isTextFieldFocused)
-                    .onSubmit {
-                        viewModel.commitEditText(layer.text ?? "")
-                    }
-                    .onAppear {
-                        DispatchQueue.main.async {
-                            isTextFieldFocused = true
-                        }
-                    }
-                    .onChange(of: annotationService.fontSize) { _, _ in
-                        // 字体大小变化时同步
-                    }
-
-                    HStack(spacing: 12) {
-                        Button("取消") { viewModel.cancelEditText() }
-                            .buttonStyle(.plain)
-                            .oneBoardFont(.callout)
-                            .foregroundColor(OneBoardColors.textSecondary)
-                        Button("确定") {
-                            viewModel.commitEditText(layer.text ?? "")
-                        }
-                        .buttonStyle(.plain)
-                        .oneBoardFont(.callout)
-                        .foregroundColor(OneBoardColors.accent)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, y: OneBoardShadow.sm.y)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                        .stroke(OneBoardColors.accent.opacity(0.08), lineWidth: 1)
-                )
-                .position(x: layer.rect.midX, y: layer.rect.minY - 44)
-            }
-        }
     }
 
     // MARK: - 布局
@@ -449,8 +379,8 @@ struct AnnotationLayerView: View {
     let layer: AnnotationLayer
     let isSelected: Bool
     var mosaicImage: NSImage? = nil
+    var hidesText = false
     let onDoubleTap: () -> Void
-    @State private var isHoveringText: Bool = false
 
     var body: some View {
         ZStack {
@@ -531,6 +461,7 @@ struct AnnotationLayerView: View {
                 .padding(.vertical, 4)
                 .frame(width: layer.rect.width, height: layer.rect.height, alignment: .topLeading)
                 .fixedSize(horizontal: false, vertical: false)
+                .opacity(hidesText ? 0 : 1)
 
             if isSelected {
                 TextControlFrame(
@@ -539,18 +470,11 @@ struct AnnotationLayerView: View {
                     showsHandles: true
                 )
                 .allowsHitTesting(false)
-            } else if isHoveringText {
-                RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                    .stroke(Color(nsColor: layer.color).opacity(0.35), lineWidth: 1)
-                    .allowsHitTesting(false)
             }
         }
         .frame(width: layer.rect.width, height: layer.rect.height)
         .position(x: layer.rect.midX, y: layer.rect.midY)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHoveringText = hovering
-        }
     }
 
     private var numberLayerView: some View {
@@ -583,16 +507,15 @@ private struct TextControlFrame: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                .stroke(color.opacity(0.8), lineWidth: 1.5)
-
+            Rectangle().fill(color.opacity(0.35)).frame(height: 1)
+                .position(x: rect.midX, y: rect.maxY)
             if showsHandles {
-                ForEach(CanvasResizeHandle.allCases, id: \.self) { handle in
-                    Rectangle()
-                        .fill(color)
-                        .frame(width: 7, height: 7)
-                        .position(handle.position(in: rect))
-                }
+                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                    .font(.system(size: 10)).foregroundStyle(color)
+                    .frame(width: 30, height: 16).background(.regularMaterial, in: Capsule())
+                    .position(x: rect.midX, y: -8)
+                Circle().fill(color).frame(width: 6, height: 6)
+                    .position(x: rect.maxX, y: rect.maxY)
             }
         }
         .frame(width: rect.width, height: rect.height)

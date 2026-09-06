@@ -1,21 +1,12 @@
 import AppKit
 
-/// 文件拖拽检测器 - 检测文件拖拽时的摇晃手势
+/// 轮询当前文件拖拽会话，不监听系统输入事件。
 final class DragDetector {
-    struct StartupStrategy: Equatable {
-        let startPolling: Bool
-        let startEventTap: Bool
-    }
-
     static let shared = DragDetector()
     static let fileDragDetected = Notification.Name(Constants.NotificationNames.shakeGestureDetected)
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
     private var localMonitor: Any?
     private var pollTimer: Timer?
-    private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
-    private var lastTriggerTime: TimeInterval = 0
     private var isDragConfirmed: Bool = false  // 当前拖拽已确认是文件拖拽
     private var didNotifyCurrentDrag = false
 
@@ -30,15 +21,7 @@ final class DragDetector {
     func start() {
         guard pollTimer == nil else { return }
         finishCurrentDrag()
-        let strategy = Self.startupStrategy(
-            inputMonitoringGranted: PermissionManager.shared.hasInputMonitoringPermission
-        )
-        if strategy.startEventTap {
-            startEventTap()
-        } else {
-            print("[DragDetector] 未授权输入监听，使用鼠标状态轮询检测文件摇晃")
-        }
-        if strategy.startPolling { startPolling() }
+        startPolling()
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.handleMouseEvent(event)
             return event
@@ -46,26 +29,13 @@ final class DragDetector {
         print("[DragDetector] 已启动")
     }
 
-    static func startupStrategy(inputMonitoringGranted: Bool) -> StartupStrategy {
-        StartupStrategy(startPolling: true, startEventTap: inputMonitoringGranted)
-    }
-
     func stop() {
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-            self.runLoopSource = nil
-        }
-        if let eventTap {
-            CFMachPortInvalidate(eventTap)
-            self.eventTap = nil
-        }
         if let localMonitor {
             NSEvent.removeMonitor(localMonitor)
             self.localMonitor = nil
         }
         pollTimer?.invalidate()
         pollTimer = nil
-        recentPositions.removeAll()
         finishCurrentDrag()
     }
 
@@ -80,88 +50,30 @@ final class DragDetector {
                 return
             }
             guard self.isDraggingSupportedContent else {
-                self.recentPositions.removeAll()
                 return
             }
-            self.handleDrag(at: NSEvent.mouseLocation)
+            self.handleDrag()
         }
         RunLoop.main.add(pollTimer!, forMode: .common)
-    }
-
-    // MARK: - CGEventTap
-
-    private func startEventTap() {
-        let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
-        let userInfo = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(mask),
-            callback: { _, type, event, userInfo in
-                guard let userInfo else { return Unmanaged.passUnretained(event) }
-                let detector = Unmanaged<DragDetector>.fromOpaque(userInfo).takeUnretainedValue()
-                detector.handleCGEvent(type: type, event: event)
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: userInfo
-        ) else {
-            print("[DragDetector] CGEventTap 创建失败（可能缺少输入监控或辅助功能权限）")
-            return
-        }
-
-        eventTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        print("[DragDetector] CGEventTap 已启用")
-    }
-
-    private func handleCGEvent(type: CGEventType, event: CGEvent) {
-        switch type {
-        case .leftMouseDragged:
-            guard isDraggingSupportedContent else {
-                recentPositions.removeAll()
-                break
-            }
-            handleDrag(at: NSEvent.mouseLocation)
-        case .leftMouseDown, .leftMouseUp:
-            finishCurrentDrag()
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
-        default: break
-        }
     }
 
     private func handleMouseEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDragged:
             guard isDraggingSupportedContent else {
-                recentPositions.removeAll()
                 break
             }
-            handleDrag(at: NSEvent.mouseLocation)
+            handleDrag()
         case .leftMouseDown, .leftMouseUp:
             finishCurrentDrag()
         default: break
         }
     }
 
-    private func handleDrag(at position: CGPoint) {
-        guard isLeftMouseButtonDown, isDraggingSupportedContent else {
-            recentPositions.removeAll()
-            return
-        }
-
-        let now = Date().timeIntervalSinceReferenceDate
-        if shouldRevealShelfForCurrentDrag(), now - lastTriggerTime > 0.3 {
-            lastTriggerTime = now
-            print("[DragDetector] 文件拖拽开始，显示暂存区")
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
-            }
+    private func handleDrag() {
+        guard isFileDragActive, shouldRevealShelfForCurrentDrag() else { return }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
         }
     }
 
@@ -172,6 +84,15 @@ final class DragDetector {
     }
 
     // MARK: - 拖拽内容检测
+
+    /// 松手立即失效，不把 .drag 上一次留下的文件误认为仍在拖动。
+    var isFileDragActive: Bool {
+        guard isLeftMouseButtonDown else {
+            finishCurrentDrag()
+            return false
+        }
+        return isDraggingSupportedContent
+    }
 
     var isDraggingSupportedContent: Bool {
         // 已确认的拖拽直接返回 true（同一拖拽操作中 changeCount 不变，避免后续帧误判）
@@ -231,26 +152,9 @@ final class DragDetector {
     }
 
     func finishCurrentDrag() {
-        recentPositions.removeAll()
         isDragConfirmed = false
         didNotifyCurrentDrag = false
         idlePasteboardChangeCount = pasteboard.changeCount
-    }
-
-    private func detectShake() -> Bool {
-        guard recentPositions.count >= 3 else { return false }
-        var directionChanges = 0
-        var prevDir: CGFloat = 0
-        for i in 1..<recentPositions.count {
-            let dx = recentPositions[i].point.x - recentPositions[i-1].point.x
-            let dy = recentPositions[i].point.y - recentPositions[i-1].point.y
-            let dt = recentPositions[i].timestamp - recentPositions[i-1].timestamp
-            guard hypot(dx, dy) / max(CGFloat(dt), 0.001) > 100, abs(dx) > 3 else { continue }
-            let dir: CGFloat = dx > 0 ? 1 : -1
-            if prevDir != 0, dir != prevDir { directionChanges += 1 }
-            prevDir = dir
-        }
-        return directionChanges >= 2
     }
 
 }

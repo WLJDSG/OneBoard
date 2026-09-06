@@ -8,9 +8,17 @@ private final class NotchShelfPanel: NSPanel {
 }
 
 enum NotchShelfAnimationLayout {
-    static let expandedSize = CGSize(width: 440, height: 220)
-    static let showDuration: TimeInterval = 0.30
+    static let expandedSize = CGSize(width: 440, height: 250)
+    static let showDuration: TimeInterval = 0.38
     static let hideDuration: TimeInterval = 0.24
+    static let collapsedScale = CGSize(width: 150 / expandedSize.width, height: 8 / expandedSize.height)
+
+    /// 包含刘海下方可抵达的区域，鼠标无需进入物理摄像头遮挡区。
+    static func hotspotFrame(on screenFrame: CGRect, notchHeight: CGFloat, notchWidth: CGFloat = 220, notchCenterX: CGFloat? = nil) -> CGRect {
+        let height = max(24, notchHeight) + 2
+        let width = notchWidth > 0 ? notchWidth : 220
+        return CGRect(x: (notchCenterX ?? screenFrame.midX) - width / 2, y: screenFrame.maxY - height, width: width + 0.5, height: height + 1)
+    }
 
     static func expandedFrame(on screenFrame: CGRect) -> CGRect {
         CGRect(
@@ -21,9 +29,31 @@ enum NotchShelfAnimationLayout {
         )
     }
 
-    static func collapsedFrame(on screenFrame: CGRect) -> CGRect {
-        let size = CGSize(width: 150, height: 8)
-        return CGRect(x: screenFrame.midX - size.width / 2, y: screenFrame.maxY - size.height, width: size.width, height: size.height)
+
+}
+
+/// 连续悬停才展开；离开刘海和卡片后收起。时间由调用者注入，测试不依赖真实等待。
+struct NotchShelfHoverState {
+    enum Action { case none, show, hide }
+    private var enteredAt: TimeInterval?
+    private var exitedAt: TimeInterval?
+    mutating func update(now: TimeInterval, inHotspot: Bool, inShelf: Bool, visible: Bool, sharing: Bool, draggingFile: Bool = false) -> Action {
+        if draggingFile {
+            enteredAt = nil
+            exitedAt = nil
+            return visible ? .none : .show
+        }
+        if visible {
+            enteredAt = nil
+            if inHotspot || inShelf || sharing { exitedAt = nil; return .none }
+            if exitedAt == nil { exitedAt = now }
+            return now - (exitedAt ?? now) >= 0.15 ? .hide : .none
+        }
+        exitedAt = nil
+        guard inHotspot else { enteredAt = nil; return .none }
+        if enteredAt == nil { enteredAt = now }
+        if now - (enteredAt ?? now) >= 0.5 { enteredAt = nil; return .show }
+        return .none
     }
 }
 
@@ -34,12 +64,14 @@ final class FileStagingViewModel: NSObject, ObservableObject {
 
     @Published var stagedFiles: [StagedFile] = []
     @Published var isShelfVisible: Bool = false
+    @Published private(set) var isShelfExpanded = false
     @Published var sharingError: String?
+    @Published var stagingError: String?
 
     private let repository = FileStagingRepository()
     private var floatingWindow: NSPanel?
     private var notchTimer: Timer?
-    private var outsideSince: Date?
+    private var hoverState = NotchShelfHoverState()
     private var sharingService: NSSharingService?
     private var animationGeneration = 0
     private var isSharing = false
@@ -51,15 +83,18 @@ final class FileStagingViewModel: NSObject, ObservableObject {
 
     private override init() {
         super.init()
-        notchTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkNotchPointer() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        notchTimer = timer
         shakeObserver = NotificationCenter.default.addObserver(
             forName: DragDetector.fileDragDetected,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                guard DragDetector.shared.isFileDragActive else { return }
                 self?.showFloatingShelf()
             }
         }
@@ -75,13 +110,23 @@ final class FileStagingViewModel: NSObject, ObservableObject {
 
     private func checkNotchPointer() {
         let point = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) else { return }
-        let hotspot = CGRect(x: screen.frame.midX - 110, y: screen.frame.maxY - 8, width: 220, height: 8)
-        if hotspot.contains(point) { outsideSince = nil; showFloatingShelf(); return }
-        guard isShelfVisible, !isSharing else { return }
-        if floatingWindow?.frame.contains(point) == true || NSEvent.pressedMouseButtons != 0 { outsideSince = nil; return }
-        if let since = outsideSince, Date().timeIntervalSince(since) > 0.65 { hideFloatingShelf() }
-        else if outsideSince == nil { outsideSince = Date() }
+        guard let screen = NSScreen.screens.first(where: {
+            point.x >= $0.frame.minX && point.x <= $0.frame.maxX && point.y >= $0.frame.minY && point.y <= $0.frame.maxY
+        }) else { return }
+        let notchWidth = screen.auxiliaryTopRightArea.flatMap { right in
+            screen.auxiliaryTopLeftArea.map { right.minX - $0.maxX }
+        } ?? 220
+        let hotspot = NotchShelfAnimationLayout.hotspotFrame(on: screen.frame,
+            notchHeight: screen.safeAreaInsets.top, notchWidth: notchWidth,
+            notchCenterX: screen.auxiliaryTopLeftArea.map { $0.maxX + notchWidth / 2 })
+        let action = hoverState.update(now: Date.timeIntervalSinceReferenceDate,
+            inHotspot: hotspot.contains(point), inShelf: floatingWindow?.frame.contains(point) == true,
+            visible: isShelfVisible, sharing: isSharing, draggingFile: DragDetector.shared.isFileDragActive)
+        switch action {
+        case .show: showFloatingShelf()
+        case .hide: hideFloatingShelf()
+        case .none: break
+        }
     }
 
     func airDrop(_ urls: [URL]) {
@@ -112,6 +157,7 @@ final class FileStagingViewModel: NSObject, ObservableObject {
         let path = normalizedURL.path
 
         guard !DragDetector.supportedDraggedFileURLs([normalizedURL]).isEmpty else {
+            stagingError = "无法暂存“\(url.lastPathComponent)”：请选择可读取的普通文件"
             print("[FileStaging] 仅支持暂存普通文件，已忽略: \(url.lastPathComponent)")
             return
         }
@@ -136,11 +182,13 @@ final class FileStagingViewModel: NSObject, ObservableObject {
                     await self.reloadFiles()
                     print("[FileStaging] 文件已暂存: \(url.lastPathComponent)")
                 } catch {
+                    self.stagingError = "暂存失败：\(error.localizedDescription)"
                     print("[FileStaging] 暂存失败: \(error)")
                 }
             }
         } catch {
             pendingFilePaths.remove(path)
+            stagingError = "暂存失败：\(error.localizedDescription)"
             print("[FileStaging] 暂存失败: \(error)")
         }
     }
@@ -169,6 +217,9 @@ final class FileStagingViewModel: NSObject, ObservableObject {
         guard !isShelfVisible else { return }
         animationGeneration += 1
         isShelfVisible = true
+        isShelfExpanded = false
+        floatingWindow?.close()
+        floatingWindow = nil
         createFloatingWindow()
         Task { [weak self] in
             guard let self else { return }
@@ -179,31 +230,29 @@ final class FileStagingViewModel: NSObject, ObservableObject {
 
     func hideFloatingShelf() {
         isShelfVisible = false
-        outsideSince = nil
+        hoverState = NotchShelfHoverState()
         animationGeneration += 1
         let generation = animationGeneration
-        guard let panel = floatingWindow, let screen = panel.screen else {
+        guard let panel = floatingWindow else {
             floatingWindow = nil
             return
         }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = NotchShelfAnimationLayout.hideDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            panel.animator().setFrame(NotchShelfAnimationLayout.collapsedFrame(on: screen.frame), display: true)
-            panel.animator().alphaValue = 0
-        } completionHandler: { [weak self, weak panel] in
-            Task { @MainActor in
-                guard let self, self.animationGeneration == generation else { return }
-                panel?.close()
-                self.floatingWindow = nil
-            }
+        withAnimation(.timingCurve(0.55, 0, 0.85, 0.4, duration: NotchShelfAnimationLayout.hideDuration)) {
+            isShelfExpanded = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + NotchShelfAnimationLayout.hideDuration) { [weak self, weak panel] in
+            guard let self, self.animationGeneration == generation else { return }
+            panel?.close()
+            self.floatingWindow = nil
         }
     }
 
     private func createFloatingWindow() {
-        let hostingView = NSHostingView(
-            rootView: NotchShelfView(viewModel: self)
+        let hostingView = FileShelfHostingView(
+            rootView: NotchShelfView(viewModel: self, animatesPresentation: true)
         )
+        hostingView.receiveFiles = { [weak self] urls in urls.forEach { self?.addFile(url: $0) } }
+        hostingView.sizingOptions = []
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         hostingView.layer?.masksToBounds = true
@@ -221,23 +270,31 @@ final class FileStagingViewModel: NSObject, ObservableObject {
             panel.hidesOnDeactivate = false
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isFloatingPanel = true
+            panel.animationBehavior = .none  // 禁止系统出场缩放叠加，顶边只由内容动画控制。
             panel.titlebarAppearsTransparent = true
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = false  // shadow 由 SwiftUI 层控制
             panel.contentView = hostingView
             panel.isMovableByWindowBackground = false
-            let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+            let point = NSEvent.mouseLocation
+            let screen = NSScreen.screens.first {
+                point.x >= $0.frame.minX && point.x <= $0.frame.maxX && point.y >= $0.frame.minY && point.y <= $0.frame.maxY
+            } ?? NSScreen.main
             guard let screen else { return }
-            panel.setFrame(NotchShelfAnimationLayout.collapsedFrame(on: screen.frame), display: false)
-            panel.alphaValue = 0
+            // 原生窗口始终贴住顶边；仅缩放内容，避免窗口逐帧取整产生顶部闪缝。
+            panel.setFrame(NotchShelfAnimationLayout.expandedFrame(on: screen.frame), display: false)
+            panel.alphaValue = 1
+            hostingView.layoutSubtreeIfNeeded()
+            hostingView.displayIfNeeded()
             panel.orderFrontRegardless()
             floatingWindow = panel
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = NotchShelfAnimationLayout.showDuration
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().setFrame(NotchShelfAnimationLayout.expandedFrame(on: screen.frame), display: true)
-                panel.animator().alphaValue = 1
+            let generation = animationGeneration
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.animationGeneration == generation, self.isShelfVisible else { return }
+                withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: NotchShelfAnimationLayout.showDuration)) {
+                    self.isShelfExpanded = true
+                }
             }
         }
     }
@@ -258,6 +315,6 @@ extension FileStagingViewModel: NSSharingServiceDelegate {
     private func finishSharing() {
         isSharing = false
         sharingService = nil
-        outsideSince = nil
+        hoverState = NotchShelfHoverState()
     }
 }

@@ -60,7 +60,7 @@ struct CalendarPanelView: View {
                         ForEach(0..<6, id: \.self) { row in
                             HStack(spacing: 3) {
                                 Text("\(grid.calendar.component(.weekOfYear, from: days[row * 7].date))")
-                                    .font(.system(size: 10, weight: .medium)).foregroundStyle(.tertiary).frame(width: 22)
+                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary).frame(width: 22)
                                 ForEach(Array(days[(row * 7)..<(row * 7 + 7)])) { day in
                                     dayCell(day).frame(maxWidth: .infinity)
                                 }
@@ -73,17 +73,12 @@ struct CalendarPanelView: View {
                     Text(CalendarLunar.label(selected))
                     Spacer()
                     if Calendar.current.component(.year, from: month) > 2026 { Text("该年调休安排尚未发布").foregroundStyle(.orange) }
-                }.font(.system(size: 10)).foregroundStyle(.secondary)
+                }.font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(20).frame(minWidth: 530, maxWidth: .infinity)
             Divider().padding(.vertical, 16)
             sidebar.frame(width: 300).padding(20)
         }
-        .background {
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                LinearGradient(colors: [Color.cyan.opacity(0.07), .clear, Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom)
-            }
-        }
+        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $adding) {
             VStack(spacing: 16) {
                 Text(tab == 0 ? "添加倒数日" : "添加待办").font(.headline)
@@ -109,7 +104,7 @@ struct CalendarPanelView: View {
             if !day.isInDisplayedMonth { month = day.date }
         } label: {
             VStack(spacing: 5) {
-                Text("\(day.day)").font(.system(size: 25, weight: .semibold))
+                Text("\(day.day)").font(.system(size: 25, weight: day.isInDisplayedMonth ? .semibold : .regular))
                     .overlay(alignment: .topTrailing) {
                         if let work = info.work {
                             Text(work ? "班" : "休").font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
@@ -122,7 +117,7 @@ struct CalendarPanelView: View {
                     .padding(.horizontal, 4).padding(.vertical, 1)
                     .background(info.festival != nil ? Color.orange.opacity(0.07) : info.term != nil ? blue.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 5))
             }
-            .foregroundStyle(day.isToday ? blue : .primary)
+            .foregroundStyle(day.isToday ? blue : day.isInDisplayedMonth ? .primary : .secondary)
             .frame(maxWidth: .infinity).frame(height: 62)
             .background {
                 if active { RoundedRectangle(cornerRadius: 12).fill(blue.opacity(day.isToday ? 0.22 : 0.14)) }
@@ -132,7 +127,6 @@ struct CalendarPanelView: View {
                 if active { RoundedRectangle(cornerRadius: 12).stroke(blue, lineWidth: 2) }
                 else if day.isToday { Circle().stroke(blue.opacity(0.4)).frame(width: 62, height: 62) }
             }
-            .opacity(day.isInDisplayedMonth ? 1 : 0.32)
         }.buttonStyle(.plain)
     }
 

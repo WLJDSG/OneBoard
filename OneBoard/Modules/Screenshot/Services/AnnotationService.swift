@@ -187,6 +187,15 @@ final class AnnotationService: ObservableObject {
         layers[index].text = text
     }
 
+    /// 编辑或一次拖动作为一个撤销步骤；拖动预览已经写入时，先恢复原态再记录。
+    func commitTextChange(from original: AnnotationLayer, to changed: AnnotationLayer) {
+        guard original.text != changed.text || original.rect != changed.rect || original.fontSize != changed.fontSize || original.color != changed.color,
+              let index = layers.firstIndex(where: { $0.id == original.id }) else { return }
+        layers[index] = original
+        recordUndo()
+        layers[index] = changed
+    }
+
     /// 删除指定图层
     func removeLayer(id: UUID) {
         guard layers.contains(where: { $0.id == id }) else { return }
@@ -260,7 +269,7 @@ final class AnnotationService: ObservableObject {
         case .rectangle, .ellipse, .arrow, .line:
             lineWidth = min(12, lineWidth + 1)
         case .text, .callout:
-            fontSize = fontSize >= 20 ? 1 : max(1, fontSize + 1)
+            fontSize = min(25, max(15, fontSize + 1))
         case .number:
             numberBadgeSize = min(48, numberBadgeSize + 2)
         case .mosaic:
@@ -275,7 +284,7 @@ final class AnnotationService: ObservableObject {
         case .rectangle, .ellipse, .arrow, .line:
             lineWidth = max(1, lineWidth - 1)
         case .text, .callout:
-            fontSize = fontSize <= 1 ? 20 : min(20, fontSize - 1)
+            fontSize = max(15, min(25, fontSize - 1))
         case .number:
             numberBadgeSize = max(20, numberBadgeSize - 2)
         case .mosaic:

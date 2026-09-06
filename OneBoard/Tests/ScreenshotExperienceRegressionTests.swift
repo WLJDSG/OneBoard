@@ -4,19 +4,19 @@ import XCTest
 
 final class ScreenshotExperienceRegressionTests: XCTestCase {
     @MainActor
-    func testFontSizeCyclesAcrossOneThroughTwenty() {
+    func testFontSizeClampsLegacyValuesToCurrentRange() {
         let service = AnnotationService()
         service.selectedTool = .text
-        service.fontSize = 20
+        service.fontSize = 30
         service.incrementStyleValue()
-        XCTAssertEqual(service.fontSize, 1)
+        XCTAssertEqual(service.fontSize, 25)
         service.decrementStyleValue()
-        XCTAssertEqual(service.fontSize, 20)
+        XCTAssertEqual(service.fontSize, 24)
         service.fontSize = 12
         service.decrementStyleValue()
-        XCTAssertEqual(service.fontSize, 11)
+        XCTAssertEqual(service.fontSize, 15)
         service.incrementStyleValue()
-        XCTAssertEqual(service.fontSize, 12)
+        XCTAssertEqual(service.fontSize, 16)
     }
 
     func testStationaryRepeatedRowsWithLiveBadgeDoNotAppend() {

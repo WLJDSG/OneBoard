@@ -204,7 +204,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if defaults.object(forKey: keys.translationTargetLanguage) == nil { defaults.set("zh-Hans", forKey: keys.translationTargetLanguage) }
         defaults.set(PermissionManager.shared.hasAccessibilityPermission, forKey: keys.accessibilityPermissionEnabled)
         defaults.set(PermissionManager.shared.hasScreenRecordingPermission, forKey: keys.screenRecordingPermissionEnabled)
-        defaults.set(PermissionManager.shared.hasInputMonitoringPermission, forKey: keys.inputMonitoringPermissionEnabled)
         defaults.set(LaunchAtLogin.isEnabled, forKey: keys.launchAtLogin)
 
         // 待办默认设置

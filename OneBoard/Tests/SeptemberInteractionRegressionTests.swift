@@ -73,7 +73,9 @@ final class SeptemberAccountAndAnnotationTests: XCTestCase {
         image.lockFocus(); NSColor.red.setFill(); CGRect(x: 0, y: 0, width: 100, height: 100).fill(); image.unlockFocus()
         let pixels = try XCTUnwrap(MosaicPixels.make(image: image, displaySize: image.size,
             rect: CGRect(x: 10, y: 10, width: 60, height: 40), blockSize: 10))
-        XCTAssertEqual(pixels.width, 6); XCTAssertEqual(pixels.height, 4)
+        let source = try XCTUnwrap(image.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        XCTAssertEqual(pixels.width, Int(60 * CGFloat(source.width) / image.size.width))
+        XCTAssertEqual(pixels.height, Int(40 * CGFloat(source.height) / image.size.height))
         let color = try XCTUnwrap(NSBitmapImageRep(cgImage: pixels).colorAt(x: 1, y: 1)?.usingColorSpace(.deviceRGB))
         XCTAssertGreaterThan(color.redComponent, 0.95)
         XCTAssertLessThan(color.greenComponent, 0.05)

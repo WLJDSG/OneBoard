@@ -309,7 +309,6 @@ struct SettingsView: View {
             Section {
                 permissionRow(title: "辅助功能", description: "用于自动粘贴、读取选中文字、全局交互", isGranted: systemCapabilities.accessibilityGranted, isRequesting: systemCapabilities.permissionRequestingKind == .accessibility, onRequest: { systemCapabilities.setAccessibilityEnabled(true) }, onRevoke: { systemCapabilities.setAccessibilityEnabled(false) })
                 permissionRow(title: "屏幕录制", description: "用于截图、OCR 和截图翻译", isGranted: systemCapabilities.screenRecordingGranted, isRequesting: systemCapabilities.permissionRequestingKind == .screenRecording, onRequest: { systemCapabilities.setScreenRecordingEnabled(true) }, onRevoke: { systemCapabilities.setScreenRecordingEnabled(false) })
-                permissionRow(title: "输入监控", description: "用于文件拖拽摇晃检测等全局输入监听", isGranted: systemCapabilities.inputMonitoringGranted, isRequesting: systemCapabilities.permissionRequestingKind == .inputMonitoring, onRequest: { systemCapabilities.setInputMonitoringEnabled(true) }, onRevoke: { systemCapabilities.setInputMonitoringEnabled(false) })
                 permissionRow(title: "通知", description: "用于待办事项到期提醒", isGranted: systemCapabilities.notificationGranted, isRequesting: systemCapabilities.permissionRequestingKind == .notifications, onRequest: { todoShowNotifications = true; systemCapabilities.setNotificationEnabled(true) }, onRevoke: { todoShowNotifications = false; systemCapabilities.setNotificationEnabled(false) })
             } header: { Text("隐私权限") }
 

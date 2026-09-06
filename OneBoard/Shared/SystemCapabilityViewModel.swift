@@ -5,7 +5,6 @@ import LaunchAtLogin
 protocol SystemPermissionProviding {
     var hasAccessibilityPermission: Bool { get }
     var hasScreenRecordingPermission: Bool { get }
-    var hasInputMonitoringPermission: Bool { get }
     func hasNotificationPermission() async -> Bool
     func showPermissionGuide(for kind: OneBoardPermissionKind)
     func resetAuthorization(for kind: OneBoardPermissionKind) throws
@@ -48,7 +47,6 @@ final class SystemCapabilityViewModel: ObservableObject {
 
     @Published private(set) var accessibilityGranted = false
     @Published private(set) var screenRecordingGranted = false
-    @Published private(set) var inputMonitoringGranted = false
     @Published private(set) var notificationGranted = false
     @Published private(set) var gatewayHelperInstalled = false
     @Published private(set) var launchAtLoginEnabled = false
@@ -83,7 +81,6 @@ final class SystemCapabilityViewModel: ObservableObject {
     func refresh() {
         accessibilityGranted = permissions.hasAccessibilityPermission
         screenRecordingGranted = permissions.hasScreenRecordingPermission
-        inputMonitoringGranted = permissions.hasInputMonitoringPermission
         launchAtLoginEnabled = launchAtLogin.isEnabled
         PermissionManager.shared.syncStoredPermissionStates()
         // Helper 探测会启动子进程，不能在单例初始化/SwiftUI 布局期间阻塞主线程。
@@ -106,10 +103,6 @@ final class SystemCapabilityViewModel: ObservableObject {
 
     func setScreenRecordingEnabled(_ enabled: Bool) {
         setPermission(.screenRecording, enabled: enabled)
-    }
-
-    func setInputMonitoringEnabled(_ enabled: Bool) {
-        setPermission(.inputMonitoring, enabled: enabled)
     }
 
     func setNotificationEnabled(_ enabled: Bool) {

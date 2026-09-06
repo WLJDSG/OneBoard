@@ -75,35 +75,33 @@ struct AnnotationToolbarView: View {
 
     private var styleGroup: some View {
         HStack(spacing: 7) {
-            if annotationService.selectedTool != .mosaic { colorPickerButton }
-
-            Divider().frame(height: 22)
-
-            Button(action: { annotationService.decrementStyleValue() }) {
-                Image(systemName: "minus")
-                    .oneBoardFont(.caption)
-                    .frame(width: 24, height: 28)
+            colorPickerButton
+            HStack(spacing: 2) {
+                Text(Self.styleLabel(for: annotationService.selectedTool))
+                    .font(.system(size: 10)).foregroundStyle(.secondary).padding(.leading, 4)
+                Button(action: { annotationService.decrementStyleValue() }) {
+                    Image(systemName: "minus").font(.system(size: 10)).frame(width: 22, height: 28)
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).help("减小\(Self.styleLabel(for: annotationService.selectedTool))")
+                Text(styleValueText).oneBoardFont(.monoCaption).frame(width: 24, height: 28)
+                Button(action: { annotationService.incrementStyleValue() }) {
+                    Image(systemName: "plus").font(.system(size: 10)).frame(width: 22, height: 28)
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).help("增大\(Self.styleLabel(for: annotationService.selectedTool)) · Right Option")
             }
-            .buttonStyle(.plain)
-            .help("减小样式")
-
-            Text(styleValueText)
-                .oneBoardFont(.monoCaption)
-                .frame(width: 26, height: 28)
-
-            Button(action: { annotationService.incrementStyleValue() }) {
-                Image(systemName: "plus")
-                    .oneBoardFont(.caption)
-                    .frame(width: 24, height: 28)
-            }
-            .buttonStyle(.plain)
-            .help("增大样式 Right Option")
-
+            .padding(.horizontal, 4).frame(height: 34)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
         }
-        .padding(.horizontal, 6)
-        .frame(height: 34)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
+    }
 
+    static func styleLabel(for tool: AnnotationTool) -> String {
+        switch tool {
+        case .cursor: return "样式"
+        case .text, .callout: return "字号"
+        case .rectangle, .ellipse, .arrow, .line: return "线宽"
+        case .number: return "编号"
+        case .mosaic: return "颗粒"
+        }
     }
 
     private var styleValueText: String {

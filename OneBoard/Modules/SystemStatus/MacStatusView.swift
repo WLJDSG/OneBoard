@@ -44,7 +44,7 @@ struct MacStatusView: View {
                     }.font(.system(size: 12))
                 }
                 if model.apps.isEmpty { Text("等待应用产生网络流量").font(.caption).foregroundStyle(.secondary) }
-                Text(model.networkStatus).font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(model.networkStatus).font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(14).background(networkHovered ? Color.blue.opacity(0.08) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 20))
                 .onHover { networkHovered = $0 }
             HStack(spacing: 8) {
@@ -56,13 +56,14 @@ struct MacStatusView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack { Label("Macintosh HD", systemImage: "internaldrive"); Spacer(); Text(bytes(model.freeDisk) + " 可用").foregroundStyle(.blue) }.font(.system(size: 12, weight: .semibold))
                 coloredProgress(model.totalDisk > 0 ? Double(model.totalDisk - model.freeDisk) / Double(model.totalDisk) : 0, color: .blue)
-                Text("总容量 \(bytes(model.totalDisk)) · 内存 \(bytes(Int64(model.usedMemory))) / \(bytes(Int64(ProcessInfo.processInfo.physicalMemory)))").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("总容量 \(bytes(model.totalDisk)) · 内存 \(bytes(Int64(model.usedMemory))) / \(bytes(Int64(ProcessInfo.processInfo.physicalMemory)))").font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(14)
             }.buttonStyle(StatusTileStyle()).help("打开系统存储空间设置")
-            HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 " + MacStatusModel.uptimeText(ProcessInfo.processInfo.systemUptime)) }.font(.system(size: 10)).padding(12).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+            HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 " + MacStatusModel.uptimeText(ProcessInfo.processInfo.systemUptime)) }.font(.system(size: 11)).padding(12).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
             Spacer(minLength: 0)
         }.padding(20)
-        }.scrollIndicators(.hidden).frame(width: 400, height: 600).background(.ultraThinMaterial)
+        }.scrollIndicators(.hidden).frame(width: 400, height: 600)
+            .background(Color(nsColor: .windowBackgroundColor))
             .task { model.start() }
     }
     private func appIcon(_ app: AppNetworkUsage) -> NSImage {
