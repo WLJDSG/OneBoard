@@ -25,7 +25,16 @@ final class FeaturePanelRenderTests: XCTestCase {
         let model = TranslationPanelViewModel(sourceText: "让桌面上的每一步，更轻松。\nKeep your tools close and your workspace clear.")
         model.translatedText = "Make every step on your desktop easier.\n让工具触手可及，让工作空间井然有序。"
         for dark in [false, true] {
+            let screenshot = NSImage(size: CGSize(width: 300, height: 200))
+            let annotations = AnnotationService(baseImage: screenshot)
             let views: [(String, AnyView, CGSize)] = [
+                ("shortcut-bindings", AnyView(QuickLaunchSettingsView().padding(16).background(Color(nsColor: .windowBackgroundColor))), CGSize(width: 720, height: 460)),
+                ("menu-icons", AnyView(HStack(spacing: 16) {
+                    Image(nsImage: MenuBarManager.menuSymbol("square.stack.3d.up")!)
+                    Image(nsImage: MenuBarManager.menuSymbol("calendar")!)
+                    Image(nsImage: MenuBarManager.networkImage(upload: 125_000, download: 3_500_000))
+                }.padding(16).background(Color(nsColor: .windowBackgroundColor))), CGSize(width: 180, height: 50)),
+                ("screenshot-toolbar", AnyView(AnnotationToolbarView(annotationService: annotations, viewModel: AnnotationViewModel(annotationService: annotations), onComplete: { _ in }, onSave: { _ in }, onPin: { _ in }, onOCR: { _ in }, onTranslate: { _ in }, onLongCapture: {}, onClose: {}, baseImage: screenshot, displaySize: screenshot.size)), CGSize(width: 820, height: 80)),
                 ("ocr", AnyView(OCRBubbleView(text: "识别结果支持选中、编辑和复制。\nOCR keeps the original text available for review.", panelSize: CGSize(width: 440, height: 320), onClose: {})), CGSize(width: 440, height: 320)),
                 ("translation", AnyView(TranslationPanelView(viewModel: model, onTranslate: {}, onSelectService: { _ in }, onClose: {})), CGSize(width: 520, height: 600)),
                 ("gateway", AnyView(GatewaySwitcherPanelView()), GatewaySwitcherPanelLayout.size),

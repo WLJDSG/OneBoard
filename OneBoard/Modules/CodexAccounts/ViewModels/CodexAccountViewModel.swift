@@ -144,6 +144,11 @@ final class CodexAccountViewModel: ObservableObject {
         }
     }
 
+    func moveAccount(_ sourceID: UUID, before targetID: UUID) {
+        service.moveAccount(sourceID, before: targetID)
+        refreshState()
+    }
+
     @discardableResult
     func requestSwitch(id: UUID) async -> String {
         guard !isSwitching else { return statusMessage ?? "Codex 账号正在切换" }

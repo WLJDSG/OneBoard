@@ -213,6 +213,11 @@ final class ScreenshotOverlayContentView: NSView {
         needsDisplay = true
     }
 
+    func refreshPointerHover() {
+        guard let window else { return }
+        updateWindowHover(at: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard !hasFinished, !isAnnotationLocked else { return }
         window?.makeKey()
@@ -459,6 +464,7 @@ final class ScreenshotOverlayContentView: NSView {
             onPin: { [weak self] image in self?.finishToolbarOutput(image, action: .pin) },
             onOCR: { [weak self] image in self?.finishToolbarOutput(image, action: .ocr) },
             onTranslate: { [weak self] image in self?.finishToolbarOutput(image, action: .translate) },
+            onLongCapture: { [weak self] in self?.finishSelection(.longCapture) },
             onClose: { [weak self] in self?.finishCancel() },
             baseImage: image,
             displaySize: selectionRect.size
@@ -477,7 +483,7 @@ final class ScreenshotOverlayContentView: NSView {
         let fittingSize = hostingView.fittingSize
         hostingView.frame = inlineToolbarFrame(selectionRect: selectionRect, toolbarSize: fittingSize)
         hostingView.isHidden = false
-        installLongCaptureButton(nextTo: hostingView)
+        longCaptureButton?.isHidden = true
     }
 
     private func installLongCaptureButton(nextTo toolbar: NSView) {

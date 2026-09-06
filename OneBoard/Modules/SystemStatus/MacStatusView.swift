@@ -59,7 +59,7 @@ struct MacStatusView: View {
                 Text("总容量 \(bytes(model.totalDisk)) · 内存 \(bytes(Int64(model.usedMemory))) / \(bytes(Int64(ProcessInfo.processInfo.physicalMemory)))").font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(14)
             }.buttonStyle(StatusTileStyle()).help("打开系统存储空间设置")
-            HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 \(Int(ProcessInfo.processInfo.systemUptime / 3600)) 小时") }.font(.system(size: 10)).padding(12).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+            HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 " + MacStatusModel.uptimeText(ProcessInfo.processInfo.systemUptime)) }.font(.system(size: 10)).padding(12).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
             Spacer(minLength: 0)
         }.padding(20)
         }.scrollIndicators(.hidden).frame(width: 400, height: 600).background(.ultraThinMaterial)

@@ -12,11 +12,13 @@ struct AnnotationToolbarView: View {
     let onPin: (NSImage) -> Void
     let onOCR: (NSImage) -> Void
     let onTranslate: (NSImage) -> Void
+    var onLongCapture: (() -> Void)? = nil
     let onClose: () -> Void
     let baseImage: NSImage
     let displaySize: CGSize
 
     @State private var showColorPicker: Bool = false
+    @State private var colorSampler: NSColorSampler?
 
     private let toolShortcuts: [AnnotationTool: String] = [
         .cursor: "1",
@@ -33,16 +35,33 @@ struct AnnotationToolbarView: View {
         HStack(spacing: 8) {
             toolGroup
             Divider().frame(height: 20)
-            styleGroup
+            if Self.showsInlineStyleControls(for: annotationService.selectedTool) {
+                styleGroup
+            }
+            iconActionButton("吸取屏幕颜色", icon: "eyedropper") {
+                let sampler = NSColorSampler()
+                colorSampler = sampler
+                sampler.show { color in
+                    Task { @MainActor in
+                        if let color { annotationService.selectedColor = color }
+                        colorSampler = nil
+                    }
+                }
+            }
             Divider().frame(height: 20)
             historyGroup
             Divider().frame(height: 20)
             outputGroup
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.lg))
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(.white.opacity(0.22)))
         .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
+    }
+
+    static func showsInlineStyleControls(for tool: AnnotationTool) -> Bool {
+        tool != .cursor
     }
 
     // MARK: - 工具组
@@ -128,6 +147,9 @@ struct AnnotationToolbarView: View {
 
     private var outputGroup: some View {
         HStack(spacing: 6) {
+            if let onLongCapture {
+                iconActionButton("长截图", icon: "rectangle.expand.vertical") { onLongCapture() }
+            }
             iconActionButton("保存到桌面 Cmd+S", icon: "square.and.arrow.down") {
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onSave(rendered)
@@ -194,8 +216,9 @@ struct AnnotationToolbarView: View {
                             : Color.clear
                     )
                 )
+                .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.sm).strokeBorder(annotationService.selectedTool == tool ? OneBoardColors.accent.opacity(0.55) : .clear))
                 .foregroundColor(
-                    annotationService.selectedTool == tool ? OneBoardColors.accent : OneBoardColors.textPrimary
+                    annotationService.selectedTool == tool ? Color.accentColor : Color.primary
                 )
         }
         .buttonStyle(.plain)
@@ -297,7 +320,7 @@ struct AnnotationToolbarView: View {
                     RoundedRectangle(cornerRadius: OneBoardRadius.lg)
                         .fill(buttonBackgroundColor(prominent: prominent, muted: muted))
                 )
-                .foregroundColor(prominent ? .white : OneBoardColors.textPrimary.opacity(muted ? 0.55 : 0.78))
+                .foregroundColor(prominent ? .white : Color.primary.opacity(muted ? 0.55 : 0.85))
         }
         .buttonStyle(.plain)
         .help(label)
@@ -305,9 +328,9 @@ struct AnnotationToolbarView: View {
 
     private func buttonBackgroundColor(prominent: Bool, muted: Bool) -> Color {
         if prominent {
-            return OneBoardColors.success
+            return Color.accentColor
         }
-        return OneBoardColors.accent.opacity(muted ? 0.06 : 0.10)
+        return Color.clear
     }
 }
 

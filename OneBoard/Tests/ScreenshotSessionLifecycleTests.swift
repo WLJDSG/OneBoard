@@ -55,6 +55,11 @@ final class ScreenshotSessionLifecycleTests: XCTestCase {
         )
     }
 
+    func testTextToolKeepsFontSizeControlsInline() {
+        XCTAssertTrue(AnnotationToolbarView.showsInlineStyleControls(for: .text))
+        XCTAssertFalse(AnnotationToolbarView.showsInlineStyleControls(for: .cursor))
+    }
+
     func testOutputSelectionKeepsImmediateOperation() {
         XCTAssertEqual(ScreenshotLockedRoute.route(for: .ocr), .ocr)
     }

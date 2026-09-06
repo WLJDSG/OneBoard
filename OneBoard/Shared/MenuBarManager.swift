@@ -43,16 +43,10 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem.isVisible = true
         updateCalendarStatusItemVisibility()
-        let macItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        macItem.button?.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Mac 状态")
-        macItem.button?.target = self
-        macItem.button?.action = #selector(openMacStatus)
-        macItem.button?.toolTip = "Mac 状态"
-        macStatusItem = macItem
+        Task { @MainActor in updateMacStatusItemVisibility() }
         macStatusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateMacStatusLabel() }
         }
-        if let button = macItem.button { Task { @MainActor in MacStatusWindowManager.shared.card.attach(to: button) } }
     }
 
     @MainActor private func updateMacStatusLabel() {
@@ -62,14 +56,18 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         let defaults = UserDefaults.standard
         let mode = defaults.string(forKey: "macStatus.menuMode") ?? "icon"
         let symbol = defaults.string(forKey: "macStatus.menuIcon") ?? "gauge.with.dots.needle.50percent"
-        button.image = mode == "icon" ? NSImage(systemSymbolName: symbol, accessibilityDescription: "Mac 状态") : nil
+        button.image = mode == "icon" ? Self.menuSymbol(symbol) : nil
+        button.imagePosition = mode == "cpu" || mode == "memory" ? .noImage : .imageOnly
         switch mode {
         case "cpu": button.title = "CPU \(Int(model.cpu * 100))%"
         case "memory": button.title = "内存 \(Int(model.memory * 100))%"
-        case "network": button.title = "↑\(Int(model.upload / 1024)) ↓\(Int(model.download / 1024)) KB/s"
+        case "network":
+            button.title = ""
+            button.image = Self.networkImage(upload: model.upload, download: model.download)
+            button.imagePosition = .imageOnly
         default: button.title = ""
         }
-        button.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        button.font = .monospacedDigitSystemFont(ofSize: mode == "network" ? 8 : 11, weight: .medium)
         item.length = mode == "icon" ? NSStatusItem.squareLength : NSStatusItem.variableLength
     }
 
@@ -169,13 +167,31 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     }
     @objc private func openMacStatus() { Task { @MainActor in MacStatusWindowManager.shared.card.toggle() } }
 
+    @MainActor func updateMacStatusItemVisibility() {
+        let defaults = UserDefaults.standard
+        let visible = defaults.object(forKey: Constants.UserDefaultsKeys.macStatusShowInMenuBar) == nil
+            || defaults.bool(forKey: Constants.UserDefaultsKeys.macStatusShowInMenuBar)
+        if visible, macStatusItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            item.button?.target = self
+            item.button?.action = #selector(openMacStatus)
+            item.button?.toolTip = "Mac 状态"
+            macStatusItem = item
+            updateMacStatusLabel()
+            if let button = item.button { Task { @MainActor in MacStatusWindowManager.shared.card.attach(to: button) } }
+        } else if !visible, let item = macStatusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            macStatusItem = nil
+        }
+    }
+
     func updateCalendarStatusItemVisibility() {
         let defaults = UserDefaults.standard
         let visible = defaults.object(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar) == nil
             || defaults.bool(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar)
         if visible, calendarStatusItem == nil {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item.button?.image = NSImage(systemSymbolName: "calendar", accessibilityDescription: "OneBoard 日历")
+            item.button?.image = Self.menuSymbol("calendar")
             item.button?.target = self
             item.button?.action = #selector(openCalendar)
             item.button?.toolTip = "OneBoard 日历"
@@ -524,23 +540,33 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     // MARK: - 图标
 
     private func createMenuBarIcon() -> NSImage {
-        // 18pt 模板图：一块分栏面板与右上叠层，像素对齐的线条适配深浅菜单栏。
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            NSColor.black.setStroke()
-            let outline = NSBezierPath(roundedRect: NSRect(x: 2, y: 2, width: 12, height: 12), xRadius: 2.5, yRadius: 2.5)
-            outline.lineWidth = 1.5
-            outline.stroke()
-            let detail = NSBezierPath()
-            detail.lineWidth = 1.5
-            detail.lineCapStyle = .round
-            detail.lineJoinStyle = .round
-            detail.move(to: NSPoint(x: 6, y: 3))
-            detail.line(to: NSPoint(x: 6, y: 13))
-            detail.move(to: NSPoint(x: 6, y: 16))
-            detail.line(to: NSPoint(x: 13.5, y: 16))
-            detail.curve(to: NSPoint(x: 16, y: 13.5), controlPoint1: NSPoint(x: 15, y: 16), controlPoint2: NSPoint(x: 16, y: 15))
-            detail.line(to: NSPoint(x: 16, y: 6))
-            detail.stroke()
+        Self.menuSymbol("square.stack.3d.up") ?? NSImage(size: NSSize(width: 18, height: 18))
+    }
+
+    static func menuSymbol(_ name: String) -> NSImage? {
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .medium)) else { return nil }
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            let scale = min(16 / symbol.size.width, 16 / symbol.size.height)
+            let size = NSSize(width: symbol.size.width * scale, height: symbol.size.height * scale)
+            symbol.draw(in: NSRect(x: (rect.width - size.width) / 2, y: (rect.height - size.height) / 2, width: size.width, height: size.height))
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    static func networkImage(upload: Double, download: Double) -> NSImage {
+        func speed(_ value: Double) -> String {
+            value >= 1_048_576 ? String(format: "%.1f M/s", value / 1_048_576) : "\(Int(max(0, value) / 1024)) K/s"
+        }
+        let lines = ["↑ " + speed(upload), "↓ " + speed(download)]
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .medium), .foregroundColor: NSColor.black]
+        let width = ceil(lines.map { ($0 as NSString).size(withAttributes: attributes).width }.max() ?? 40)
+        let image = NSImage(size: NSSize(width: width, height: 18), flipped: false) { _ in
+            // 两行固定在与图标相同的 18pt 画布内，避免 NSButton 多行标题基线偏移。
+            (lines[0] as NSString).draw(at: NSPoint(x: 0, y: 8), withAttributes: attributes)
+            (lines[1] as NSString).draw(at: NSPoint(x: 0, y: 0), withAttributes: attributes)
             return true
         }
         image.isTemplate = true

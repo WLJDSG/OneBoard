@@ -125,11 +125,12 @@ struct CalendarPanelView: View {
             .foregroundStyle(day.isToday ? blue : .primary)
             .frame(maxWidth: .infinity).frame(height: 62)
             .background {
-                if day.isToday { Circle().fill(blue.opacity(0.1)).frame(width: 62, height: 62) }
+                if active { RoundedRectangle(cornerRadius: 12).fill(blue.opacity(day.isToday ? 0.22 : 0.14)) }
+                else if day.isToday { Circle().fill(blue.opacity(0.1)).frame(width: 62, height: 62) }
             }
             .overlay {
-                if day.isToday { Circle().stroke(blue.opacity(0.4)).frame(width: 62, height: 62) }
-                else if active { RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.15)) }
+                if active { RoundedRectangle(cornerRadius: 12).stroke(blue, lineWidth: 2) }
+                else if day.isToday { Circle().stroke(blue.opacity(0.4)).frame(width: 62, height: 62) }
             }
             .opacity(day.isInDisplayedMonth ? 1 : 0.32)
         }.buttonStyle(.plain)
@@ -269,7 +270,6 @@ struct CalendarSettingsView: View {
                 }
             } header: { Text("菜单栏日历") }
 
-            Section { Button("打开日历") { CalendarPanelWindowManager.shared.show() } } header: { Text("预览") }
         }
         .onChange(of: showInMenuBar) { _, _ in MenuBarManager.shared.updateCalendarStatusItemVisibility() }
     }

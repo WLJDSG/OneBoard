@@ -69,21 +69,23 @@ struct AIModelSettingsView: View {
                             }.frame(maxWidth: .infinity).padding(36)
                         }
                     }
-                    ForEach(viewModel.profiles(for: selectedClient)) { profile in profileRow(profile) }
+                    ForEach(viewModel.profiles(for: selectedClient)) { profile in
+                        profileRow(profile)
+                            .draggable(profile.id.uuidString)
+                            .dropDestination(for: String.self) { items, _ in
+                                guard let id = items.first.flatMap(UUID.init(uuidString:)) else { return false }
+                                viewModel.moveProfile(id, before: profile.id)
+                                return true
+                            }
+                    }
                     HStack(spacing: 14) {
                         Button { viewModel.importFromCCSwitch() } label: {
                             Label("从 CC Switch 导入", systemImage: "square.and.arrow.down")
                         }
                         Spacer()
-                        Button("恢复初次切换前备份") { viewModel.restoreBackup(for: selectedClient) }
-                            .disabled(viewModel.isSwitching)
                     }
                     .buttonStyle(SettingsActionStyle())
                     .padding(.top, 8)
-                    Text(backupHelp).font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(3)
-                    if let message = viewModel.statusMessage {
-                        Label(message, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
-                    }
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 4)
@@ -139,14 +141,6 @@ struct AIModelSettingsView: View {
         )
     }
 
-    private var backupHelp: String {
-        switch selectedClient {
-        case .codex:
-            return "切换会合并修改 ~/.codex/config.toml，不改动账号认证缓存。第三方 API Key 从 OneBoard SQLite 读取，并按 Codex 格式写入当前活动配置。"
-        case .claude:
-            return "切换会保留 ~/.claude/settings.json 的未知字段，仅更新 Anthropic API 和模型环境变量。"
-        }
-    }
 }
 
 struct AIProviderEditorView: View {
@@ -195,6 +189,7 @@ struct AIProviderEditorView: View {
     @State private var fableModel: String
     @State private var fableModelName: String
     @State private var subagentModel: String
+    @State private var bulkClaudeModel: String
     @State private var errorMessage: String?
 
     init(
@@ -244,6 +239,7 @@ struct AIProviderEditorView: View {
         _fableModel = State(initialValue: profile?.claudeFableModel ?? "")
         _fableModelName = State(initialValue: profile?.claudeFableModelName ?? "")
         _subagentModel = State(initialValue: profile?.claudeSubagentModel ?? "")
+        _bulkClaudeModel = State(initialValue: profile?.model ?? "")
     }
 
     var body: some View {
@@ -289,7 +285,8 @@ struct AIProviderEditorView: View {
                             }
                             if client == .codex {
                                 editorRow("默认模型") {
-                                    TextField("例如：gpt-5", text: $model)
+                                    AIModelComboBox(text: $model, models: discoveredModels)
+                                        .frame(minHeight: 24)
                                 }
                             }
                         }
@@ -316,13 +313,8 @@ struct AIProviderEditorView: View {
                                     }.labelsHidden()
                                 }
                                 editorRow("模型目录") {
-                                    HStack {
-                                        Button(isFetchingModels ? "获取中…" : "获取模型") { fetchModels() }
-                                            .disabled(isFetchingModels || baseURL.isEmpty)
-                                        Text("获取后可在各模型下拉框选择，也可手动输入。")
-                                            .font(.caption)
-                                            .foregroundColor(SettingsPalette.muted)
-                                    }
+                                    Button(isFetchingModels ? "获取中…" : "获取模型") { fetchModels() }
+                                        .disabled(isFetchingModels || baseURL.isEmpty)
                                 }
                                 editorRow("API Key") {
                                     HStack(spacing: 8) {
@@ -344,10 +336,6 @@ struct AIProviderEditorView: View {
                                 }
                             }
 
-                            Label("API Key 仅保存到 OneBoard 的 oneboard.sqlite，不使用钥匙串。", systemImage: "externaldrive.badge.checkmark")
-                                .font(.caption)
-                                .foregroundColor(SettingsPalette.muted)
-                                .padding(.top, 10)
                             if let endpointTestMessage {
                                 Text(endpointTestMessage)
                                     .font(.caption)
@@ -365,10 +353,7 @@ struct AIProviderEditorView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                                         editorRow("上游格式") {
-                                            Picker("", selection: $apiFormat) {
-                                                ForEach(availableAPIFormats) { format in Text(format.title).tag(format) }
-                                            }
-                                            .labelsHidden()
+                                            apiFormatPicker
                                         }
                                         if client == .claude {
                                             editorRow("鉴权字段") {
@@ -409,10 +394,7 @@ struct AIProviderEditorView: View {
                                         }
                                         if client == .codex {
                                             editorRow("缓存路由") {
-                                                Picker("", selection: $promptCacheRouting) {
-                                                    ForEach(AIPromptCacheRouting.allCases) { mode in Text(mode.title).tag(mode) }
-                                                }
-                                                .labelsHidden()
+                                                promptCacheRoutingPicker
                                             }
                                         }
                                         if client == .codex, apiFormat == .anthropic {
@@ -439,76 +421,7 @@ struct AIProviderEditorView: View {
                     }
 
                     if client == .claude {
-                        GroupBox {
-                            DisclosureGroup(isExpanded: $isAdvancedExpanded) {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("空槽位自动使用默认模型；Fable 为空时优先使用 Opus。模型 ID 可带 [1M] 后缀，显示名仅影响 Claude Code 的模型选择界面。")
-                                        .font(.caption)
-                                        .foregroundColor(SettingsPalette.muted)
-
-                                    HStack {
-                                        Text("模型映射")
-                                            .font(.body.weight(.medium))
-                                        Spacer()
-                                        Button {
-                                            applyOneModelToAllRoles()
-                                        } label: {
-                                            Label("一键设置", systemImage: "wand.and.stars")
-                                        }
-                                        .disabled(firstConfiguredClaudeModel == nil)
-                                    }
-
-                                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
-                                        GridRow {
-                                            Text("模型角色")
-                                            Text("显示名称")
-                                            Text("实际请求模型")
-                                            Text("1M")
-                                        }
-                                        .font(.caption.weight(.medium))
-                                        .foregroundColor(SettingsPalette.muted)
-
-                                        modelMappingRow("Sonnet", model: $sonnetModel, name: $sonnetModelName)
-                                        modelMappingRow("Opus", model: $opusModel, name: $opusModelName)
-                                        modelMappingRow("Fable", model: $fableModel, name: $fableModelName)
-                                        modelMappingRow("Haiku", model: $haikuModel, name: $haikuModelName, supportsOneM: false)
-                                        GridRow {
-                                            Text("子代理")
-                                                .foregroundColor(SettingsPalette.muted)
-                                                .frame(width: 92, alignment: .leading)
-                                            Text("不显示在 /model 菜单")
-                                                .font(.caption)
-                                                .foregroundColor(SettingsPalette.muted)
-                                            modelSelector($subagentModel)
-                                            Toggle("", isOn: oneMBinding($subagentModel))
-                                                .labelsHidden()
-                                        }
-
-                                        GridRow {
-                                            Divider().gridCellColumns(4)
-                                        }
-
-                                        GridRow {
-                                            Text("默认兜底")
-                                                .foregroundColor(SettingsPalette.muted)
-                                                .frame(width: 92, alignment: .leading)
-                                            Text("未匹配角色时使用")
-                                                .font(.caption)
-                                                .foregroundColor(SettingsPalette.muted)
-                                            modelSelector($model)
-                                            Toggle("", isOn: oneMBinding($model))
-                                                .labelsHidden()
-                                        }
-                                    }
-                                }
-                                .padding(.top, 10)
-                            } label: {
-                                Text("高级选项")
-                                    .font(.body.weight(.medium))
-                            }
-                        } label: {
-                            Label("Claude Code 模型槽位", systemImage: "slider.horizontal.3")
-                        }
+                        claudeModelSettings
                     }
 
                     if let errorMessage {
@@ -568,6 +481,35 @@ struct AIProviderEditorView: View {
         }
     }
 
+    private var claudeModelSettings: some View {
+        GroupBox {
+            DisclosureGroup(isExpanded: $isAdvancedExpanded) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("空槽位自动使用默认模型；Fable 为空时优先使用 Opus。模型 ID 可带 [1M] 后缀。")
+                        .font(.caption).foregroundColor(SettingsPalette.muted)
+                    HStack {
+                        Text("模型映射").font(.body.weight(.medium))
+                        Spacer()
+                        AIModelComboBox(text: $bulkClaudeModel, models: discoveredModels).frame(width: 220).frame(minHeight: 24)
+                        Button(action: applyOneModelToAllRoles) { Label("一键设置", systemImage: "wand.and.stars") }
+                            .disabled(bulkClaudeModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                        GridRow { Text("模型角色"); Text("显示名称"); Text("实际请求模型"); Text("1M") }
+                            .font(.caption.weight(.medium)).foregroundColor(SettingsPalette.muted)
+                        modelMappingRow("Sonnet", model: $sonnetModel, name: $sonnetModelName)
+                        modelMappingRow("Opus", model: $opusModel, name: $opusModelName)
+                        modelMappingRow("Fable", model: $fableModel, name: $fableModelName)
+                        modelMappingRow("Haiku", model: $haikuModel, name: $haikuModelName, supportsOneM: false)
+                        GridRow { Text("子代理"); Text("不显示在 /model 菜单"); modelSelector($subagentModel); Toggle("", isOn: oneMBinding($subagentModel)).labelsHidden() }
+                        GridRow { Divider().gridCellColumns(4) }
+                        GridRow { Text("默认兜底"); Text("未匹配角色时使用"); modelSelector($model); Toggle("", isOn: oneMBinding($model)).labelsHidden() }
+                    }
+                }.padding(.top, 10)
+            } label: { Text("高级选项").font(.body.weight(.medium)) }
+        } label: { Label("Claude Code 模型槽位", systemImage: "slider.horizontal.3") }
+    }
+
     @ViewBuilder
     private func modelMappingRow(
         _ title: String,
@@ -605,13 +547,9 @@ struct AIProviderEditorView: View {
         endpointTestMessage = nil
     }
 
-    private var firstConfiguredClaudeModel: String? {
-        [model, sonnetModel, opusModel, fableModel, haikuModel, subagentModel]
-            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-
     private func applyOneModelToAllRoles() {
-        guard let value = firstConfiguredClaudeModel else { return }
+        let value = bulkClaudeModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
         let base = Self.stripOneMMarker(value)
         model = value
         sonnetModel = value
@@ -713,6 +651,24 @@ struct AIProviderEditorView: View {
         client == .claude
             ? [.anthropic, .openAIChat, .openAIResponses, .geminiNative]
             : [.openAIResponses, .openAIChat, .anthropic]
+    }
+
+    private var apiFormatPicker: some View {
+        Picker("", selection: $apiFormat) {
+            ForEach(availableAPIFormats) { format in
+                Text(format.title).tag(format)
+            }
+        }
+        .labelsHidden()
+    }
+
+    private var promptCacheRoutingPicker: some View {
+        Picker("", selection: $promptCacheRouting) {
+            ForEach(AIPromptCacheRouting.allCases) { mode in
+                Text(mode.title).tag(mode)
+            }
+        }
+        .labelsHidden()
     }
 
     private func testEndpoints() {

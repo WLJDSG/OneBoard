@@ -17,6 +17,11 @@ struct ICloudBackupStore: CloudConfigurationStoring {
                 throw FolderSyncError.downloading
             }
             guard FileManager.default.fileExists(atPath: file.path) else { return nil }
+            if (try? directory.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) != true {
+                let snapshot = try JSONDecoder().decode(ConfigurationSnapshot.self, from: Data(contentsOf: file))
+                guard snapshot.schema == ConfigurationSnapshot.schemaVersion else { throw ConfigurationSyncError.invalidSnapshot }
+                return snapshot
+            }
             var error: NSError?
             var result: Result<ConfigurationSnapshot, Error>?
             NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &error) { url in
@@ -36,14 +41,19 @@ struct ICloudBackupStore: CloudConfigurationStoring {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let payload = try encoder.encode(snapshot)
+            if (try? directory.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) != true {
+                try Self.write(payload, to: directory)
+                return
+            }
             var error: NSError?
             var result: Result<Void, Error>?
-            NSFileCoordinator().coordinate(writingItemAt: file, options: .forReplacing, error: &error) { url in
+            NSFileCoordinator().coordinate(writingItemAt: directory, options: .forMerging, error: &error) { coordinatedDirectory in
                 result = Result {
+                    let url = coordinatedDirectory.appendingPathComponent("configuration.json")
                     if FileManager.default.fileExists(atPath: url.path) {
                         let previous = try Data(contentsOf: url)
                         if previous == payload { return }
-                        try previous.write(to: directory.appendingPathComponent("configuration.previous.json"), options: .atomic)
+                        try previous.write(to: coordinatedDirectory.appendingPathComponent("configuration.previous.json"), options: .atomic)
                     }
                     try payload.write(to: url, options: .atomic)
                 }
@@ -51,5 +61,15 @@ struct ICloudBackupStore: CloudConfigurationStoring {
             if let error { throw error }
             try result?.get()
         }.value
+    }
+
+    private static func write(_ payload: Data, to directory: URL) throws {
+        let url = directory.appendingPathComponent("configuration.json")
+        if FileManager.default.fileExists(atPath: url.path) {
+            let previous = try Data(contentsOf: url)
+            if previous == payload { return }
+            try previous.write(to: directory.appendingPathComponent("configuration.previous.json"), options: .atomic)
+        }
+        try payload.write(to: url, options: .atomic)
     }
 }

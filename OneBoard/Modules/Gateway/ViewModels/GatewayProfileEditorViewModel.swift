@@ -7,7 +7,6 @@ final class GatewayProfileEditorViewModel: ObservableObject {
     @Published var gateway: String
     @Published var dnsText: String
     @Published var description: String
-    @Published var symbolName: String
 
     private let editingID: UUID?
 
@@ -18,7 +17,6 @@ final class GatewayProfileEditorViewModel: ObservableObject {
         self.gateway = profile?.gateway ?? ""
         self.dnsText = profile?.dnsServers.joined(separator: "\n") ?? ""
         self.description = profile?.description ?? ""
-        self.symbolName = profile?.symbolName ?? "router"
     }
 
     func buildProfile() throws -> GatewayProfile {
@@ -30,7 +28,7 @@ final class GatewayProfileEditorViewModel: ObservableObject {
             gateway: gateway.trimmingCharacters(in: .whitespacesAndNewlines),
             dnsServers: parsedDNS,
             description: description.trimmingCharacters(in: .whitespacesAndNewlines),
-            symbolName: symbolName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "router" : symbolName
+            symbolName: "network"
         )
         try profile.validate()
         return profile

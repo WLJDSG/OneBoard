@@ -91,8 +91,12 @@ final class ScreenshotCaptureService: NSObject {
                 let mouseLocation = NSEvent.mouseLocation
                 let activeWindow = self.overlayWindows.first { $0.frame.contains(mouseLocation) }
                     ?? self.overlayWindows.first
-                activeWindow?.makeKey()
                 NSApp.activate(ignoringOtherApps: true)
+                activeWindow?.makeKeyAndOrderFront(nil)
+                if let overlay = activeWindow?.contentView as? ScreenshotOverlayContentView {
+                    activeWindow?.makeFirstResponder(overlay)
+                    overlay.refreshPointerHover()
+                }
             }
         }
         return result

@@ -68,6 +68,36 @@ final class CodexAccountStatusServiceTests: XCTestCase {
         XCTAssertNil(result.refreshedAuthCache)
     }
 
+    func testProPrimaryWeeklyWindowIsNotMislabelledAsFiveHour() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let accessToken = jwt(["exp": 1_800_003_600])
+        CodexStatusURLProtocol.handler = { request in
+            switch request.url?.path {
+            case "/backend-api/wham/usage":
+                return Self.response(request, json: [
+                    "plan_type": "pro",
+                    "rate_limit": [
+                        "primary_window": ["used_percent": 12, "limit_window_seconds": 604_800]
+                    ]
+                ])
+            case "/backend-api/wham/rate-limit-reset-credits":
+                return Self.response(request, json: ["available_count": 2])
+            case "/backend-api/accounts/check/v4-2023-04-27":
+                return Self.response(request, json: [:])
+            default:
+                return Self.response(request, status: 404, json: [:])
+            }
+        }
+        let result = try await makeService(now: now).refreshStatus(
+            authCache: authData(accessToken: accessToken, refreshToken: "refresh"),
+            accountID: nil,
+            allowCredentialRefresh: true
+        )
+        XCTAssertNil(result.status.fiveHour)
+        XCTAssertEqual(result.status.weekly?.remainingPercent, 88)
+        XCTAssertEqual(result.status.weekly?.windowMinutes, 10_080)
+    }
+
     func testExpiredCredentialRotatesRefreshTokenBeforeReadingUsage() async throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let expiredAccessToken = jwt(["exp": 1_799_999_000])

@@ -43,6 +43,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 AIModelSwitcherViewModel.shared.reload()
                 CodexAccountViewModel.shared.refreshState()
                 MenuBarManager.shared.updateCalendarStatusItemVisibility()
+                MenuBarManager.shared.updateMacStatusItemVisibility()
+                QuickLaunchBindings.register()
             }
         }
         Task { @MainActor in CloudSyncViewModel.shared.startIfEnabled() }

@@ -16,6 +16,9 @@ struct FolderConfigurationStore: CloudConfigurationStoring {
                 throw FolderSyncError.downloading
             }
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            if (try? folder.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) != true {
+                return try Self.decrypt(Data(contentsOf: url), key: key)
+            }
             let values = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey, .isUbiquitousItemKey])
             if values.isUbiquitousItem == true, values.ubiquitousItemDownloadingStatus != .current {
                 try FileManager.default.startDownloadingUbiquitousItem(at: url)
@@ -36,11 +39,16 @@ struct FolderConfigurationStore: CloudConfigurationStoring {
             let accessed = folder.startAccessingSecurityScopedResource()
             defer { if accessed { folder.stopAccessingSecurityScopedResource() } }
             let data = try Self.encrypt(snapshot, key: key)
-            let url = folder.appendingPathComponent("OneBoard.configuration.encrypted")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            if (try? folder.resourceValues(forKeys: [.isUbiquitousItemKey]).isUbiquitousItem) != true {
+                try data.write(to: folder.appendingPathComponent("OneBoard.configuration.encrypted"), options: .atomic)
+                return
+            }
             var writeError: Error?
             var error: NSError?
-            NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing, error: &error) { coordinated in
-                do { try data.write(to: coordinated, options: .atomic) } catch { writeError = error }
+            NSFileCoordinator().coordinate(writingItemAt: folder, options: .forMerging, error: &error) { coordinatedFolder in
+                let url = coordinatedFolder.appendingPathComponent("OneBoard.configuration.encrypted")
+                do { try data.write(to: url, options: .atomic) } catch { writeError = error }
             }
             if let error { throw error }
             if let writeError { throw writeError }

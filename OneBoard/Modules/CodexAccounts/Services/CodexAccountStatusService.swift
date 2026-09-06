@@ -65,8 +65,13 @@ final class CodexAccountStatusService: CodexAccountStatusProviding {
 
         let payload = try Self.jsonObject(from: response.data)
         let rateLimit = payload["rate_limit"] as? [String: Any]
-        let fiveHour = Self.window(from: rateLimit?["primary_window"], now: now())
-        let weekly = Self.window(from: rateLimit?["secondary_window"], now: now())
+        let primaryWindow = Self.window(from: rateLimit?["primary_window"], now: now())
+        let secondaryWindow = Self.window(from: rateLimit?["secondary_window"], now: now())
+        let windows = [primaryWindow, secondaryWindow].compactMap { $0 }
+        let fiveHour = windows.first { ($0.windowMinutes ?? 0) > 0 && ($0.windowMinutes ?? 0) <= 24 * 60 }
+            ?? (primaryWindow?.windowMinutes == nil ? primaryWindow : nil)
+        let weekly = windows.first { ($0.windowMinutes ?? 0) > 24 * 60 }
+            ?? (secondaryWindow?.windowMinutes == nil ? secondaryWindow : nil)
         var usageResetCount = Self.integer(
             in: payload["rate_limit_reset_credits"],
             keys: ["available_count", "availableCount"]

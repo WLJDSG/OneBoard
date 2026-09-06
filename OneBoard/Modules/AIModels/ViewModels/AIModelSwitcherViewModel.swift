@@ -91,6 +91,19 @@ final class AIModelSwitcherViewModel: ObservableObject {
         }
     }
 
+    func moveProfile(_ sourceID: UUID, before targetID: UUID) {
+        guard sourceID != targetID,
+              let source = profiles.first(where: { $0.id == sourceID }),
+              source.client == profiles.first(where: { $0.id == targetID })?.client else { return }
+        var ordered = profiles
+        guard let sourceIndex = ordered.firstIndex(where: { $0.id == sourceID }) else { return }
+        let item = ordered.remove(at: sourceIndex)
+        guard let targetIndex = ordered.firstIndex(where: { $0.id == targetID }) else { return }
+        ordered.insert(item, at: targetIndex)
+        store.profiles = ordered
+        reload()
+    }
+
     @discardableResult
     func switchProfile(id: UUID) async -> String {
         guard let profile = profiles.first(where: { $0.id == id }) else {

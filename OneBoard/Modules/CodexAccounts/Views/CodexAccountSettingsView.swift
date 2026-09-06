@@ -41,6 +41,12 @@ struct CodexAccountSettingsView: View {
                     } else {
                         ForEach(viewModel.profiles) { profile in
                             accountRow(profile)
+                                .draggable(profile.id.uuidString)
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let id = items.first.flatMap(UUID.init(uuidString:)) else { return false }
+                                    viewModel.moveAccount(id, before: profile.id)
+                                    return true
+                                }
                         }
                     }
                 } header: {
@@ -181,8 +187,8 @@ struct CodexAccountSettingsView: View {
 
             if let status = profile.status {
                 HStack(spacing: 18) {
-                    usageMeter(title: "5 小时", window: status.fiveHour)
-                    usageMeter(title: "每周", window: status.weekly)
+                    if let window = status.fiveHour { usageMeter(title: "5 小时", window: window) }
+                    if let window = status.weekly { usageMeter(title: "每周", window: window) }
                 }
 
                 HStack(spacing: 18) {
@@ -203,16 +209,16 @@ struct CodexAccountSettingsView: View {
         }
     }
 
-    private func usageMeter(title: String, window: CodexUsageWindowSnapshot?) -> some View {
+    private func usageMeter(title: String, window: CodexUsageWindowSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(title).font(.caption.weight(.semibold))
                 Spacer()
-                Text(window.map { "\($0.remainingPercent)%" } ?? "--")
+                Text("\(window.remainingPercent)%")
                     .font(.caption.monospacedDigit())
             }
-            ProgressView(value: Double(window?.remainingPercent ?? 0), total: 100)
-            Text(window?.resetAt.map { "重置：\($0.formatted(date: .abbreviated, time: .shortened))" } ?? "重置时间未知")
+            ProgressView(value: Double(window.remainingPercent), total: 100)
+            Text(window.resetAt.map { "重置：\($0.formatted(date: .abbreviated, time: .shortened))" } ?? "重置时间未知")
                 .font(.caption2)
                 .foregroundColor(SettingsPalette.muted)
         }

@@ -17,6 +17,7 @@ final class DragDetector {
     private var recentPositions: [(point: CGPoint, timestamp: TimeInterval)] = []
     private var lastTriggerTime: TimeInterval = 0
     private var isDragConfirmed: Bool = false  // 当前拖拽已确认是文件拖拽
+    private var didNotifyCurrentDrag = false
 
     private var idlePasteboardChangeCount: Int
     private let pasteboard: NSPasteboard
@@ -155,17 +156,19 @@ final class DragDetector {
         }
 
         let now = Date().timeIntervalSinceReferenceDate
-        recentPositions.append((position, now))
-        recentPositions = recentPositions.filter { now - $0.timestamp < 0.6 }
-
-        if detectShake(), now - lastTriggerTime > 1.5 {  // 冷却 1.5s
+        if shouldRevealShelfForCurrentDrag(), now - lastTriggerTime > 0.3 {
             lastTriggerTime = now
-            recentPositions.removeAll()
-            print("[DragDetector] 文件拖拽摇晃触发")
+            print("[DragDetector] 文件拖拽开始，显示暂存区")
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: Self.fileDragDetected, object: self)
             }
         }
+    }
+
+    func shouldRevealShelfForCurrentDrag() -> Bool {
+        guard isDraggingSupportedContent, !didNotifyCurrentDrag else { return false }
+        didNotifyCurrentDrag = true
+        return true
     }
 
     // MARK: - 拖拽内容检测
@@ -175,32 +178,23 @@ final class DragDetector {
         if isDragConfirmed { return true }
 
         // .drag 松手后保留上次文件，必须有本次按下期间的新写入才能确认。
-        guard pasteboard.changeCount != idlePasteboardChangeCount else { return false }
-        let types = pasteboard.types ?? []
-
-        if canReadSupportedFileURL(from: pasteboard, types: types) {
-            isDragConfirmed = true
-            return true
-        }
-        return false
+        return updateDragState(
+            changeCount: pasteboard.changeCount,
+            types: pasteboard.types ?? [],
+            urls: FileDropTarget.Destination.urls(pasteboard)
+        )
     }
 
-    private func canReadSupportedFileURL(
-        from pasteboard: NSPasteboard,
-        types: [NSPasteboard.PasteboardType]
+    func updateDragState(
+        changeCount: Int,
+        types: [NSPasteboard.PasteboardType],
+        urls: [URL]
     ) -> Bool {
-        guard Self.supportsDraggedFileTypes(types) else { return false }
-        let fileURLReadOptions: [NSPasteboard.ReadingOptionKey: Any] = [
-            .urlReadingFileURLsOnly: true
-        ]
-        let urls = (pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: fileURLReadOptions
-        ) ?? []).compactMap { object -> URL? in
-            guard let url = object as? NSURL else { return nil }
-            return url as URL
-        }
-        return Self.canConfirmFileDrag(types: types, urls: urls)
+        if isDragConfirmed { return true }
+        guard changeCount != idlePasteboardChangeCount,
+              Self.canConfirmFileDrag(types: types, urls: urls) else { return false }
+        isDragConfirmed = true
+        return true
     }
 
     static func supportsDraggedFileTypes(_ types: [NSPasteboard.PasteboardType]) -> Bool {
@@ -239,6 +233,7 @@ final class DragDetector {
     func finishCurrentDrag() {
         recentPositions.removeAll()
         isDragConfirmed = false
+        didNotifyCurrentDrag = false
         idlePasteboardChangeCount = pasteboard.changeCount
     }
 

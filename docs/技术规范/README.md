@@ -1,5 +1,17 @@
 # OneBoard 技术规范
 
+## 2026-09-06 额度与排序
+
+Codex `primary_window` / `secondary_window` 需依 `limit_window_seconds` 分类短窗口和周窗口。列表拖拽后将整体顺序写回原存储，不改变活动 ID。
+
+## 2026-09-06 长截图与刘海暂存回归修复
+
+LongCaptureCornerGuide 只绘制八段四角短线。AnnotationToolbarView 对非游标工具内联样式步进控件，避免非激活截图面板上的 popover 抢焦。FileDropTarget 同时解析 fileURL pasteboard item、单值 URL 和 NSFilenamesPboardType，接收 NSView 覆盖整个投放区；FileStagingViewModel 以顶部中心折叠帧和完整帧执行双向 NSWindow 动画，并在 NSSharingServiceDelegate 回调前保持 AirDrop 会话。
+
+## 2026-09-06 快捷键与图标交互修订
+
+QuickLaunchBindings 迁移旧 KeyboardShortcuts 后禁用旧注册源，单次安装处理器，回调实时读取配置。迁移标记纳入配置备份。NSImage 模板图统一 18pt，网速两行渲染为图像，切换纯文字模式重设 imagePosition。NSColorSampler 回填标注颜色。长截图边框与四块透传遮罩关闭 hasShadow。
+
 ## 2026-09-06 17:12 交互与文件类型修订
 
 HoverCardController 维护 hoverSince；FileDropTarget 注册 fileURL 并通过 NSPasteboard.readObjects 读取 NSURL；NotchShelfPanel 不受可用屏幕边界限制。MacStatusModel.shared 供菜单栏/卡片共用。配置键 macStatus.menuMode/menuIcon 与 quickLaunch.bindings 纳入备份。FinderFileKind 改为经过正则验证的 RawRepresentable，扩展只构造请求，主应用写文件。长截图使用 CGContext 灰度转换而非逐点 NSColor 转换，80ms 等待不等同于保证采集帧率。
@@ -304,3 +316,8 @@ SystemCapabilityViewModel 的 refresh 及 Helper 安装/卸载后状态检查通
 - Finder Sync 复用目标目录解析，只发送 `oneboard://open-terminal?directory=...`；主应用通过 `NSWorkspace` 打开系统 Terminal，不由扩展执行 shell。
 - 长截图按原选区定位显示器，使用独立 `screencapture -D` 重抓、CGEvent 像素滚动、相邻帧静止检测和固定重叠裁剪；不得改变多显示器独立捕获约束。
 - 自定义翻译继续复用 `AIProviderProfile`、`SQLiteAIProviderSecretVault` 与 `ConfiguredAITranslationService`，默认使用 OpenAI Chat Completions，不复制新的明文 Key 存储。
+# 2026-09-06 实现约束
+
+- 拖拽显示由本次 `.drag` changeCount 与可读普通文件 URL 共同确认，同一次拖拽只通知一次。
+- AI OCR 复用 `AIProviderProfile` 和 SQLite 密钥，按 OpenAI Chat/Responses、Anthropic、Gemini 图片输入格式构造请求。
+- 菜单栏状态项的创建和移除由 `MenuBarManager` 统一管理；网速标题按上传、下载两行渲染。

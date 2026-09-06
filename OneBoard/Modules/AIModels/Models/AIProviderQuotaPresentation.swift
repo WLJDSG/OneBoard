@@ -21,10 +21,13 @@ struct AIProviderQuotaPresentation: Equatable {
             return AIProviderQuotaPresentation(text: "额度：尚未关联 Codex 账号", tone: .unavailable)
         }
         if let status = account.status {
-            let fiveHour = status.fiveHour.map { "\($0.remainingPercent)%" } ?? "--"
-            let weekly = status.weekly.map { "\($0.remainingPercent)%" } ?? "--"
+            var parts: [String] = []
+            if let plan = account.planType, !plan.isEmpty { parts.append(plan.uppercased()) }
+            if let window = status.fiveHour { parts.append("5 小时 \(window.remainingPercent)%") }
+            if let window = status.weekly { parts.append("每周 \(window.remainingPercent)%") }
+            parts.append(account.title)
             return AIProviderQuotaPresentation(
-                text: "额度：5 小时 \(fiveHour) · 每周 \(weekly) · \(account.title)",
+                text: "额度：" + parts.joined(separator: " · "),
                 tone: .normal
             )
         }

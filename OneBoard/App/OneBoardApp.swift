@@ -140,7 +140,7 @@ struct SettingsView: View {
     @AppStorage(Constants.UserDefaultsKeys.selectedSettingsTab) private var selectedTabRawValue = SettingsTab.general.rawValue
     @AppStorage(Constants.UserDefaultsKeys.ocrServiceType) private var ocrServiceType = "apple"
     @AppStorage(Constants.UserDefaultsKeys.translationServiceType) private var translationServiceType = "apple"
-    @State private var ocrAPIKey = ""
+    @AppStorage(Constants.UserDefaultsKeys.ocrAIProviderID) private var ocrProviderID = ""
     @AppStorage(ConfiguredAITranslationService.selectionKey) private var translationProviderID = ""
     @ObservedObject private var aiProviders = AIModelSwitcherViewModel.shared
     @AppStorage(Constants.UserDefaultsKeys.translationSourceLanguage) private var sourceLanguage = ""
@@ -186,7 +186,7 @@ struct SettingsView: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
             .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.primary.opacity(0.04)))
             .padding(.leading, 18)
-            .padding(.top, 38)
+            .padding(.top, 18)
             .padding(.bottom, 18)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -206,7 +206,7 @@ struct SettingsView: View {
                         .background(SettingsPalette.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                 }
                 .padding(.horizontal, 28)
-                .padding(.top, 46)
+                .padding(.top, 22)
                 .padding(.bottom, 22)
 
                 selectedSettingsContent
@@ -220,7 +220,6 @@ struct SettingsView: View {
         .onAppear {
             systemCapabilities.refresh()
             gatewayViewModel.refreshHelperStatus()
-            ocrAPIKey = AppSettings.thirdPartyOCRAPIKey
         }
         .onReceive(NotificationCenter.default.publisher(for: .permissionFlowCompleted)) { _ in systemCapabilities.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .systemCapabilityStatusDidChange)) { _ in systemCapabilities.refresh(); gatewayViewModel.refreshHelperStatus() }
@@ -394,14 +393,6 @@ struct SettingsView: View {
     private var hotkeySettings: some View {
         SettingsForm {
             Section { QuickLaunchSettingsView() } header: { Text("可视化快捷启动") }
-            Section { HStack { Text("显示剪贴板"); Spacer(); KeyboardShortcuts.Recorder(for: .showClipboard) } } header: { Text("剪贴板快捷键") }
-            Section { HStack { Text("截图"); Spacer(); KeyboardShortcuts.Recorder(for: .captureScreenshot) }; HStack { Text("翻译选中文字"); Spacer(); KeyboardShortcuts.Recorder(for: .translateSelectedText) } } header: { Text("截图快捷键") }
-            Section { HStack { Text("文件暂存架"); Spacer(); KeyboardShortcuts.Recorder(for: .showFileShelf) } } header: { Text("文件暂存快捷键") }
-            Section { HStack { Text("显示网关切换"); Spacer(); KeyboardShortcuts.Recorder(for: .showGatewaySwitcher) } } header: { Text("网关快捷键") }
-            Section {
-                HStack { Text("显示待办面板"); Spacer(); KeyboardShortcuts.Recorder(for: .toggleTodoPanel) }
-                HStack { Text("将选中文字添加到待办"); Spacer(); KeyboardShortcuts.Recorder(for: .addSelectedTextToTodo) }
-            } header: { Text("待办快捷键") }
         }
     }
 
@@ -409,11 +400,17 @@ struct SettingsView: View {
         SettingsForm {
             Section {
                 LabeledContent("OCR 服务") {
-                    Picker("OCR 服务", selection: $ocrServiceType) { Text("Apple Vision（离线免费）").tag("apple"); Text("第三方 API").tag("third_party") }.labelsHidden().frame(width: 230)
+                    Picker("OCR 服务", selection: $ocrServiceType) { Text("Apple Vision（离线免费）").tag("apple"); Text("AI 服务").tag("third_party") }.labelsHidden().frame(width: 230)
                 }
                 if ocrServiceType == "third_party" {
-                    SecureField("API Key", text: secretBinding($ocrAPIKey) { AppSettings.thirdPartyOCRAPIKey = $0 })
-                        .textFieldStyle(.roundedBorder)
+                    LabeledContent("AI 服务") {
+                        Picker("AI 服务", selection: $ocrProviderID) {
+                            Text("请选择已添加的 AI 服务").tag("")
+                            ForEach(aiProviders.profiles.filter { $0.kind == .custom && aiProviders.hasSavedAPIKey(for: $0) }) { profile in
+                                Text("\(profile.title) · \(profile.model)").tag(profile.id.uuidString)
+                            }
+                        }.labelsHidden().frame(width: 230)
+                    }
                 }
                 LabeledContent("识别语言") {
                     Picker("识别语言", selection: Binding(get: { UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.ocrLanguage) ?? "zh-Hans" }, set: { UserDefaults.standard.set($0, forKey: Constants.UserDefaultsKeys.ocrLanguage) })) {

@@ -30,7 +30,6 @@ struct GatewayProfileEditorView: View {
                 LabeledContent("DNS（逗号、空格或换行分隔）") { TextField("DNS（逗号、空格或换行分隔）", text: $viewModel.dnsText, axis: .vertical).labelsHidden() }
                     .lineLimit(3, reservesSpace: true)
 
-                LabeledContent("图标") { TextField("图标", text: $viewModel.symbolName).labelsHidden() }
                 LabeledContent("描述") { TextField("描述", text: $viewModel.description, axis: .vertical).labelsHidden() }
                     .lineLimit(2, reservesSpace: true)
             }

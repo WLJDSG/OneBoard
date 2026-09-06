@@ -260,6 +260,7 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         )
         let account = CodexAccountProfile(
             title: "work@example.com",
+            planType: "pro",
             status: CodexAccountStatusSnapshot(
                 fiveHour: CodexUsageWindowSnapshot(remainingPercent: 82, resetAt: nil, windowMinutes: 300),
                 weekly: CodexUsageWindowSnapshot(remainingPercent: 61, resetAt: nil, windowMinutes: nil),
@@ -272,9 +273,28 @@ final class AIModelConfigurationWriterTests: XCTestCase {
         XCTAssertEqual(
             AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: account),
             AIProviderQuotaPresentation(
-                text: "额度：5 小时 82% · 每周 61% · work@example.com",
+                text: "额度：PRO · 5 小时 82% · 每周 61% · work@example.com",
                 tone: .normal
             )
+        )
+    }
+
+    func testOfficialProQuotaOmitsMissingFiveHourWindow() {
+        let profile = AIProviderProfile(client: .codex, kind: .official, title: "OpenAI Official", model: "gpt-test")
+        let account = CodexAccountProfile(
+            title: "pro@example.com",
+            planType: "pro",
+            status: CodexAccountStatusSnapshot(
+                fiveHour: nil,
+                weekly: CodexUsageWindowSnapshot(remainingPercent: 88, resetAt: nil, windowMinutes: 10_080),
+                resetCreditsAvailable: 2,
+                subscriptionActiveUntil: nil,
+                fetchedAt: Date()
+            )
+        )
+        XCTAssertEqual(
+            AIProviderQuotaPresentation.make(profile: profile, activeCodexAccount: account).text,
+            "额度：PRO · 每周 88% · pro@example.com"
         )
     }
 

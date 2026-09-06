@@ -14,10 +14,12 @@ struct ConfigurationSnapshot: Codable, Equatable, Sendable {
 enum ConfigurationSnapshotCodec {
     static let standardKeys: [String] = [
         "calendar.countdowns",
+        "quickLaunch.optionMigration",
         "macStatus.menuMode", "macStatus.menuIcon", "quickLaunch.bindings",
         Constants.UserDefaultsKeys.maxClipboardItems,
         Constants.UserDefaultsKeys.retentionDays,
         Constants.UserDefaultsKeys.ocrServiceType,
+        Constants.UserDefaultsKeys.ocrAIProviderID,
         Constants.UserDefaultsKeys.ocrLanguage,
         Constants.UserDefaultsKeys.translationServiceType,
         Constants.UserDefaultsKeys.translationSourceLanguage,
@@ -28,6 +30,7 @@ enum ConfigurationSnapshotCodec {
         ConfiguredAITranslationService.selectionKey,
         Constants.UserDefaultsKeys.calendarWeekStart,
         Constants.UserDefaultsKeys.calendarShowInMenuBar,
+        Constants.UserDefaultsKeys.macStatusShowInMenuBar,
     ]
 
     static let sharedKeys = [Constants.UserDefaultsKeys.enabledFileTypes]

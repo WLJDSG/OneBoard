@@ -81,6 +81,8 @@ enum Constants {
         static let iCloudLastSync = "icloud_last_sync"
         static let calendarWeekStart = "calendar_week_start"
         static let calendarShowInMenuBar = "calendar_show_in_menu_bar"
+        static let macStatusShowInMenuBar = "mac_status_show_in_menu_bar"
+        static let ocrAIProviderID = "ocr_ai_provider_id"
     }
 
     // MARK: - Notification Names

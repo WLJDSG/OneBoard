@@ -61,8 +61,6 @@ struct TranslationSettingsView: View {
                     if let profile = customProfiles.first(where: { $0.id.uuidString == providerID }) {
                         LabeledContent("模型", value: profile.model)
                         LabeledContent("接口", value: profile.baseURL)
-                        Text("使用此配置保存的 Key、模型和协议；不会切换 Codex 或 Claude 的活动配置。")
-                            .font(.caption).foregroundStyle(.secondary)
                     } else if !providerID.isEmpty {
                         Text("原配置已删除，请重新选择。").foregroundStyle(.orange)
                     }

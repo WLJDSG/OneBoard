@@ -50,8 +50,50 @@ final class AppleVisionOCRService: OCRServiceProtocol {
 /// 第三方 OCR 服务（扩展点，后续实现）
 final class ThirdPartyOCRService: OCRServiceProtocol {
     func recognizeText(in image: NSImage, language: String) async throws -> String {
-        // TODO: 对接第三方 OCR API（百度、Google 等）
-        throw OCRServiceError.notImplemented
+        guard let raw = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.ocrAIProviderID),
+              let id = UUID(uuidString: raw),
+              let profile = AIProviderStore.shared.profiles.first(where: { $0.id == id && $0.kind == .custom }) else {
+            throw OCRServiceError.recognitionFailed("请先在设置中选择 AI 服务")
+        }
+        let key = try SQLiteAIProviderSecretVault().load(for: profile.id)
+        let request = try AIImageOCRRequest.make(image: image, language: language, profile: profile, key: key)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw OCRServiceError.recognitionFailed("\(profile.title) 识别失败（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)）")
+        }
+        do {
+            return try ConfiguredAITranslationService.parse(data, format: profile.apiFormat ?? .recommendedValue(for: profile.client, baseURL: profile.baseURL)).text
+        } catch {
+            throw OCRServiceError.recognitionFailed("AI 服务未返回可用文字")
+        }
+    }
+}
+
+private enum AIImageOCRRequest {
+    static func make(image: NSImage, language: String, profile: AIProviderProfile, key: String) throws -> URLRequest {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.9]) else { throw OCRServiceError.invalidImage }
+        let base64 = jpeg.base64EncodedString()
+        let dataURL = "data:image/jpeg;base64,\(base64)"
+        let prompt = "Recognize all visible text in this image, prioritizing language \(language). Preserve reading order and line breaks. Return only the recognized text."
+        let format = profile.apiFormat ?? .recommendedValue(for: profile.client, baseURL: profile.baseURL)
+        var request = try ConfiguredAITranslationService.request(profile: profile, key: key, text: prompt, source: nil, target: "plain text")
+        guard var body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] else {
+            throw OCRServiceError.recognitionFailed("AI 请求格式无效")
+        }
+        switch format {
+        case .openAIChat:
+            body["messages"] = [["role": "user", "content": [["type": "text", "text": prompt], ["type": "image_url", "image_url": ["url": dataURL]]]]]
+        case .openAIResponses:
+            body["input"] = [["role": "user", "content": [["type": "input_text", "text": prompt], ["type": "input_image", "image_url": dataURL]]]]
+        case .anthropic:
+            body["messages"] = [["role": "user", "content": [["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": base64]], ["type": "text", "text": prompt]]]]
+        case .geminiNative:
+            body["contents"] = [["role": "user", "parts": [["text": prompt], ["inline_data": ["mime_type": "image/jpeg", "data": base64]]]]]
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
     }
 }
 

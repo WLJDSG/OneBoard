@@ -29,6 +29,10 @@ final class MacStatusModel: ObservableObject {
     private var baselines: [String: (UInt64, UInt64)] = [:]
     private var task: Task<Void, Never>?
     init() { sample() }
+    static func uptimeText(_ seconds: TimeInterval) -> String {
+        let hours = max(0, Int(seconds / 3600))
+        return hours >= 24 ? "\(hours / 24) 天 \(hours % 24) 小时" : "\(hours) 小时"
+    }
     var thermal: String {
         switch ProcessInfo.processInfo.thermalState {
         case .nominal: return "正常"
@@ -100,6 +104,11 @@ final class MacStatusModel: ObservableObject {
         }
         if let values = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]) {
             totalDisk = Int64(values.volumeTotalCapacity ?? 0); freeDisk = values.volumeAvailableCapacityForImportantUsage ?? 0
+        }
+        if totalDisk <= 0 || freeDisk <= 0,
+           let attributes = try? FileManager.default.attributesOfFileSystem(forPath: "/") {
+            totalDisk = (attributes[.systemSize] as? NSNumber)?.int64Value ?? totalDisk
+            freeDisk = (attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? freeDisk
         }
         if let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(), let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] {
             for source in sources {

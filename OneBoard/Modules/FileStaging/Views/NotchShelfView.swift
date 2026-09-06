@@ -17,9 +17,9 @@ struct NotchShelfView: View {
             }.buttonStyle(.plain)
             HStack(spacing: 10) {
                 zone("隔空投送", icon: "airplayaudio", targeted: sharingTarget)
-                    .overlay(FileDropTarget(targeted: $sharingTarget) { viewModel.airDrop($0) })
+                    .overlay(FileDropTarget(targeted: $sharingTarget) { viewModel.airDrop($0) }.frame(maxWidth: .infinity, maxHeight: .infinity))
                 zone("拖入暂存", icon: "tray.and.arrow.down", targeted: stagingTarget)
-                    .overlay(FileDropTarget(targeted: $stagingTarget) { urls in urls.forEach { viewModel.addFile(url: $0) } })
+                    .overlay(FileDropTarget(targeted: $stagingTarget) { urls in urls.forEach { viewModel.addFile(url: $0) } }.frame(maxWidth: .infinity, maxHeight: .infinity))
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {

@@ -49,6 +49,38 @@ enum LongScreenshotStitcher {
     }
 }
 
+enum LongCaptureOverlayLayout {
+    struct Segment {
+        let start: CGPoint
+        let end: CGPoint
+    }
+
+    static func cornerSegments(in rect: CGRect, length: CGFloat = 22) -> [Segment] {
+        let length = min(length, rect.width / 2, rect.height / 2)
+        return [
+            Segment(start: CGPoint(x: rect.minX, y: rect.minY), end: CGPoint(x: rect.minX + length, y: rect.minY)),
+            Segment(start: CGPoint(x: rect.minX, y: rect.minY), end: CGPoint(x: rect.minX, y: rect.minY + length)),
+            Segment(start: CGPoint(x: rect.maxX, y: rect.minY), end: CGPoint(x: rect.maxX - length, y: rect.minY)),
+            Segment(start: CGPoint(x: rect.maxX, y: rect.minY), end: CGPoint(x: rect.maxX, y: rect.minY + length)),
+            Segment(start: CGPoint(x: rect.minX, y: rect.maxY), end: CGPoint(x: rect.minX + length, y: rect.maxY)),
+            Segment(start: CGPoint(x: rect.minX, y: rect.maxY), end: CGPoint(x: rect.minX, y: rect.maxY - length)),
+            Segment(start: CGPoint(x: rect.maxX, y: rect.maxY), end: CGPoint(x: rect.maxX - length, y: rect.maxY)),
+            Segment(start: CGPoint(x: rect.maxX, y: rect.maxY), end: CGPoint(x: rect.maxX, y: rect.maxY - length)),
+        ]
+    }
+}
+
+private struct LongCaptureCornerGuide: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for segment in LongCaptureOverlayLayout.cornerSegments(in: rect.insetBy(dx: 2, dy: 2)) {
+            path.move(to: segment.start)
+            path.addLine(to: segment.end)
+        }
+        return path
+    }
+}
+
 /// 用户手动滚动；控制窗口不激活应用，选区内部完全透传鼠标。
 @MainActor
 final class LongScreenshotCaptureService: ObservableObject {
@@ -63,18 +95,19 @@ final class LongScreenshotCaptureService: ObservableObject {
         let screen = NSScreen.screens[screenIndex]
         let border = NSPanel(contentRect: selectionRect.insetBy(dx: -3, dy: -3), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         border.isOpaque = false
+        border.hasShadow = false
         border.backgroundColor = .clear
         border.ignoresMouseEvents = true
         border.level = .floating
-        border.contentView = NSHostingView(rootView: Rectangle().stroke(Color.accentColor, lineWidth: 2).padding(1))
-        let controls = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 440, height: 70), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        border.contentView = NSHostingView(rootView: LongCaptureCornerGuide().stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round)))
+        let controls = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 390, height: 76), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         controls.isFloatingPanel = true
         controls.level = .floating
         controls.isOpaque = false
         controls.backgroundColor = .clear
         controls.contentView = NSHostingView(rootView: LongCaptureControls(model: self))
-        let x = min(max(screen.visibleFrame.minX, selectionRect.minX), screen.visibleFrame.maxX - 440)
-        let y = selectionRect.minY - 78 >= screen.visibleFrame.minY ? selectionRect.minY - 78 : min(screen.visibleFrame.maxY - 70, selectionRect.maxY + 8)
+        let x = min(max(screen.visibleFrame.minX, selectionRect.midX - 195), screen.visibleFrame.maxX - 390)
+        let y = selectionRect.minY - 86 >= screen.visibleFrame.minY ? selectionRect.minY - 86 : min(screen.visibleFrame.maxY - 76, selectionRect.maxY + 10)
         controls.setFrameOrigin(CGPoint(x: x, y: y))
         border.orderFrontRegardless()
         controls.orderFrontRegardless()
@@ -90,6 +123,7 @@ final class LongScreenshotCaptureService: ObservableObject {
         let shades = outside.filter { $0.width > 0 && $0.height > 0 }.map { rect -> NSPanel in
             let panel = NSPanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.backgroundColor = .black.withAlphaComponent(0.25); panel.isOpaque = false
+            panel.hasShadow = false
             panel.ignoresMouseEvents = true; panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
             panel.orderFrontRegardless(); return panel
         }
@@ -143,26 +177,33 @@ final class LongScreenshotCaptureService: ObservableObject {
 private struct LongCaptureControls: View {
     @ObservedObject var model: LongScreenshotCaptureService
     var body: some View {
-        HStack {
-            Image(systemName: "rectangle.expand.vertical").foregroundStyle(.blue)
+        HStack(spacing: 12) {
+            Image(systemName: "rectangle.expand.vertical")
+                .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: 38, height: 38).background(Color.accentColor, in: RoundedRectangle(cornerRadius: 11))
             VStack(alignment: .leading, spacing: 3) {
                 Text("长截图 · \(model.count) 帧").font(.system(size: 12, weight: .semibold))
                 Text(model.message).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(2)
             }.frame(maxWidth: .infinity, alignment: .leading)
-            Button { model.cancel() } label: { Image(systemName: "xmark").foregroundStyle(.red) }.help("取消")
-            Divider().frame(height: 20)
-            Button { model.finish() } label: { Image(systemName: "checkmark").foregroundStyle(.green) }.help("完成")
-        }.buttonStyle(.plain).padding(12).frame(width: 440, height: 70).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            Button { model.cancel() } label: { Image(systemName: "xmark").frame(width: 30, height: 30).background(Color.primary.opacity(0.06), in: Circle()) }.help("取消")
+            Button { model.finish() } label: { Label("完成", systemImage: "checkmark").font(.system(size: 12, weight: .semibold)).padding(.horizontal, 12).frame(height: 32).foregroundStyle(.white).background(Color.accentColor, in: Capsule()) }.help("完成")
+        }.buttonStyle(.plain).padding(12).frame(width: 390, height: 76)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.22)))
+            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
     }
 }
 
 private struct LongCapturePreview: View {
     @ObservedObject var model: LongScreenshotCaptureService
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             if let image = model.preview { Image(nsImage: image).resizable().scaledToFit() }
-            Text("实时预览").font(.system(size: 10)).foregroundStyle(.secondary)
-        }.padding(6).frame(width: 140, height: 240).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            Text("实时预览 · \(model.count) 帧").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+        }.padding(8).frame(width: 140, height: 240)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.2)))
+            .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 }
 

@@ -33,6 +33,16 @@ final class CodexAccountService {
     var isCodexRunning: Bool { applicationLifecycle.isRunning }
     var hasCurrentAuthCache: Bool { authCacheFile.exists }
 
+    func moveAccount(_ sourceID: UUID, before targetID: UUID) {
+        guard sourceID != targetID else { return }
+        var ordered = profiles
+        guard let sourceIndex = ordered.firstIndex(where: { $0.id == sourceID }) else { return }
+        let item = ordered.remove(at: sourceIndex)
+        guard let targetIndex = ordered.firstIndex(where: { $0.id == targetID }) else { return }
+        ordered.insert(item, at: targetIndex)
+        store.profiles = ordered
+    }
+
     @discardableResult
     func saveAuthorizedAccount(requestedEmail: String, credential: CodexOAuthCredential) throws -> CodexAccountProfile {
         let expected = requestedEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

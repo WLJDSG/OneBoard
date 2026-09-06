@@ -3,6 +3,15 @@ import XCTest
 @testable import OneBoardKit
 
 final class ManualCaptureAndFolderSyncTests: XCTestCase {
+    func testLongCaptureGuideUsesCornersInsteadOfFullHeightRails() {
+        let rect = CGRect(x: 0, y: 0, width: 420, height: 900)
+        let segments = LongCaptureOverlayLayout.cornerSegments(in: rect, length: 22)
+
+        XCTAssertEqual(segments.count, 8)
+        XCTAssertTrue(segments.allSatisfy { hypot($0.end.x - $0.start.x, $0.end.y - $0.start.y) <= 22.01 })
+        XCTAssertFalse(segments.contains { abs($0.end.y - $0.start.y) > 22.01 }, "长截图引导不能再绘制贯穿全高的竖线")
+    }
+
     func testSparseDocumentScrollIsRecognized() throws {
         func document(_ offset: Int) -> NSImage {
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 240, pixelsHigh: 200, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 960, bitsPerPixel: 32)!

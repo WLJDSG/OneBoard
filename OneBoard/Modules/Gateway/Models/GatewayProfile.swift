@@ -54,14 +54,14 @@ struct GatewayProfile: Codable, Identifiable, Equatable, Sendable {
             title: ".2 网关",
             gateway: "192.168.31.2",
             description: "适合切换到 .2 网关，作为备用出口或中间路由。",
-            symbolName: "point.3.connected.trianglepath.dotted"
+            symbolName: "arrow.triangle.branch"
         ),
         GatewayProfile(
             id: UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567892")!,
             title: "代理网关",
             gateway: "192.168.31.3",
             description: "适合将默认出口交给旁路由代理。",
-            symbolName: "network.badge.shield.half.filled"
+            symbolName: "shield.lefthalf.filled"
         )
     ]
 

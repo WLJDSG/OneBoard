@@ -9,18 +9,13 @@ final class DragDetectorTests: XCTestCase {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".txt")
         try Data("test".utf8).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        board.writeObjects([file as NSURL])
         let detector = DragDetector(pasteboard: board)
         XCTAssertFalse(detector.isDraggingSupportedContent, "启动时遗留的文件不能确认新拖拽")
-        board.clearContents()
-        board.writeObjects([file as NSURL])
-        XCTAssertTrue(detector.isDraggingSupportedContent)
-        XCTAssertTrue(detector.isDraggingSupportedContent, "同一拖拽后续帧保持有效")
+        XCTAssertTrue(detector.updateDragState(changeCount: board.changeCount + 1, types: [.fileURL], urls: [file]))
+        XCTAssertTrue(detector.updateDragState(changeCount: board.changeCount + 1, types: [.fileURL], urls: []), "同一拖拽后续帧保持有效")
         detector.finishCurrentDrag()
         XCTAssertFalse(detector.isDraggingSupportedContent, "松手后拖动窗口不能复用旧文件")
-        board.clearContents()
-        board.writeObjects([file as NSURL])
-        XCTAssertTrue(detector.isDraggingSupportedContent, "再次拖动同一文件仍有效")
+        XCTAssertTrue(detector.updateDragState(changeCount: board.changeCount + 1, types: [.fileURL], urls: [file]), "再次拖动同一文件仍有效")
     }
 
     func testPollingFallbackRemainsEnabledWithoutInputMonitoringPermission() {
@@ -60,5 +55,20 @@ final class DragDetectorTests: XCTestCase {
 
     func testFileURLTypeWithoutReadableURLsDoesNotConfirmDrag() {
         XCTAssertFalse(DragDetector.canConfirmFileDrag(types: [.fileURL], urls: []))
+    }
+
+    func testFileDragRevealsShelfImmediatelyAndOnlyOncePerDrag() throws {
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".txt")
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let detector = DragDetector(pasteboard: board)
+        XCTAssertTrue(detector.updateDragState(changeCount: board.changeCount + 1, types: [.fileURL], urls: [file]))
+        XCTAssertTrue(detector.shouldRevealShelfForCurrentDrag(), "文件拖拽首帧就应显示暂存区")
+        XCTAssertFalse(detector.shouldRevealShelfForCurrentDrag(), "同一次拖拽不能重复弹出")
+        detector.finishCurrentDrag()
+        XCTAssertTrue(detector.updateDragState(changeCount: board.changeCount + 1, types: [.fileURL], urls: [file]))
+        XCTAssertTrue(detector.shouldRevealShelfForCurrentDrag(), "下一次文件拖拽应再次显示")
     }
 }

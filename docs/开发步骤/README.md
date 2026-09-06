@@ -1,5 +1,17 @@
 # OneBoard 开发步骤
 
+## 2026-09-06 回归要求
+
+额度测试覆盖 primary 为周窗口且无 secondary 的 Pro 用例；排序需验证重载后不变；快捷键绑定需验证取消选择不覆盖原值。
+
+## 2026-09-06 长截图与刘海暂存回归修复
+
+长截图四角引导、文字字号控件、Finder 两类 URL 载荷和刘海展开/收起几何由快速测试覆盖；安装后仍需从 Finder 向两个投放区各拖一次真实文件，确认暂存入库、AirDrop 收件人窗口，以及展开和反向缩回动画。
+
+## 2026-09-06 快捷键与图标交互修订
+
+回归覆盖旧绑定迁移不覆盖已占用键位、迁移幂等、图标同高以及运行时长跨日。执行 swift test --disable-sandbox；视觉渲染单独执行 FeaturePanelRenderTests，避免系统权限检查污染完整测试进程。手动检查模式切换、绑定弹层、取色及长截图遮罩。
+
 ## 2026-09-06 17:12 交互与文件类型修订
 
 回归先检查 700ms 悬停与自定义扩展的失败测试，再执行全量 Swift 测试。视觉测试需填充三条应用网络数据，避免只验空状态。安装验收仍需真实 Finder 拖放/AirDrop 收件人界面、剪贴板单/双击及快速滚动；静态渲染不可替代系统交互验收。
@@ -344,3 +356,8 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 6. 分别验证系统、Google、自定义翻译；用假上游/测试 Key 验证模型目录、连接测试和错误呈现。
 7. 从 `OneBoard/` 跑全量测试与 Release build，从仓库根目录打包并 `hdiutil verify build/OneBoard.dmg`。CloudKit、Finder、系统终端与真实滚动属于安装包人工验收。
 8. 本地 DMG 默认使用 `OneBoard.local.entitlements`；从 DMG 内实际启动并确认进程驻留。只有准备好有效 iCloud provisioning profile 时才以 `ONEBOARD_ENABLE_ICLOUD_SYNC=1 script/package_app.sh` 构建 CloudKit 版本。
+# 2026-09-06 验证补充
+
+1. 用拖拽粘贴板夹具验证首帧展开、单次触发和旧文件不误触。
+2. 验证应用/工具选择器、OCR AI 服务选择、菜单栏开关和日历选中态。
+3. 全量运行 SwiftPM 测试、Release 构建、正式打包及 `hdiutil verify`，再进行截图和长截图实机验收。
