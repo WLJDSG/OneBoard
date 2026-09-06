@@ -74,6 +74,13 @@ enum Constants {
 
         // Finder 新建文件
         static let enabledFileTypes = "enabled_file_types"             // 共享 UserDefaults
+
+        // iCloud 与日历
+        static let iCloudSyncEnabled = "icloud_sync_enabled"
+        static let iCloudLastLocalChange = "icloud_last_local_change"
+        static let iCloudLastSync = "icloud_last_sync"
+        static let calendarWeekStart = "calendar_week_start"
+        static let calendarShowInMenuBar = "calendar_show_in_menu_bar"
     }
 
     // MARK: - Notification Names
@@ -84,5 +91,12 @@ enum Constants {
         static let hotkeyShowClipboard = "OneBoardHotkeyShowClipboard"
         static let hotkeyCaptureScreenshot = "OneBoardHotkeyCaptureScreenshot"
         static let hotkeyShowFileShelf = "OneBoardHotkeyShowFileShelf"
+        static let configurationDidSync = "OneBoardConfigurationDidSync"
+        static let privateConfigurationDidChange = "OneBoardPrivateConfigurationDidChange"
     }
+}
+
+extension Notification.Name {
+    static let oneBoardConfigurationDidSync = Notification.Name(Constants.NotificationNames.configurationDidSync)
+    static let oneBoardPrivateConfigurationDidChange = Notification.Name(Constants.NotificationNames.privateConfigurationDidChange)
 }

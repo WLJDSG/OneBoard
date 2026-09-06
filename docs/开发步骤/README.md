@@ -1,5 +1,19 @@
 # OneBoard 开发步骤
 
+## 2026-09-06 17:12 交互与文件类型修订
+
+回归先检查 700ms 悬停与自定义扩展的失败测试，再执行全量 Swift 测试。视觉测试需填充三条应用网络数据，避免只验空状态。安装验收仍需真实 Finder 拖放/AirDrop 收件人界面、剪贴板单/双击及快速滚动；静态渲染不可替代系统交互验收。
+
+## 2026-09-06 交互验收
+
+MenuCalendarInteractionTests 覆盖真实面板标题栏/二次点击与悬停穿行状态；ManualCaptureAndFolderSyncTests 的稀疏文字滚动测试先失败后通过；MacStatusTests 检查实际内存、磁盘、CPU 区间与采样历史。FeaturePanelRenderTests 单独输出日历、状态、刘海深浅色。
+
+安装后仍须真实验收：菜单栏悬停→移入卡片→移出、pin→切换应用、剪贴板双击→输入位置、长截图连续缓慢滚动→右侧增长→完成/AirDrop 接收方确认。CUA 在当前机器连接新版 app 路径超时，Bundle ID 因多个副本存在歧义，不能将自动测试称为完整真实交互验收。
+
+## 2026-09-06 验收补充
+
+运行全量 Swift 测试和 Release 构建。CalendarAndBackupRegressionTests 覆盖五年月份固定六行、2026 节假日/24 节气、明文备份往返与上一版、快捷键恢复。ClipboardPreviewTests 反复挂载文件预览再切换文本。视觉渲染测试单独执行，避免非 App 测试进程的异步通知授权检查。安装后人工验收手动滚动不闪边框、真实文件切换、iCloud 上传及重装恢复；本地备份测试不等同云端上传验证。
+
 ## 项目概述
 
 OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、文件暂存、Finder 快速新建、网关切换、AI 模型供应商切换、Codex 桌面账号切换和待办事项。
@@ -296,3 +310,37 @@ OneBoard 是一款 macOS 原生应用，整合截图工具、历史剪贴板、�
 ## 2026-09-05 设置页整体视觉升级
 
 完成设置窗口及全部九类页面、供应商/网关/账号编辑弹窗的统一外观。生成九页浅色/深色预览，检查最小窗口尺寸、空状态、带用量供应商卡片和 OAuth/网关弹窗；临时截图测试不保留在常规测试集中。全量测试和 Release 打包后验证 DMG。
+
+## 2026-09-05 导航与面板验收
+
+1. 核对设置 11 个分类和菜单日常工具入口，旧持久化标识仍可解析；Finder 类型设置从待办移至文件页。
+2. 运行 `swift test --disable-sandbox` 和 `swift build -c release --disable-sandbox`（在 OneBoard/）。导航回归验证快捷动作目标与维护菜单隔离。
+3. 可设置 `ONEBOARD_RENDER_DIRECTORY=/tmp/oneboard-feature-review` 并运行 `swift test --disable-sandbox --filter FeaturePanelRenderTests`，输出独立面板和设置分类的深浅色、最小尺寸与内容状态图片；该测试默认跳过，演示数据仅放入测试进程内存。
+4. 从根目录运行 `ONEBOARD_CODESIGN_IDENTITY=- bash script/package_app.sh`，并执行 `hdiutil verify build/OneBoard.dmg`。真实拖放、系统授权与菜单点击以开发包人工验收为准。
+
+## 2026-09-05 截图验收
+
+自动测试覆盖旧拖拽残留、新文件与同文件重新拖动、1px Retina 条纹导出和贴图渲染、实际贴图窗口尺寸、窗口层级命中、单击与自定义拖动、跨屏坐标及翻译回调。系统剪贴板测试需要可访问 pasteboard 服务的环境。运行全量测试、Release 构建、正式打包及 hdiutil verify。人工验收包含实际屏幕刚置顶清晰度、跨屏移动、窗口悬停、文件摇晃和真实翻译服务；测试图案通过不能代替用户现场的模糊问题确认。
+
+### 窗口预选稳定性修正（2026-09-05）
+
+窗口预选追加验证：testWindowPreviewRetainsOpaqueScreenshotPixels 检查预选区 alpha=1、背景原图内容及方向；testWindowPreviewSurvivesMouseDownAndSmallJitter 检查按下与抖动期间保留高亮。可设置 ONEBOARD_RENDER_DIRECTORY 并运行 ScreenshotSelectionTests/testWindowPreview 输出 window-hover.png。
+
+### 2026-09-05 回归检查
+
+运行 `swift test --disable-sandbox` 与 Release 构建；测试需要 macOS 屏幕/剪贴板服务，受限环境可能导致原有拖拽测试失败。`script/tests/test_ai_usage_proxy.py` 验证 Anthropic 普通/SSE计数；设置 `ONEBOARD_TEST_FORMAT=openai_chat` 验证带缓存 usage 的 Chat Completions 转换计数。代理测试使用本地假上游，不调用真实 Key。桌面测试覆盖菜单入口、符号链接目录与三种文件生成。最后正式打包并运行 `hdiutil verify build/OneBoard.dmg`。真实系统授权、指纹窗口焦点及 iCloud Finder 菜单仍需安装后交互验收。
+
+### 2026-09-05 设置首次打开崩溃修复
+
+构建后独立运行 python3 script/tests/test_settings_cold_start.py（Release 使用 ONEBOARD_TEST_CONFIGURATION=release），验证未预热单例的设置窗口打开、布局与再次打开；随后全量测试及正式打包、DMG 校验。
+
+## 2026-09-06 验证清单
+
+1. 运行 `CloudSyncAndCalendarTests`，验证偏好白名单、云端删除传播、额度缓存保留、日历周起始和长图拼接尺寸。
+2. 在两个使用同一 iCloud 账号的正式签名安装包上修改普通偏好、AI Key 与账号配置，确认双向同步；关闭同步后确认本地数据不被删除。
+3. 切换日历菜单栏开关，验证独立图标即时增删；检查周一/周日表头、月份切换与今天定位。
+4. 在 Finder 文件夹空白处、所选文件和工具栏菜单分别打开终端，确认目录正确；iCloud Desktop 继续遵守 File Provider 限制。
+5. 在浏览器/文档滚动区执行长截图，确认自动滚动、到底停止、拼接顺序、标注与保存；非滚动区应在画面不变时停止。
+6. 分别验证系统、Google、自定义翻译；用假上游/测试 Key 验证模型目录、连接测试和错误呈现。
+7. 从 `OneBoard/` 跑全量测试与 Release build，从仓库根目录打包并 `hdiutil verify build/OneBoard.dmg`。CloudKit、Finder、系统终端与真实滚动属于安装包人工验收。
+8. 本地 DMG 默认使用 `OneBoard.local.entitlements`；从 DMG 内实际启动并确认进程驻留。只有准备好有效 iCloud provisioning profile 时才以 `ONEBOARD_ENABLE_ICLOUD_SYNC=1 script/package_app.sh` 构建 CloudKit 版本。

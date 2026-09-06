@@ -3,7 +3,7 @@ import XCTest
 
 final class GatewaySwitcherTests: XCTestCase {
     func testGatewayPanelUsesCompactSize() {
-        XCTAssertEqual(GatewaySwitcherPanelLayout.size, CGSize(width: 360, height: 360))
+        XCTAssertEqual(GatewaySwitcherPanelLayout.size, CGSize(width: 380, height: 440))
     }
 
     func testParseDefaultRouteAndHardwarePorts() {

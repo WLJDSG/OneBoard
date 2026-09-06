@@ -18,7 +18,7 @@ struct TodoRowView: View {
             Button(action: onToggleComplete) {
                 Image(systemName: isVisuallyCompleted ? "checkmark.circle.fill" : "circle")
                     .oneBoardFont(.title)
-                    .foregroundColor(isVisuallyCompleted ? OneBoardColors.success : OneBoardColors.textSecondary)
+                    .foregroundColor(isVisuallyCompleted ? OneBoardColors.success : FeaturePalette.secondary)
             }
             .buttonStyle(.plain)
 
@@ -37,7 +37,7 @@ struct TodoRowView: View {
                     .oneBoardFont(.body)
                     .lineLimit(2)
                     .strikethrough(isVisuallyCompleted)
-                    .foregroundColor(isVisuallyCompleted ? OneBoardColors.textSecondary : OneBoardColors.textPrimary)
+                    .foregroundColor(isVisuallyCompleted ? FeaturePalette.secondary : FeaturePalette.text)
 
                 // 元信息行
                 HStack(spacing: OneBoardSpacing.xs) {
@@ -49,7 +49,7 @@ struct TodoRowView: View {
                             Text(appName)
                                 .oneBoardFont(.captionSmall)
                         }
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(FeaturePalette.secondary)
                     }
 
                     // 截止日期
@@ -57,10 +57,10 @@ struct TodoRowView: View {
                         HStack(spacing: OneBoardSpacing.twoXS) {
                             Image(systemName: item.isOverdue ? "exclamationmark.triangle.fill" : "calendar")
                                 .oneBoardFont(.captionSmall)
-                                .foregroundColor(item.isOverdue ? OneBoardColors.destructive : OneBoardColors.textSecondary)
+                                .foregroundColor(item.isOverdue ? OneBoardColors.destructive : FeaturePalette.secondary)
                             Text(formatDueDate(dueDate))
                                 .oneBoardFont(.captionSmall)
-                                .foregroundColor(item.isOverdue ? OneBoardColors.destructive : OneBoardColors.textSecondary)
+                                .foregroundColor(item.isOverdue ? OneBoardColors.destructive : FeaturePalette.secondary)
                         }
                         .onTapGesture { showDueDatePicker = true }
                     }
@@ -73,7 +73,7 @@ struct TodoRowView: View {
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
                     .oneBoardFont(.callout)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
             }
             .buttonStyle(.plain)
             .opacity(0.6)

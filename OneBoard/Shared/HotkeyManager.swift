@@ -25,6 +25,7 @@ final class HotkeyManager {
     /// 注册所有快捷键
     static func registerAll() {
         migrateDefaultShortcutsIfNeeded()
+        Task { @MainActor in QuickLaunchBindings.register() }
 
         KeyboardShortcuts.onKeyDown(for: .showClipboard) {
             // 快捷键呼出 → 独立浮动窗口（不依赖图标）

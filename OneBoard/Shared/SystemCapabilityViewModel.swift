@@ -84,10 +84,14 @@ final class SystemCapabilityViewModel: ObservableObject {
         accessibilityGranted = permissions.hasAccessibilityPermission
         screenRecordingGranted = permissions.hasScreenRecordingPermission
         inputMonitoringGranted = permissions.hasInputMonitoringPermission
-        gatewayHelperInstalled = gatewayHelper.isHelperInstalled()
         launchAtLoginEnabled = launchAtLogin.isEnabled
         PermissionManager.shared.syncStoredPermissionStates()
-        Task { [permissions] in
+        // Helper 探测会启动子进程，不能在单例初始化/SwiftUI 布局期间阻塞主线程。
+        Task { [permissions, gatewayHelper] in
+            let installed = await Task.detached(priority: .utility) {
+                gatewayHelper.isHelperInstalled()
+            }.value
+            self.gatewayHelperInstalled = installed
             let granted = await permissions.hasNotificationPermission()
             await MainActor.run {
                 self.notificationGranted = granted
@@ -151,13 +155,17 @@ final class SystemCapabilityViewModel: ObservableObject {
                         try gatewayHelper.uninstallHelper()
                     }.value
                 }
-                let installed = gatewayHelper.isHelperInstalled()
+                let installed = await Task.detached(priority: .utility) {
+                    gatewayHelper.isHelperInstalled()
+                }.value
                 self.gatewayHelperInstalled = installed
                 self.statusMessage = installed ? "网关免密 Helper 已启用" : "网关免密 Helper 已卸载"
                 self.errorMessage = nil
                 NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
             } catch {
-                let installed = gatewayHelper.isHelperInstalled()
+                let installed = await Task.detached(priority: .utility) {
+                    gatewayHelper.isHelperInstalled()
+                }.value
                 self.gatewayHelperInstalled = installed
                 self.errorMessage = error.localizedDescription
                 NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)

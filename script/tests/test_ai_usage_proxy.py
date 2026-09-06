@@ -11,6 +11,9 @@ import uuid
 from pathlib import Path
 
 
+api_format = os.environ.get("ONEBOARD_TEST_FORMAT", "anthropic")
+
+
 class Upstream(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -22,7 +25,23 @@ class Upstream(http.server.BaseHTTPRequestHandler):
         message = {'id': 'msg_' + uuid.uuid4().hex, 'type': 'message', 'role': 'assistant',
                    'model': 'test-model', 'content': [{'type': 'text', 'text': 'hello'}],
                    'stop_reason': 'end_turn', 'usage': usage}
-        if request.get('stream'):
+        if api_format == 'openai_chat':
+            deepseek_usage = {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120,
+                              'prompt_cache_hit_tokens': 80, 'prompt_cache_miss_tokens': 20,
+                              'prompt_tokens_details': {'cached_tokens': 80}}
+            base = {'id': 'chatcmpl-' + uuid.uuid4().hex, 'model': 'test-model', 'created': 1800000000}
+            if request.get('stream'):
+                assert request.get('stream_options', {}).get('include_usage') is True
+                chunks = [
+                    {**base, 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': 'hello'}, 'finish_reason': None}]},
+                    {**base, 'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]},
+                    {**base, 'object': 'chat.completion.chunk', 'choices': [], 'usage': deepseek_usage}]
+                data = (''.join('data: ' + json.dumps(chunk) + '\n\n' for chunk in chunks) + 'data: [DONE]\n\n').encode()
+                content_type = 'text/event-stream'
+            else:
+                data = json.dumps({**base, 'object': 'chat.completion', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'hello'}, 'finish_reason': 'stop'}], 'usage': deepseek_usage}).encode()
+                content_type = 'application/json'
+        elif request.get('stream'):
             chunks = [
                 ('message_start', {'type': 'message_start', 'message': {**message, 'content': [], 'usage': {**usage, 'output_tokens': 0}}}),
                 ('content_block_start', {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}}),
@@ -51,7 +70,7 @@ payload = {'listenPort': 0, 'enableLogging': True, 'providers': [{
         'id': 'test-provider', 'name': 'Fixture',
         'settingsConfig': {'env': {'ANTHROPIC_BASE_URL': f'http://127.0.0.1:{server.server_port}',
                                   'ANTHROPIC_AUTH_TOKEN': 'fixture-key', 'ANTHROPIC_MODEL': 'test-model'}},
-        'meta': {'apiFormat': 'anthropic'}, 'inFailoverQueue': False}}]}
+        'meta': {'apiFormat': api_format}, 'inFailoverQueue': False}}]}
 process = subprocess.Popen([binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
 lines = queue.Queue()
 threading.Thread(target=lambda: [lines.put(line) for line in process.stdout], daemon=True).start()
@@ -79,9 +98,9 @@ try:
     assert len(events) == 2, events
     for event in events:
         assert event['providerID'] == 'test-provider', event
-        assert (event['input'], event['output'], event['cacheRead'], event['cacheCreation']) == (100, 20, 50, 10), event
+        assert (event['input'], event['output'], event['cacheRead'], event['cacheCreation']) == ((20, 20, 80, 0) if api_format == 'openai_chat' else (100, 20, 50, 10)), event
     assert events[0]['id'] != events[1]['id'], events
-    print('PASS: non-streaming and SSE emit exact input/output/cache usage once per request')
+    print(api_format + ': PASS: non-streaming and SSE emit exact input/output/cache usage once per request')
 finally:
     process.terminate()
     process.wait(timeout=15)

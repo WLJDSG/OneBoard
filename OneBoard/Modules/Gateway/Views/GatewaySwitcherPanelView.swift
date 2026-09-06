@@ -1,47 +1,39 @@
 import SwiftUI
 
 enum GatewaySwitcherPanelLayout {
-    static let size = CGSize(width: 360, height: 360)
+    static let size = CGSize(width: 380, height: 440)
 }
 
-/// 网关切换面板 — Apple Notes 风格
+/// 网关切换面板
 struct GatewaySwitcherPanelView: View {
     @StateObject private var viewModel = GatewayViewModel.shared
-    @State private var isAnimating = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack(spacing: 8) {
-                Image(systemName: "network")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(OneBoardColors.accent)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("网关切换")
-                        .oneBoardFont(.title)
-                    if !viewModel.displayGateway.isEmpty {
-                        Text(viewModel.displayGateway)
-                            .oneBoardFont(.caption)
-                            .foregroundColor(OneBoardColors.textSecondary)
-                    }
-                }
-                Spacer()
-                Button { viewModel.refresh() } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12))
-                        .foregroundColor(OneBoardColors.textTertiary)
-                        .rotationEffect(.degrees(isAnimating ? 360 : 0))
-                        .animation(isAnimating ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isAnimating)
-                }
-                .buttonStyle(.borderless)
-                OneBoardCloseButton { MenuBarManager.shared.closeGatewaySwitcherPanel() }
+            FeaturePanelHeader(title: "网关切换", subtitle: viewModel.displayGateway.isEmpty ? "查看状态并选择连接配置" : "当前网关 · \(viewModel.displayGateway)", icon: "network") {
+                FeaturePanelIconButton(icon: "arrow.clockwise", title: "刷新网络状态") { viewModel.refresh() }
+                    .disabled(viewModel.isRefreshing)
+                FeaturePanelIconButton(icon: "xmark", title: "关闭") { MenuBarManager.shared.closeGatewaySwitcherPanel() }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
 
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
+                    if let message = viewModel.statusMessage {
+                        Text(message)
+                            .font(.system(size: 11))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(FeaturePalette.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                            .textSelection(.enabled)
+                    }
+                    if viewModel.profiles.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "network").font(.system(size: 28)).foregroundStyle(FeaturePalette.accent)
+                            Text("尚未添加网关配置").font(.system(size: 13, weight: .medium))
+                            Text("在管理配置中添加网关和 DNS，再从这里切换。")
+                                .font(.system(size: 11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        }.frame(maxWidth: .infinity).padding(.vertical, 36)
+                    }
                     ForEach(viewModel.profiles) { profile in
                         profileCard(profile)
                     }
@@ -51,10 +43,10 @@ struct GatewaySwitcherPanelView: View {
 
             HStack(spacing: 10) {
                 Image(systemName: "server.rack")
-                    .foregroundColor(OneBoardColors.textTertiary)
+                    .foregroundColor(FeaturePalette.secondary)
                 Text(dnsSummary)
                     .oneBoardFont(.caption)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Button {
@@ -64,17 +56,15 @@ struct GatewaySwitcherPanelView: View {
                         .oneBoardFont(.caption)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(OneBoardColors.accent)
+                .foregroundColor(FeaturePalette.accent)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(OneBoardColors.hoverBg)
-            .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .top)
+            .background(FeaturePalette.hover)
+            .overlay(Rectangle().fill(FeaturePalette.border).frame(height: 1), alignment: .top)
         }
         .frame(width: GatewaySwitcherPanelLayout.size.width, height: GatewaySwitcherPanelLayout.size.height)
-        .background(OneBoardColors.panelBg)
-        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
-        .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
+        .featurePanelStyle()
         .onAppear {
             viewModel.refresh()
             viewModel.startPolling()
@@ -82,9 +72,7 @@ struct GatewaySwitcherPanelView: View {
         .onDisappear {
             viewModel.stopPolling()
         }
-        .onChange(of: viewModel.isRefreshing) { _, newValue in
-            isAnimating = newValue
-        }
+
     }
 
     private func profileCard(_ profile: GatewayProfile) -> some View {
@@ -93,20 +81,20 @@ struct GatewaySwitcherPanelView: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(isActive ? OneBoardColors.accent.opacity(0.14) : OneBoardColors.hoverBg)
+                        .fill(isActive ? FeaturePalette.accent.opacity(0.14) : FeaturePalette.hover)
                         .frame(width: 36, height: 36)
                     Image(systemName: isActive ? "network.badge.shield.half.filled" : "network")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(isActive ? OneBoardColors.accent : OneBoardColors.textSecondary)
+                        .foregroundColor(isActive ? FeaturePalette.accent : FeaturePalette.secondary)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(profile.title)
                         .oneBoardFont(.body)
                         .fontWeight(.semibold)
-                        .foregroundColor(OneBoardColors.textPrimary)
+                        .foregroundColor(FeaturePalette.text)
                     Text(summary(for: profile))
                         .oneBoardFont(.caption)
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(FeaturePalette.secondary)
                         .lineLimit(1)
                 }
                 Spacer()
@@ -115,22 +103,22 @@ struct GatewaySwitcherPanelView: View {
                 } else if isActive {
                     Label("当前", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(OneBoardColors.accent)
+                        .foregroundColor(FeaturePalette.accent)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(OneBoardColors.textTertiary)
+                        .foregroundColor(FeaturePalette.secondary)
                 }
             }
             .padding(11)
             .contentShape(Rectangle())
             .background(
-                RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                    .fill(isActive ? OneBoardColors.selectedBg : OneBoardColors.panelBg)
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isActive ? FeaturePalette.accent.opacity(0.08) : FeaturePalette.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                    .stroke(isActive ? OneBoardColors.accent.opacity(0.35) : OneBoardColors.panelBorder, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(isActive ? FeaturePalette.accent.opacity(0.35) : FeaturePalette.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

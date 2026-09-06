@@ -7,42 +7,28 @@ struct TodoHistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 头部
-            HStack {
-                Image(systemName: "clock.arrow.circlepath")
-                    .oneBoardFont(.headline)
-                Text("待办历史")
-                    .oneBoardFont(.headline)
-                Spacer()
-                Button("关闭") { dismiss() }
-                    .buttonStyle(.plain)
-                    .oneBoardFont(.callout)
-                    .foregroundColor(OneBoardColors.textSecondary)
+            FeaturePanelHeader(title: "待办历史", subtitle: "完成趋势与来源统计", icon: "clock.arrow.circlepath") {
+                FeaturePanelIconButton(icon: "xmark", title: "关闭") { dismiss() }
             }
-            .padding()
-
-            Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // 总览统计
-                    overviewSection
+                    SettingsCard { overviewSection.padding(16) }
 
-                    Divider().padding(.horizontal)
 
                     // 每日完成柱状图
-                    dailyChartSection
+                    SettingsCard { dailyChartSection.padding(16) }
 
-                    Divider().padding(.horizontal)
 
                     // 来源应用统计
-                    sourceAppSection
+                    SettingsCard { sourceAppSection.padding(16) }
                 }
                 .padding()
             }
         }
         .frame(width: 360, height: 440)
-        .background(.regularMaterial)
+        .featurePanelStyle()
         .task {
             await viewModel.load()
         }
@@ -54,18 +40,18 @@ struct TodoHistoryView: View {
         VStack(spacing: 8) {
             Text("总览")
                 .oneBoardFont(.caption)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 0) {
-                statItem(title: "总待办", value: "\(viewModel.totalCount)", color: OneBoardColors.textPrimary)
+                statItem(title: "总待办", value: "\(viewModel.totalCount)", color: FeaturePalette.text)
                 Divider().frame(height: 30)
                 statItem(title: "已完成", value: "\(viewModel.totalCompleted)", color: OneBoardColors.success)
                 Divider().frame(height: 30)
-                statItem(title: "完成率", value: viewModel.completionRateText, color: OneBoardColors.accent)
+                statItem(title: "完成率", value: viewModel.completionRateText, color: FeaturePalette.accent)
             }
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: OneBoardRadius.lg).fill(OneBoardColors.textPrimary.opacity(0.03)))
+            .background(RoundedRectangle(cornerRadius: OneBoardRadius.lg).fill(FeaturePalette.text.opacity(0.03)))
         }
     }
 
@@ -76,7 +62,7 @@ struct TodoHistoryView: View {
                 .foregroundColor(color)
             Text(title)
                 .oneBoardFont(.captionSmall)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -87,13 +73,13 @@ struct TodoHistoryView: View {
         VStack(spacing: 8) {
             Text("每日完成趋势（近30天）")
                 .oneBoardFont(.caption)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if viewModel.dailyCounts.isEmpty {
                 Text("暂无数据")
                     .oneBoardFont(.callout)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
                     .padding(.vertical, 20)
                     .frame(maxWidth: .infinity)
             } else {
@@ -104,16 +90,16 @@ struct TodoHistoryView: View {
                             VStack(spacing: 2) {
                                 Text("\(entry.count)")
                                     .font(.system(size: 8))
-                                    .foregroundColor(entry.count > 0 ? OneBoardColors.accent : .clear)
+                                    .foregroundColor(entry.count > 0 ? FeaturePalette.accent : .clear)
                                 RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                                    .fill(entry.count > 0 ? OneBoardColors.accent : OneBoardColors.textSecondary.opacity(0.1))
+                                    .fill(entry.count > 0 ? FeaturePalette.accent : FeaturePalette.secondary.opacity(0.1))
                                     .frame(
                                         width: 8,
                                         height: max(4, CGFloat(entry.count) / CGFloat(max(maxCount, 1)) * 60)
                                     )
                                 Text(String(entry.date.suffix(5)))  // MM-DD
                                     .font(.system(size: 7))
-                                    .foregroundColor(OneBoardColors.textSecondary)
+                                    .foregroundColor(FeaturePalette.secondary)
                             }
                         }
                     }
@@ -129,13 +115,13 @@ struct TodoHistoryView: View {
         VStack(spacing: 8) {
             Text("来源应用分布")
                 .oneBoardFont(.caption)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if viewModel.sourceAppStats.isEmpty {
                 Text("暂无数据")
                     .oneBoardFont(.callout)
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity)
             } else {
@@ -150,14 +136,14 @@ struct TodoHistoryView: View {
 
                         GeometryReader { geo in
                             RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                                .fill(OneBoardColors.accent.opacity(0.6))
+                                .fill(FeaturePalette.accent.opacity(0.6))
                                 .frame(width: max(10, CGFloat(entry.count) / CGFloat(maxCount) * geo.size.width))
                         }
                         .frame(height: 12)
 
                         Text("\(entry.count)")
                             .oneBoardFont(.caption)
-                            .foregroundColor(OneBoardColors.textSecondary)
+                            .foregroundColor(FeaturePalette.secondary)
                             .frame(width: 30, alignment: .trailing)
                     }
                 }

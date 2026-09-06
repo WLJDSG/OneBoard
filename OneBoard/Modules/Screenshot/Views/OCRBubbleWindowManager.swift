@@ -135,8 +135,7 @@ enum OCRBubbleLayout {
     }
 }
 
-private struct OCRBubbleView: View {
-    let text: String
+struct OCRBubbleView: View {
     let panelSize: CGSize
     let onClose: () -> Void
 
@@ -144,7 +143,6 @@ private struct OCRBubbleView: View {
     @State private var isEditing = false
 
     init(text: String, panelSize: CGSize, onClose: @escaping () -> Void) {
-        self.text = text
         self.panelSize = panelSize
         self.onClose = onClose
         _editableText = State(initialValue: text)
@@ -152,18 +150,8 @@ private struct OCRBubbleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("提取文字")
-                    .oneBoardFont(.title)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .oneBoardFont(.headline)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("关闭")
+            FeaturePanelHeader(title: "提取文字", subtitle: "核对识别结果，可编辑后复制", icon: "text.viewfinder") {
+                FeaturePanelIconButton(icon: "xmark", title: "关闭", action: onClose)
             }
 
             Group {
@@ -172,7 +160,7 @@ private struct OCRBubbleView: View {
                         .oneBoardFont(.body)
                         .scrollContentBackground(.hidden)
                         .padding(8)
-                        .background(OneBoardColors.surface, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
+                        .background(FeaturePalette.surface, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
                 } else {
                     ScrollView {
                         Text(editableText)
@@ -182,37 +170,29 @@ private struct OCRBubbleView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(10)
                     }
-                    .background(OneBoardColors.surface, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
+                    .background(FeaturePalette.surface, in: RoundedRectangle(cornerRadius: OneBoardRadius.md))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .padding(.horizontal, 16)
 
             HStack(spacing: 10) {
                 Spacer()
                 Button(isEditing ? "完成" : "编辑") {
                     isEditing.toggle()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(SettingsActionStyle())
 
                 Button("复制") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(editableText, forType: .string)
                     onClose()
                 }
-                .buttonStyle(.borderedProminent)
-            }
+                .buttonStyle(SettingsActionStyle(prominent: true))
+            }.padding(.horizontal, 16).padding(.bottom, 16)
         }
-        .padding(18)
         .frame(width: panelSize.width, height: panelSize.height)
-        .background(
-            RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                .fill(OneBoardColors.background)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: OneBoardRadius.xl)
-                .stroke(OneBoardShadow.md.color, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.xl))
+        .featurePanelStyle()
     }
 }

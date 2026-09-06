@@ -86,7 +86,17 @@ final class ScreenshotViewModel: ObservableObject {
             OCRBubbleWindowManager.shared.show(text: ocrResult, relativeTo: result.selectionRect)
         case .translate:
             await performTranslation(on: result.image)
+        case .longCapture:
+            await captureLongScreenshot(from: result)
         }
+    }
+
+    private func captureLongScreenshot(from result: ScreenshotResult) async {
+        isProcessing = true
+        defer { isProcessing = false }
+        guard let image = await LongScreenshotCaptureService().capture(initial: result.image, selectionRect: result.selectionRect) else { return }
+        capturedImage = image
+        showAnnotationWindow(result: ScreenshotResult(image: image, selectionRect: result.selectionRect), initialTool: .cursor)
     }
 
     /// 显示标注窗口（图片窗口 + 独立工具栏）
@@ -338,6 +348,10 @@ final class ScreenshotViewModel: ObservableObject {
                 }
             }
         )
+        // 初次挂载就提供截图逻辑尺寸，防止 hosting view 的理想尺寸参与缩放。
+        hostingView.sizingOptions = []
+        hostingView.frame = CGRect(origin: .zero, size: frame.size)
+        hostingView.autoresizingMask = [.width, .height]
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isFloatingPanel = true
@@ -417,30 +431,15 @@ final class ScreenshotViewModel: ObservableObject {
         translationResult = ""
         defer { isProcessing = false }
 
-        // 1. 先尝试通过模拟 Cmd+C 获取选中文字
-        let selectedText = await SelectedTextReader.readSelectedText()
-        if !selectedText.isEmpty {
-            TranslationPanelWindowManager.shared.show(sourceText: selectedText)
-            return
-        }
-
-        // 2. Cmd+C 失败，尝试通过辅助功能 API 获取选中文字
-        if PermissionManager.shared.hasAccessibilityPermission,
-           let axText = await readSelectedTextViaAccessibility(),
-           !axText.isEmpty {
-            TranslationPanelWindowManager.shared.show(sourceText: axText)
-            return
-        }
-
-        // 3. 所有方式都失败，根据权限状态给出明确提示
-        if !PermissionManager.shared.hasAccessibilityPermission {
-            translationResult = "需要辅助功能权限才能读取选中文字\n请在系统设置 → 隐私与安全性 → 辅助功能 中开启 OneBoard"
-            AnnotationResultWindowManager.shared.show(title: "翻译失败", text: translationResult)
-            PermissionManager.shared.promptAccessibilityPermission()
-        } else {
-            translationResult = "未检测到选中的文字\n请确保在前台应用中选中了文字后再试"
-            AnnotationResultWindowManager.shared.show(title: "翻译", text: translationResult)
-        }
+        await SelectedTextTranslation.run(
+            hasPermission: PermissionManager.shared.hasAccessibilityPermission,
+            requestPermission: { PermissionManager.shared.promptAccessibilityPermission() },
+            readText: { [self] in
+                if let text = await readSelectedTextViaAccessibility(), !text.isEmpty { return text }
+                return await SelectedTextReader.readSelectedText()
+            },
+            translate: { TranslationPanelWindowManager.shared.show(sourceText: $0) }
+        )
     }
 
     /// 通过辅助功能 API 读取前台应用选中的文字
@@ -554,5 +553,17 @@ private struct PasteboardSnapshot {
         if !items.isEmpty {
             pasteboard.writeObjects(items)
         }
+    }
+}
+
+/// 无权限先引导；没有选区不打开翻译窗口，也不显示失败提示。
+@MainActor
+enum SelectedTextTranslation {
+    static func run(hasPermission: Bool, requestPermission: () -> Void,
+                    readText: () async -> String, translate: (String) -> Void) async {
+        guard hasPermission else { requestPermission(); return }
+        let text = await readText().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        translate(text)
     }
 }

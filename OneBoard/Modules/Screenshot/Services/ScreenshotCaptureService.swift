@@ -26,6 +26,7 @@ final class ScreenshotCaptureService: NSObject {
     /// 捕获屏幕截图（静默全屏截图 → 自定义遮罩框选）
     func captureRegion() async -> ScreenshotResult? {
         // 每块显示器独立截图，避免混合 Retina/非 Retina 像素后按主屏尺寸误裁。
+        let windowFrames = ScreenshotWindowCandidate.snapshot()
         let screens = NSScreen.screens
         let plans = ScreenshotDisplayCapturePlan.make(screenFrames: screens.map(\.frame))
         var captures: [(screen: NSScreen, plan: ScreenshotDisplayCapturePlan, image: NSImage)] = []
@@ -49,15 +50,16 @@ final class ScreenshotCaptureService: NSObject {
                     didResume = true
                     DispatchQueue.main.async {
                         self?.closeOverlay()
+                        continuation.resume(returning: result)
                     }
-                    continuation.resume(returning: result)
                 }
 
                 for capture in captures {
                     let eventManager = OverlayEventManager()
                     let overlayView = ScreenshotOverlayContentView(
                         screenshot: capture.image,
-                        eventManager: eventManager
+                        eventManager: eventManager,
+                        windowCandidates: ScreenshotWindowCandidate.localRects(windowFrames, screenFrame: capture.plan.screenFrame)
                     )
                     overlayView.onConfirm = { img, rect, action in
                         finish(ScreenshotResult(image: img, selectionRect: rect, action: action))
@@ -72,9 +74,10 @@ final class ScreenshotCaptureService: NSObject {
                     )
                     window.level = .screenSaver
                     window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-                    window.isOpaque = false
-                    window.backgroundColor = .clear
+                    window.isOpaque = true
+                    window.backgroundColor = .black
                     window.hasShadow = false
+                    window.acceptsMouseMovedEvents = true
                     window.isReleasedWhenClosed = false
                     overlayView.frame = NSRect(origin: .zero, size: capture.plan.screenFrame.size)
                     overlayView.autoresizingMask = [.width, .height]

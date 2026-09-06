@@ -12,7 +12,6 @@ struct FileStagingView: View {
             // Header
             header
 
-            Divider()
 
             // Content
             ZStack(alignment: .topLeading) {
@@ -23,9 +22,18 @@ struct FileStagingView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(FeaturePalette.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(
+                isDropTargeted ? FeaturePalette.accent : FeaturePalette.border,
+                style: StrokeStyle(lineWidth: isDropTargeted ? 2 : 1, dash: [5])))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+            Text("移除暂存项不会删除原文件")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .padding(.bottom, 14)
         }
         .frame(width: FileStagingViewModel.shelfSize.width, height: FileStagingViewModel.shelfSize.height)
-        .oneBoardPanelStyle()
+        .featurePanelStyle()
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)
             return true
@@ -38,25 +46,9 @@ struct FileStagingView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "tray.full")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(OneBoardColors.accent)
-            Text("暂存架")
-                .font(.system(size: 13, weight: .semibold))
-            if !viewModel.stagedFiles.isEmpty {
-                Text("\(viewModel.stagedFiles.count)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(OneBoardColors.textSecondary)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: OneBoardRadius.sm).fill(OneBoardColors.textSecondary.opacity(0.12)))
-            }
-            Spacer()
-            OneBoardCloseButton(action: onClose)
+        FeaturePanelHeader(title: "文件暂存区", subtitle: "\(viewModel.stagedFiles.count) 个文件 · 拖入收集，拖出使用", icon: "tray.full") {
+            FeaturePanelIconButton(icon: "xmark", title: "关闭", action: onClose)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
     }
 
     // MARK: - Drop Prompt
@@ -65,10 +57,10 @@ struct FileStagingView: View {
         VStack(spacing: 12) {
             Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "tray")
                 .font(.system(size: 36))
-                .foregroundColor(isDropTargeted ? OneBoardColors.accent : OneBoardColors.textTertiary.opacity(0.5))
+                .foregroundColor(isDropTargeted ? FeaturePalette.accent : FeaturePalette.secondary.opacity(0.5))
             Text(isDropTargeted ? "松开放入" : "拖放文件到此处")
                 .font(.system(size: 13))
-                .foregroundColor(isDropTargeted ? OneBoardColors.accent : OneBoardColors.textSecondary)
+                .foregroundColor(isDropTargeted ? FeaturePalette.accent : FeaturePalette.secondary)
         }
         .frame(maxWidth: .infinity)
         .frame(maxHeight: .infinity)
@@ -105,12 +97,12 @@ struct FileStagingView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(width: 80)
-                    .foregroundColor(OneBoardColors.textPrimary)
+                    .foregroundColor(FeaturePalette.text)
             }
             .frame(width: 88, height: 100)
             .background(
                 RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                    .fill(OneBoardColors.accent.opacity(0.04))
+                    .fill(FeaturePalette.accent.opacity(0.04))
             )
 
             Button {
@@ -118,9 +110,11 @@ struct FileStagingView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(OneBoardColors.textTertiary)
+                    .foregroundColor(FeaturePalette.secondary)
             }
             .buttonStyle(.plain)
+            .help("移除暂存项")
+            .accessibilityLabel("移除 \(file.fileName)")
             .offset(x: 4, y: -4)
         }
     }

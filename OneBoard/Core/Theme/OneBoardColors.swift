@@ -46,25 +46,17 @@ enum OneBoardColors {
     /// 搜索栏背景
     static let searchBg = Color(red: 0.0, green: 0.0, blue: 0.0, opacity: 0.025)
 
-    // MARK: 兼容别名
+    // MARK: 内容区颜色
 
     static let background = Color(nsColor: .controlBackgroundColor)
     static let surface = hoverBg
     static let border = divider
     static let borderSubtle = Color(red: 0.0, green: 0.0, blue: 0.0, opacity: 0.03)
     static let pinnedHighlight = accent.opacity(0.04)
-    static let primary = accent
-    static let primaryLight = accentLight
-    static let primaryDark = Color(red: 0.8, green: 0.58, blue: 0.1)
-    static let secondaryBackground = surface
-    static let separator = divider
 
     // MARK: NSColor
 
     static let nsAccent = NSColor(red: 0.290, green: 0.620, blue: 0.969, alpha: 1.0)
-    static let nsPrimary = nsAccent
-    static let nsPrimaryLight = nsAccent.withAlphaComponent(0.08)
-    static let nsPrimaryDark = NSColor(red: 0.8, green: 0.58, blue: 0.1, alpha: 1.0)
     static let nsAccentLight = nsAccent.withAlphaComponent(0.08)
     static let nsAccentDark = NSColor(red: 0.8, green: 0.58, blue: 0.1, alpha: 1.0)
 }

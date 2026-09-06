@@ -46,7 +46,7 @@ struct AIProviderUsageService {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else {
-            throw AIModelSwitchError.proxyFailure("额度接口未返回 HTTP 响应")
+            throw AIProviderQuotaError("额度接口未返回 HTTP 响应")
         }
         guard (200..<300).contains(response.statusCode) else {
             let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
@@ -54,7 +54,7 @@ struct AIProviderUsageService {
             let message = (root?["message"] ?? nested?["message"]) as? String
             let detail = message.map { String($0.replacingOccurrences(of: key, with: "[已隐藏]").prefix(240)) }
                 ?? "请确认额度接口类型及 Key 权限"
-            throw AIModelSwitchError.proxyFailure("额度查询 HTTP \(response.statusCode)：\(detail)")
+            throw AIProviderQuotaError("额度查询 HTTP \(response.statusCode)：\(detail)")
         }
         return try Self.parse(data, api: api, credentialID: AIUsageIdentity.make(profile: profile, key: key))
     }
@@ -62,7 +62,7 @@ struct AIProviderUsageService {
     static func endpoint(_ profile: AIProviderProfile) throws -> (URL, AIQuotaAPI) {
         guard var parts = URLComponents(string: profile.baseURL), let host = parts.host,
               ["https", "http"].contains(parts.scheme ?? "") else {
-            throw AIModelSwitchError.proxyFailure("请求地址无效")
+            throw AIProviderQuotaError("请求地址无效")
         }
         var api = profile.quotaAPI ?? .auto
         if api == .auto {
@@ -82,7 +82,10 @@ struct AIProviderUsageService {
         else if path.hasSuffix("/v1") { path = String(path.dropLast(3)) }
         let endpoint: String
         switch api {
-        case .deepseek: endpoint = "user/balance"
+        case .deepseek:
+            // DeepSeek 的 Anthropic 兼容前缀只用于模型请求，余额接口位于源站根路径。
+            if host.lowercased() == "api.deepseek.com" { path = "" }
+            endpoint = "user/balance"
         case .siliconflow: endpoint = "v1/user/info"
         case .openrouter:
             if path == "api" { path = "" }
@@ -92,13 +95,13 @@ struct AIProviderUsageService {
         parts.path = "/" + [path, endpoint].filter { !$0.isEmpty }.joined(separator: "/")
         parts.query = nil
         parts.fragment = nil
-        guard let url = parts.url else { throw AIModelSwitchError.proxyFailure("请求地址无效") }
+        guard let url = parts.url else { throw AIProviderQuotaError("请求地址无效") }
         return (url, api)
     }
 
     static func parse(_ data: Data, api: AIQuotaAPI, credentialID: String, now: Date = Date()) throws -> AIQuotaSnapshot {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw AIModelSwitchError.proxyFailure("额度响应格式无效")
+            throw AIProviderQuotaError("额度响应格式无效")
         }
         func number(_ value: Any?) -> Double? {
             let n = (value as? NSNumber)?.doubleValue ?? (value as? String).flatMap(Double.init)
@@ -124,7 +127,7 @@ struct AIProviderUsageService {
                 balance = amount(total - used, "USD")
             }
         case .auto, .sub2api:
-            if (root["isValid"] as? Bool) == false { throw AIModelSwitchError.proxyFailure("供应商返回 Key 无效或不可用") }
+            if (root["isValid"] as? Bool) == false { throw AIProviderQuotaError("供应商返回 Key 无效或不可用") }
             if let remaining = number(root["remaining"]) {
                 balance = remaining < 0 ? "无限额（供应商返回）" : amount(remaining, root["unit"] as? String ?? "USD")
                 if let name = root["planName"] as? String { balance = name + " · " + balance! }
@@ -135,7 +138,7 @@ struct AIProviderUsageService {
             }
             if balance == nil, today != nil { balance = "接口未提供余额" }
         }
-        guard let balance else { throw AIModelSwitchError.proxyFailure("未识别到额度；该接口可能不支持此查询，请选择对应额度类型") }
+        guard let balance else { throw AIProviderQuotaError("未识别到额度；该接口可能不支持此查询，请选择对应额度类型") }
         var result = AIQuotaSnapshot(balance: balance, todayTokens: today, fetchedAt: now, credentialID: credentialID)
         if let usage = root["usage"] as? [String: Any] {
             func count(_ section: String, _ field: String) -> Int64? {
@@ -148,4 +151,10 @@ struct AIProviderUsageService {
         }
         return result
     }
+}
+
+struct AIProviderQuotaError: LocalizedError {
+    let message: String
+    init(_ message: String) { self.message = message }
+    var errorDescription: String? { message }
 }

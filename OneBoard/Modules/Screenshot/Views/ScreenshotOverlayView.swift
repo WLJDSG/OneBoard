@@ -89,6 +89,10 @@ private struct ScreenshotOverlayNSView: NSViewRepresentable {
     func updateNSView(_ nsView: OverlayView, context: Context) {}
 }
 
+private final class ScreenshotToolbarHostingView: NSHostingView<AnnotationToolbarView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 final class ScreenshotOverlayContentView: NSView {
     let screenshot: NSImage
     let eventManager: OverlayEventManager
@@ -98,7 +102,15 @@ final class ScreenshotOverlayContentView: NSView {
     private let cachedCGImage: CGImage?
     private let imagePixelSize: CGSize
     private var selectionModel = ScreenshotSelectionModel()
+    private let windowCandidates: [CGRect]
+    private var hoveredWindowRect: CGRect?
+    private var windowClickAnchor: CGPoint?
+    private var pendingWindowRect: CGRect?
+    private var hoverTrackingArea: NSTrackingArea?
+
     private var selectionToolbarView: NSHostingView<AnnotationToolbarView>?
+    private var longCaptureButton: NSButton?
+    private var isToolbarMouseInteraction = false
     private var hasFinished = false
     private var isAnnotationLocked = false
     private var annotationService: AnnotationService?
@@ -115,7 +127,8 @@ final class ScreenshotOverlayContentView: NSView {
         selectionRect.flatMap { croppedImage(for: $0) } != nil
     }
 
-    init(screenshot: NSImage, eventManager: OverlayEventManager) {
+    init(screenshot: NSImage, eventManager: OverlayEventManager, windowCandidates: [CGRect] = []) {
+        self.windowCandidates = windowCandidates
         self.screenshot = screenshot
         self.eventManager = eventManager
         // 安全获取 CGImage：NSImage.cgImage 在部分显示器配置下可能崩溃
@@ -137,15 +150,18 @@ final class ScreenshotOverlayContentView: NSView {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         frame = window?.contentView?.bounds ?? frame
         window?.makeFirstResponder(self)
+        if let window { updateWindowHover(at: convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)) }
 
         eventManager.keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
+            guard let self, event.window === self.window else { return event }
             guard !self.isAnnotationLocked else { return event }
             switch event.keyCode {
             case 53:
@@ -163,32 +179,99 @@ final class ScreenshotOverlayContentView: NSView {
     override func removeFromSuperview() {
         selectionToolbarView?.removeFromSuperview()
         selectionToolbarView = nil
+        longCaptureButton?.removeFromSuperview()
+        longCaptureButton = nil
         annotationCanvasView?.removeFromSuperview()
         eventManager.cleanup()
         super.removeFromSuperview()
     }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        updateWindowHover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        updateWindowHover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hoveredWindowRect = nil
+        needsDisplay = true
+    }
+
+    private func updateWindowHover(at point: CGPoint) {
+        guard !hasFinished, !isAnnotationLocked, selectionModel.rect == nil, windowClickAnchor == nil else { return }
+        hoveredWindowRect = windowCandidates.first { $0.contains(point) }
+        needsDisplay = true
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard !hasFinished, !isAnnotationLocked else { return }
+        window?.makeKey()
         let point = convert(event.locationInWindow, from: nil)
+        // SwiftUI 未消费的工具栏事件也不能交给框选状态机。
+        isToolbarMouseInteraction = selectionToolbarView.map { !$0.isHidden && $0.frame.contains(point) } ?? false
+        guard !isToolbarMouseInteraction else { return }
         if shouldBeginAnnotation(at: point) {
             beginInlineAnnotation(firstEvent: event)
             return
         }
+        if selectionModel.rect == nil, let candidate = windowCandidates.first(where: { $0.contains(point) }) {
+            // 按下时仍是窗口预选；超过阈值才从原始按下位置开始自定义框选。
+            pendingWindowRect = candidate
+            windowClickAnchor = point
+            hoveredWindowRect = candidate
+            needsDisplay = true
+            return
+        }
+        hoveredWindowRect = nil
         hideSelectionToolbar()
         selectionModel.begin(at: point, bounds: bounds)
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard !hasFinished, !isAnnotationLocked else { return }
-        selectionModel.update(to: convert(event.locationInWindow, from: nil), bounds: bounds)
+        guard !hasFinished, !isAnnotationLocked, !isToolbarMouseInteraction else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        if let anchor = windowClickAnchor {
+            guard hypot(point.x - anchor.x, point.y - anchor.y) > 4 else { return }
+            pendingWindowRect = nil
+            windowClickAnchor = nil
+            hoveredWindowRect = nil
+            selectionModel.begin(at: anchor, bounds: bounds)
+        }
+        selectionModel.update(to: point, bounds: bounds)
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        if isToolbarMouseInteraction {
+            isToolbarMouseInteraction = false
+            return
+        }
         guard !hasFinished, !isAnnotationLocked else { return }
-        selectionModel.end(at: convert(event.locationInWindow, from: nil), bounds: bounds)
+        let point = convert(event.locationInWindow, from: nil)
+        if let anchor = windowClickAnchor, let rect = pendingWindowRect {
+            if hypot(point.x - anchor.x, point.y - anchor.y) <= 4 {
+                selectionModel = ScreenshotSelectionModel(rect: rect)
+            } else {
+                selectionModel.begin(at: anchor, bounds: bounds)
+                selectionModel.end(at: point, bounds: bounds)
+            }
+        } else {
+            selectionModel.end(at: point, bounds: bounds)
+        }
+        windowClickAnchor = nil
+        pendingWindowRect = nil
+        hoveredWindowRect = nil
         showSelectionToolbarIfNeeded()
         needsDisplay = true
     }
@@ -198,15 +281,23 @@ final class ScreenshotOverlayContentView: NSView {
 
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
-        // 先覆盖全屏暗色遮罩，框选时再挖空选区露出底下的屏幕内容。
-        ctx.setFillColor(NSColor.black.withAlphaComponent(0.45).cgColor)
+        // 预览与输出使用同一张每屏截图。透明挖洞会让 WindowServer 将鼠标交给底层窗口。
+        ctx.setFillColor(NSColor.black.cgColor)
         ctx.fill(bounds)
+        if let cachedCGImage {
+            ctx.interpolationQuality = .none
+            ctx.draw(cachedCGImage, in: bounds)
+        }
+        let previewRect = selectionRect ?? hoveredWindowRect
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.45).cgColor)
+        ctx.beginPath()
+        ctx.addRect(bounds)
+        if let rect = previewRect, rect.width > 1, rect.height > 1 {
+            ctx.addRect(rect)
+        }
+        ctx.drawPath(using: .eoFill)
 
-        if let rect = selectionRect, rect.width > 1, rect.height > 1 {
-            ctx.saveGState()
-            ctx.setBlendMode(.clear)
-            ctx.fill(rect)
-            ctx.restoreGState()
+        if let rect = previewRect, rect.width > 1, rect.height > 1 {
 
             OneBoardColors.nsAccent.setStroke()
             let border = NSBezierPath(rect: rect)
@@ -214,7 +305,7 @@ final class ScreenshotOverlayContentView: NSView {
             border.stroke()
 
             if !isAnnotationLocked {
-                drawResizeHandles(for: rect)
+                if selectionRect != nil { drawResizeHandles(for: rect) }
                 drawSizeLabel(for: rect)
             }
         } else {
@@ -282,12 +373,12 @@ final class ScreenshotOverlayContentView: NSView {
     }
 
     private func finishAnnotation(_ image: NSImage, action: ScreenshotSelectionAction) {
-        guard !hasFinished, let rect = selectionRect,
-              let screen = window?.screen ?? NSScreen.main else { return }
+        guard !hasFinished, let rect = selectionRect else { return }
+        let screenFrame = window?.screen?.frame ?? window?.frame ?? CGRect(origin: .zero, size: bounds.size)
         hasFinished = true
         onConfirm?(
             image,
-            ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screen.frame),
+            ScreenshotCropMapper.screenRect(forOverlayRect: rect, screenFrame: screenFrame),
             action
         )
     }
@@ -378,7 +469,7 @@ final class ScreenshotOverlayContentView: NSView {
             existing.rootView = rootView
             hostingView = existing
         } else {
-            hostingView = NSHostingView(rootView: rootView)
+            hostingView = ScreenshotToolbarHostingView(rootView: rootView)
             hostingView.wantsLayer = true
             addSubview(hostingView)
             selectionToolbarView = hostingView
@@ -386,6 +477,26 @@ final class ScreenshotOverlayContentView: NSView {
         let fittingSize = hostingView.fittingSize
         hostingView.frame = inlineToolbarFrame(selectionRect: selectionRect, toolbarSize: fittingSize)
         hostingView.isHidden = false
+        installLongCaptureButton(nextTo: hostingView)
+    }
+
+    private func installLongCaptureButton(nextTo toolbar: NSView) {
+        let button = longCaptureButton ?? NSButton(title: "长截图", target: self, action: #selector(beginLongCapture))
+        button.bezelStyle = .rounded
+        button.image = NSImage(systemSymbolName: "rectangle.stack", accessibilityDescription: "长截图")
+        button.imagePosition = .imageLeading
+        button.sizeToFit()
+        let width = max(button.frame.width + 12, 82)
+        var x = toolbar.frame.maxX + 8
+        if x + width > bounds.maxX - 12 { x = toolbar.frame.minX - width - 8 }
+        button.frame = CGRect(x: x, y: toolbar.frame.minY + 4, width: width, height: max(28, toolbar.frame.height - 8))
+        if button.superview == nil { addSubview(button) }
+        button.isHidden = false
+        longCaptureButton = button
+    }
+
+    @objc private func beginLongCapture() {
+        finishSelection(.longCapture)
     }
 
     func handleAnnotationToolSelection(_ tool: AnnotationTool) {
@@ -417,6 +528,7 @@ final class ScreenshotOverlayContentView: NSView {
 
     private func hideSelectionToolbar() {
         selectionToolbarView?.isHidden = true
+        longCaptureButton?.isHidden = true
     }
 
     private func inlineToolbarFrame(selectionRect: CGRect, toolbarSize: CGSize) -> CGRect {
@@ -455,7 +567,7 @@ final class ScreenshotOverlayContentView: NSView {
     }
 
     private func drawHint() {
-        let title = "拖拽选择截图区域"
+        let title = "单击选择窗口，或拖拽自定义截图区域"
         let subtitle = "松开后可移动和缩放  ·  Esc 取消"
         let titleAttributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 18, weight: .medium),

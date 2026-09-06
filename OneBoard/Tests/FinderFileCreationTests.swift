@@ -3,6 +3,29 @@ import Foundation
 import XCTest
 
 final class FinderFileCreationTests: XCTestCase {
+    func testCustomExtensionsValidateAndRoundTrip() throws {
+        let kind = try XCTUnwrap(FinderFileKind(rawValue: "vue"))
+        let request = FinderFileCreationRequest(directoryURL: URL(fileURLWithPath: "/tmp"), kind: kind)
+        XCTAssertEqual(FinderFileCreationRequest(commandURL: try XCTUnwrap(request.commandURL))?.kind, kind)
+        for invalid in ["", "../txt", "a/b", "a\\b", "..", "txt\n"] {
+            XCTAssertNil(FinderFileKind(rawValue: invalid))
+        }
+        XCTAssertNotNil(FinderFileKind(rawValue: "md"))
+    }
+    func testCreatingThroughDesktopSymlinkWritesToCloudDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let cloudDesktop = root.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs/Desktop")
+        try FileManager.default.createDirectory(at: cloudDesktop, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let desktop = root.appendingPathComponent("Desktop")
+        try FileManager.default.createSymbolicLink(at: desktop, withDestinationURL: cloudDesktop)
+        for kind in FinderFileKind.allCases {
+            let file = try FinderFileCreator.create(kind: kind, in: desktop.resolvingSymlinksInPath())
+            XCTAssertEqual(file.deletingLastPathComponent(), cloudDesktop.standardizedFileURL)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        }
+    }
+
     func testFinderCommandRoundTripsProtectedDirectoryWithoutWritingInExtension() throws {
         let directory = URL(fileURLWithPath: "/Users/example/Desktop/办公", isDirectory: true)
         let request = FinderFileCreationRequest(directoryURL: directory, kind: .txt)
@@ -12,6 +35,14 @@ final class FinderFileCreationTests: XCTestCase {
 
         XCTAssertEqual(decoded.directoryURL, directory)
         XCTAssertEqual(decoded.kind, .txt)
+    }
+
+    func testFinderTerminalCommandRoundTripsCurrentDirectory() throws {
+        let directory = URL(fileURLWithPath: "/Users/example/办公/项目", isDirectory: true)
+        let commandURL = try XCTUnwrap(FinderTerminalRequest(directoryURL: directory).commandURL)
+        let decoded = try XCTUnwrap(FinderTerminalRequest(commandURL: commandURL))
+        XCTAssertEqual(decoded.directoryURL, directory)
+        XCTAssertEqual(commandURL.host, "open-terminal")
     }
 
     func testFinderManagedDirectoriesCoverRootAndDesktop() {
@@ -24,7 +55,7 @@ final class FinderFileCreationTests: XCTestCase {
 
         XCTAssertTrue(directories.contains(URL(fileURLWithPath: "/", isDirectory: true)))
         XCTAssertTrue(directories.contains(home.appendingPathComponent("Desktop", isDirectory: true)))
-        XCTAssertFalse(directories.contains(iCloudRoot))
+        XCTAssertTrue(directories.contains(iCloudRoot))
         XCTAssertTrue(directories.contains(iCloudDesktop))
     }
 
@@ -44,6 +75,7 @@ final class FinderFileCreationTests: XCTestCase {
 
         XCTAssertTrue(groups.contains("group.com.oneboard.mac"))
         XCTAssertTrue(homeExceptions.contains("/Desktop/"))
+        XCTAssertTrue(homeExceptions.contains("/Library/Mobile Documents/com~apple~CloudDocs/"))
         XCTAssertTrue(homeExceptions.contains("/Library/Mobile Documents/com~apple~CloudDocs/Desktop/"))
         XCTAssertNil(plist["com.apple.security.temporary-exception.files.home-relative-path.read-only"])
     }

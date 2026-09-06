@@ -1,9 +1,78 @@
 import AppKit
+import SwiftUI
 @testable import OneBoardKit
 import XCTest
 
 @MainActor
 final class AnnotationServiceTests: XCTestCase {
+    func testRenderPreservesSinglePixelStripes() throws {
+        let image = makeImage(points: CGSize(width: 64, height: 32), pixels: CGSize(width: 128, height: 64))
+        let source = try XCTUnwrap(image.representations.first as? NSBitmapImageRep)
+        for y in 0..<64 {
+            for x in 0..<128 { source.setColor(NSColor(deviceRed: x.isMultiple(of: 2) ? 0 : 1, green: x.isMultiple(of: 2) ? 0 : 1, blue: x.isMultiple(of: 2) ? 0 : 1, alpha: 1), atX: x, y: y) }
+        }
+        XCTAssertEqual(source.colorAt(x: 10, y: 20)?.usingColorSpace(.deviceRGB)?.redComponent, 0)
+        let rendered = AnnotationService(baseImage: image).renderToImage(baseImage: image)
+        let output = try XCTUnwrap(rendered.representations.first as? NSBitmapImageRep)
+        for x in 10..<30 {
+            let value = try XCTUnwrap(output.colorAt(x: x, y: 20)?.usingColorSpace(.deviceRGB)).redComponent
+            XCTAssertEqual(value, x.isMultiple(of: 2) ? 0 : 1, accuracy: 0.02)
+        }
+    }
+
+    func testPinnedViewPreservesRetinaPixelStripes() throws {
+        let image = makeImage(points: CGSize(width: 64, height: 32), pixels: CGSize(width: 128, height: 64))
+        let source = try XCTUnwrap(image.representations.first as? NSBitmapImageRep)
+        for y in 0..<64 {
+            for x in 0..<128 {
+                let value: CGFloat = x.isMultiple(of: 2) ? 0 : 1
+                source.setColor(NSColor(deviceRed: value, green: value, blue: value, alpha: 1), atX: x, y: y)
+            }
+        }
+        let rendered = AnnotationService(baseImage: image).renderToImage(baseImage: image)
+        let renderer = ImageRenderer(content: PinnedScreenshotView(image: rendered, onClose: {}).frame(width: 64, height: 32))
+        renderer.scale = 2
+        let output = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+        XCTAssertEqual(output.pixelsWide, 128)
+        for x in 10..<30 {
+            let value = try XCTUnwrap(output.colorAt(x: x, y: 20)?.usingColorSpace(.deviceRGB)).redComponent
+            XCTAssertEqual(value, x.isMultiple(of: 2) ? 0 : 1, accuracy: 0.02)
+        }
+    }
+
+    func testPinnedPanelKeepsSelectionFrame() throws {
+        let image = makeImage(points: CGSize(width: 128, height: 64), pixels: CGSize(width: 256, height: 128))
+        let source = try XCTUnwrap(image.representations.first as? NSBitmapImageRep)
+        for y in 0..<128 {
+            for x in 0..<256 {
+                let value: CGFloat = x.isMultiple(of: 2) ? 0 : 1
+                source.setColor(NSColor(deviceRed: value, green: value, blue: value, alpha: 1), atX: x, y: y)
+            }
+        }
+        let frame = CGRect(x: 100, y: 100, width: 128, height: 64)
+        ScreenshotViewModel.shared.pinToScreen(image, preferredFrame: frame)
+        let panels = ScreenshotViewModel.shared.pinnedWindows
+        let panel = try XCTUnwrap(panels.last)
+        defer {
+            panel.close()
+            ScreenshotViewModel.shared.pinnedWindows.removeAll { $0 === panel }
+        }
+        panel.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(panel.frame.size, frame.size)
+        XCTAssertEqual(panel.contentView?.bounds.size, frame.size)
+        let content = try XCTUnwrap(panel.contentView)
+        let bitmap = try XCTUnwrap(content.bitmapImageRepForCachingDisplay(in: content.bounds))
+        content.cacheDisplay(in: content.bounds, to: bitmap)
+        if panel.backingScaleFactor == 2 {
+            XCTAssertEqual(bitmap.pixelsWide, 256)
+            for x in 10..<30 {
+                let value = try XCTUnwrap(bitmap.colorAt(x: x, y: 20)?.usingColorSpace(.deviceRGB)).redComponent
+                XCTAssertEqual(value, x.isMultiple(of: 2) ? 0 : 1, accuracy: 0.02)
+            }
+        }
+
+    }
+
     func testRenderKeepsSourcePixelDimensionsForRetinaImages() {
         let image = makeImage(points: CGSize(width: 100, height: 50), pixels: CGSize(width: 200, height: 100))
         let service = AnnotationService(baseImage: image)

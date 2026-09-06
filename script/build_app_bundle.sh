@@ -30,8 +30,8 @@ if [ -z "${ONEBOARD_CODESIGN_IDENTITY:-}" ]; then
     ONEBOARD_CODESIGN_IDENTITY="$(/usr/bin/security find-identity -v -p codesigning | /usr/bin/awk '/Developer ID Application|Apple Development/ { print $2; exit }')"
 fi
 : "${ONEBOARD_CODESIGN_IDENTITY:=-}"
-export HOME="$ONEBOARD_BUILD_HOME"
-export CLANG_MODULE_CACHE_PATH="$ONEBOARD_MODULE_CACHE"
+HOME="$ONEBOARD_BUILD_HOME" \
+CLANG_MODULE_CACHE_PATH="$ONEBOARD_MODULE_CACHE" \
 swift build -c release --disable-sandbox
 
 rm -rf "$APP_DIR"
@@ -43,6 +43,7 @@ cp "$PROXY_BINARY" "$HELPERS_DIR/oneboard-ai-proxy"
 chmod +x "$HELPERS_DIR/oneboard-ai-proxy"
 mkdir -p "$RESOURCES_DIR/ThirdPartyNotices"
 cp "$ROOT_DIR/ThirdPartyNotices/CC-Switch-LICENSE.txt" "$RESOURCES_DIR/ThirdPartyNotices/CC-Switch-LICENSE.txt"
+cp "$ROOT_DIR/ThirdPartyNotices/LunarSwift-LICENSE.txt" "$RESOURCES_DIR/ThirdPartyNotices/LunarSwift-LICENSE.txt"
 
 # --- Finder Sync Extension ---
 echo "Building Finder Sync Extension..."
@@ -85,6 +86,15 @@ echo "Finder Sync Extension bundled at $EXTENSION_DIR"
 sed 's/$(EXECUTABLE_NAME)/OneBoard/g' "Resources/Info.plist" > "$CONTENTS_DIR/Info.plist"
 printf 'APPL????' > "$CONTENTS_DIR/PkgInfo"
 
+if [ "${ONEBOARD_ENABLE_ICLOUD_SYNC:-0}" = "1" ]; then
+    APP_ENTITLEMENTS="Resources/OneBoard.entitlements"
+    /usr/libexec/PlistBuddy -c "Add :OneBoardCloudSyncAvailable bool true" "$CONTENTS_DIR/Info.plist"
+else
+    APP_ENTITLEMENTS="Resources/OneBoard.local.entitlements"
+    /usr/libexec/PlistBuddy -c "Add :OneBoardCloudSyncAvailable bool false" "$CONTENTS_DIR/Info.plist"
+    echo "iCloud sync signing is disabled for this local package."
+fi
+
 if [ -f "Resources/AppIcon.icns" ]; then
     cp "Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 elif [ -f "$BUILD_DIR/AppIcon.icns" ]; then
@@ -124,7 +134,7 @@ fi
 /usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" "$HELPERS_DIR/oneboard-ai-proxy" || true
 # 嵌套扩展已经按各自 entitlement 签名；这里不能使用 --deep 重签，
 # 否则会剥掉 Finder 扩展的 app-sandbox entitlement，导致 PlugInKit 拒绝加载。
-/usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "Resources/OneBoard.entitlements" "$APP_DIR"
+/usr/bin/codesign --force --sign "$ONEBOARD_CODESIGN_IDENTITY" --entitlements "$APP_ENTITLEMENTS" "$APP_DIR"
 
 echo "Validating app bundle..."
 /usr/bin/codesign --verify --deep --strict "$APP_DIR"

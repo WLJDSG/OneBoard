@@ -3,6 +3,18 @@ import GRDB
 @testable import OneBoardKit
 
 final class AIProviderUsageTests: XCTestCase {
+    func testQuotaFailureDoesNotClaimProxyFailure() {
+        XCTAssertEqual(AIProviderQuotaError("额度查询 HTTP 404").localizedDescription, "额度查询 HTTP 404")
+    }
+
+    func testDeepSeekAnthropicConnectionUsesRootBalanceEndpoint() throws {
+        for suffix in ["/anthropic", "/anthropic/v1/messages", "/v1/chat/completions"] {
+            let profile = AIProviderProfile(client: .claude, title: "DeepSeek", baseURL: "https://api.deepseek.com" + suffix, model: "m")
+            XCTAssertEqual(try AIProviderUsageService.endpoint(profile).0.absoluteString,
+                           "https://api.deepseek.com/user/balance")
+        }
+    }
+
     func testDeepSeekBalanceDoesNotInventTokenCounts() throws {
         let snapshot = try AIProviderUsageService.parse(Data(#"{"balance_infos":[{"currency":"CNY","total_balance":"12.3456"}]}"#.utf8), api: .deepseek, credentialID: "key")
         XCTAssertEqual(snapshot.balance, "12.3456 CNY")

@@ -19,10 +19,14 @@ struct OneBoardGatewayHelper {
 
     func isInstalled() -> Bool {
         guard fileManager.isExecutableFile(atPath: Self.helperPath),
+              fileManager.fileExists(atPath: Self.sudoersPath),
+              fileManager.fileExists(atPath: Self.allowedIPsPath),
               let script = try? String(contentsOfFile: Self.helperPath, encoding: .utf8) else {
             return false
         }
-        return Self.isCurrentHelperScript(script)
+        guard Self.isCurrentHelperScript(script) else { return false }
+        // 只查询 sudo 授权，不执行 Helper，避免文件存在却尚未授权当前用户。
+        return (try? runner.run("/usr/bin/sudo", arguments: ["-n", "-l", Self.helperPath]))?.terminationStatus == 0
     }
 
     static func isCurrentHelperScript(_ script: String) -> Bool {

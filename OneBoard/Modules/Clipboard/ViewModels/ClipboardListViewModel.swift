@@ -131,6 +131,8 @@ final class ClipboardListViewModel: ObservableObject {
 
     // MARK: - 粘贴
 
+    func copy(_ entry: ClipboardEntry) { writeToPasteboard(entry) }
+
     /// 将条目内容写入剪贴板（不执行粘贴操作）
     private func writeToPasteboard(_ entry: ClipboardEntry) {
         print("[ViewModel] writeToPasteboard: contentType=\(entry.contentType), plainText=\(entry.plainText?.prefix(50) ?? "nil")..., dataSize=\(entry.data.count)")

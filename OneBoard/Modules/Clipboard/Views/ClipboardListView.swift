@@ -37,7 +37,7 @@ struct ClipboardListView: View {
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .medium))
-            .foregroundColor(OneBoardColors.textTertiary)
+            .foregroundColor(FeaturePalette.secondary)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
@@ -59,19 +59,19 @@ struct ClipboardListView: View {
         VStack(spacing: 12) {
             Image(systemName: "doc.on.clipboard")
                 .font(.system(size: 32))
-                .foregroundColor(OneBoardColors.textSecondary.opacity(0.3))
+                .foregroundColor(FeaturePalette.secondary.opacity(0.3))
 
             if viewModel.searchText.isEmpty {
                 Text("暂无剪贴板记录")
                     .font(.system(size: 13))
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
                 Text("复制任意内容后自动记录")
                     .font(.system(size: 11))
-                    .foregroundColor(OneBoardColors.textSecondary.opacity(0.6))
+                    .foregroundColor(FeaturePalette.secondary.opacity(0.6))
             } else {
                 Text("未找到匹配结果")
                     .font(.system(size: 13))
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

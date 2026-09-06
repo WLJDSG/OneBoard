@@ -13,6 +13,9 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     public static let shared = MenuBarManager()
 
     private var statusItem: NSStatusItem?
+    private var calendarStatusItem: NSStatusItem?
+    private var macStatusItem: NSStatusItem?
+    private var macStatusTimer: Timer?
     private var activeMenu: NSMenu?
     private var clipboardFloatingWindow: NSPanel?
     private var clipboardGlobalMouseMonitor: Any?
@@ -39,6 +42,35 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         button.action = #selector(handleClick)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem.isVisible = true
+        updateCalendarStatusItemVisibility()
+        let macItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        macItem.button?.image = NSImage(systemSymbolName: "gauge.with.dots.needle.50percent", accessibilityDescription: "Mac 状态")
+        macItem.button?.target = self
+        macItem.button?.action = #selector(openMacStatus)
+        macItem.button?.toolTip = "Mac 状态"
+        macStatusItem = macItem
+        macStatusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateMacStatusLabel() }
+        }
+        if let button = macItem.button { Task { @MainActor in MacStatusWindowManager.shared.card.attach(to: button) } }
+    }
+
+    @MainActor private func updateMacStatusLabel() {
+        guard let item = macStatusItem, let button = item.button else { return }
+        let model = MacStatusModel.shared
+        model.start()
+        let defaults = UserDefaults.standard
+        let mode = defaults.string(forKey: "macStatus.menuMode") ?? "icon"
+        let symbol = defaults.string(forKey: "macStatus.menuIcon") ?? "gauge.with.dots.needle.50percent"
+        button.image = mode == "icon" ? NSImage(systemSymbolName: symbol, accessibilityDescription: "Mac 状态") : nil
+        switch mode {
+        case "cpu": button.title = "CPU \(Int(model.cpu * 100))%"
+        case "memory": button.title = "内存 \(Int(model.memory * 100))%"
+        case "network": button.title = "↑\(Int(model.upload / 1024)) ↓\(Int(model.download / 1024)) KB/s"
+        default: button.title = ""
+        }
+        button.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        item.length = mode == "icon" ? NSStatusItem.squareLength : NSStatusItem.variableLength
     }
 
     @objc private func handleClick() {
@@ -47,50 +79,111 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     }
 
     func showMenu(anchor: NSView? = nil) {
-        let menu = NSMenu()
-        menu.appearance = NSAppearance(named: .aqua)
+        let menu = makeMainMenu()
         menu.delegate = self
-        let aiModelsItem = NSMenuItem(title: "AI 模型", action: nil, keyEquivalent: "")
-        aiModelsItem.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted", accessibilityDescription: "AI 模型")
-        aiModelsItem.submenu = makeAIModelMenu()
-        menu.addItem(aiModelsItem)
-        let codexItem = NSMenuItem(title: "Codex 账号", action: nil, keyEquivalent: "")
-        codexItem.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: "Codex 账号")
-        codexItem.submenu = makeCodexAccountMenu()
-        menu.addItem(codexItem)
-        menu.addItem(NSMenuItem.separator())
-        let gatewayItem = NSMenuItem(title: "网关切换...", action: #selector(openGatewaySwitcher), keyEquivalent: "g")
-        gatewayItem.target = self
-        gatewayItem.image = NSImage(systemSymbolName: "network", accessibilityDescription: "网关切换")
-        menu.addItem(gatewayItem)
-        menu.addItem(NSMenuItem.separator())
-        let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
-        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "设置")
-        menu.addItem(settingsItem)
-        let clearPrivacyItem = NSMenuItem(title: "清除 OneBoard 授权...", action: #selector(clearPrivacyAuthorizations), keyEquivalent: "")
-        clearPrivacyItem.target = self
-        clearPrivacyItem.image = NSImage(systemSymbolName: "lock.slash", accessibilityDescription: "清除授权")
-        menu.addItem(clearPrivacyItem)
-        let uninstallItem = NSMenuItem(title: "彻底卸载并清理残留...", action: #selector(runUninstaller), keyEquivalent: "")
-        uninstallItem.target = self
-        uninstallItem.image = NSImage(systemSymbolName: "trash", accessibilityDescription: "卸载")
-        menu.addItem(uninstallItem)
-        menu.addItem(NSMenuItem.separator())
-        let todoItem = NSMenuItem(title: "待办列表...", action: #selector(openTodoPanel), keyEquivalent: "")
-        todoItem.target = self
-        todoItem.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: "待办")
-        menu.addItem(todoItem)
-        menu.addItem(NSMenuItem.separator())
-        let quitItem = NSMenuItem(title: "退出 OneBoard", action: #selector(quitApp), keyEquivalent: "q")
-        quitItem.target = self
-        quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: "退出")
-        menu.addItem(quitItem)
 
         let anchorView = anchor ?? statusItem?.button
         if let anchorView {
             activeMenu = menu
             menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchorView.bounds.minY - 4), in: anchorView)
+        }
+    }
+
+    /// 原生菜单负责快捷操作，配置和维护集中放在末尾。
+    func makeMainMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem.sectionHeader(title: "日常工具"))
+        menu.addItem(actionItem("截图…", icon: "camera.viewfinder", action: #selector(captureScreenshot)))
+        menu.addItem(actionItem("翻译…", icon: "globe", action: #selector(openTranslation)))
+        menu.addItem(actionItem("剪贴板历史…", icon: "doc.on.clipboard", action: #selector(openClipboard)))
+        menu.addItem(actionItem("文件暂存区…", icon: "tray.full", action: #selector(openFileShelf)))
+        let desktop = NSMenuItem(title: "在桌面新建文件", action: nil, keyEquivalent: "")
+        let desktopMenu = NSMenu()
+        let enabledTypes = UserDefaults(suiteName: Constants.appGroupIdentifier)?.stringArray(forKey: Constants.UserDefaultsKeys.enabledFileTypes) ?? ["txt", "docx", "xlsx"]
+        for kind in enabledTypes.compactMap(FinderFileKind.init(rawValue:)) {
+            let item = actionItem("新建 .\(kind.rawValue) 文件", icon: "doc.badge.plus", action: #selector(createDesktopFile(_:)))
+            item.representedObject = kind.rawValue
+            desktopMenu.addItem(item)
+        }
+        desktop.submenu = desktopMenu
+        menu.addItem(desktop)
+        menu.addItem(actionItem("待办列表…", icon: "checklist", action: #selector(openTodoPanel)))
+        if UserDefaults.standard.object(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar) == nil
+            || UserDefaults.standard.bool(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar) {
+            menu.addItem(actionItem("日历…", icon: "calendar", action: #selector(openCalendar)))
+        }
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem.sectionHeader(title: "连接与账号"))
+        let models = NSMenuItem(title: "AI 模型", action: nil, keyEquivalent: "")
+        models.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted", accessibilityDescription: nil)
+        models.submenu = makeAIModelMenu()
+        menu.addItem(models)
+        let accounts = NSMenuItem(title: "Codex 账号", action: nil, keyEquivalent: "")
+        accounts.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: nil)
+        accounts.submenu = makeCodexAccountMenu()
+        menu.addItem(accounts)
+        menu.addItem(actionItem("网关切换…", icon: "network", action: #selector(openGatewaySwitcher), key: "g"))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem.sectionHeader(title: "应用"))
+        menu.addItem(actionItem("设置…", icon: "gearshape", action: #selector(openSettings), key: ","))
+        let maintenance = NSMenuItem(title: "维护", action: nil, keyEquivalent: "")
+        let maintenanceMenu = NSMenu()
+        maintenanceMenu.addItem(actionItem("清除 OneBoard 授权…", icon: "lock.slash", action: #selector(clearPrivacyAuthorizations)))
+        maintenanceMenu.addItem(actionItem("彻底卸载并清理残留…", icon: "trash", action: #selector(runUninstaller)))
+        maintenance.submenu = maintenanceMenu
+        menu.addItem(maintenance)
+        menu.addItem(actionItem("退出 OneBoard", icon: "power", action: #selector(quitApp), key: "q"))
+        return menu
+    }
+
+    private func actionItem(_ title: String, icon: String, action: Selector, key: String = "") -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        item.target = self
+        item.image = NSImage(systemSymbolName: icon, accessibilityDescription: title)
+        return item
+    }
+
+    @MainActor @objc private func createDesktopFile(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String, let kind = FinderFileKind(rawValue: value) else { return }
+        DesktopFileCreation.create(kind: kind)
+    }
+
+    @objc private func captureScreenshot() {
+        Task { @MainActor in await ScreenshotViewModel.shared.startCapture() }
+    }
+
+    @objc private func openTranslation() {
+        Task { @MainActor in TranslationPanelWindowManager.shared.show(sourceText: "") }
+    }
+
+    @objc private func openClipboard() {
+        Task { @MainActor in showClipboardAsFloatingWindow() }
+    }
+
+    @objc private func openFileShelf() {
+        Task { @MainActor in FileStagingViewModel.shared.showFloatingShelf() }
+    }
+
+    @objc private func openCalendar() {
+        Task { @MainActor in CalendarPanelWindowManager.shared.show() }
+    }
+    @objc private func openMacStatus() { Task { @MainActor in MacStatusWindowManager.shared.card.toggle() } }
+
+    func updateCalendarStatusItemVisibility() {
+        let defaults = UserDefaults.standard
+        let visible = defaults.object(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar) == nil
+            || defaults.bool(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar)
+        if visible, calendarStatusItem == nil {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            item.button?.image = NSImage(systemSymbolName: "calendar", accessibilityDescription: "OneBoard 日历")
+            item.button?.target = self
+            item.button?.action = #selector(openCalendar)
+            item.button?.toolTip = "OneBoard 日历"
+            calendarStatusItem = item
+            if let button = item.button { Task { @MainActor in CalendarPanelWindowManager.shared.attach(to: button) } }
+        } else if !visible, let item = calendarStatusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            calendarStatusItem = nil
         }
     }
 
@@ -431,42 +524,26 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     // MARK: - 图标
 
     private func createMenuBarIcon() -> NSImage {
+        // 18pt 模板图：一块分栏面板与右上叠层，像素对齐的线条适配深浅菜单栏。
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            let blue = NSColor(calibratedRed: 0.18, green: 0.55, blue: 1.0, alpha: 1)
-            let violet = NSColor(calibratedRed: 0.55, green: 0.35, blue: 0.98, alpha: 1)
-
-            let rearPanel = NSBezierPath(
-                roundedRect: NSRect(x: 6.0, y: 6.0, width: 9.5, height: 9.0),
-                xRadius: 2.2,
-                yRadius: 2.2
-            )
-            violet.setFill()
-            rearPanel.fill()
-
-            let frontPanel = NSBezierPath(
-                roundedRect: NSRect(x: 2.5, y: 2.5, width: 11.5, height: 11.5),
-                xRadius: 2.6,
-                yRadius: 2.6
-            )
-            blue.setFill()
-            frontPanel.fill()
-
-            if let context = NSGraphicsContext.current?.cgContext {
-                context.saveGState()
-                context.setBlendMode(.clear)
-                context.setLineCap(.round)
-                context.setLineWidth(1.25)
-                context.move(to: CGPoint(x: 5.2, y: 9.1))
-                context.addLine(to: CGPoint(x: 11.0, y: 9.1))
-                context.move(to: CGPoint(x: 5.2, y: 6.4))
-                context.addLine(to: CGPoint(x: 9.2, y: 6.4))
-                context.strokePath()
-                context.restoreGState()
-            }
-
+            NSColor.black.setStroke()
+            let outline = NSBezierPath(roundedRect: NSRect(x: 2, y: 2, width: 12, height: 12), xRadius: 2.5, yRadius: 2.5)
+            outline.lineWidth = 1.5
+            outline.stroke()
+            let detail = NSBezierPath()
+            detail.lineWidth = 1.5
+            detail.lineCapStyle = .round
+            detail.lineJoinStyle = .round
+            detail.move(to: NSPoint(x: 6, y: 3))
+            detail.line(to: NSPoint(x: 6, y: 13))
+            detail.move(to: NSPoint(x: 6, y: 16))
+            detail.line(to: NSPoint(x: 13.5, y: 16))
+            detail.curve(to: NSPoint(x: 16, y: 13.5), controlPoint1: NSPoint(x: 15, y: 16), controlPoint2: NSPoint(x: 16, y: 15))
+            detail.line(to: NSPoint(x: 16, y: 6))
+            detail.stroke()
             return true
         }
-        image.isTemplate = false
+        image.isTemplate = true
         return image
     }
 
@@ -490,7 +567,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
         let hostingView = NSHostingView(rootView: GatewaySwitcherPanelView())
         hostingView.wantsLayer = true
-        hostingView.layer?.cornerRadius = OneBoardRadius.lg
+        hostingView.layer?.cornerRadius = 20
         hostingView.layer?.masksToBounds = true
 
         let panel = ClipboardPanel(
@@ -518,11 +595,15 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.closeGatewaySwitcherPanel()
+            MainActor.assumeIsolated {
+                guard !GatewayViewModel.shared.isSwitching else { return }
+                self?.closeGatewaySwitcherPanel()
+            }
         }
 
         gatewayGlobalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
             guard let self, let panel = self.gatewayPanel, panel.isVisible else { return }
+            guard !GatewayViewModel.shared.isSwitching else { return }
             if !NSPointInRect(NSEvent.mouseLocation, panel.frame) {
                 self.closeGatewaySwitcherPanel()
             }
@@ -553,14 +634,12 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
         let hostingView = ClipboardTrackingHostingView(
             rootView: ClipboardPopoverView(),
-            onMouseExit: { [weak self] in
-                self?.closeClipboardFloatingWindow()
-            }
+            onMouseExit: { }
         )
         hostingView.wantsLayer = true
 
         let panel = ClipboardPanel(
-            contentRect: NSRect(x: 0, y: 0, width: Constants.popoverWidth, height: Constants.popoverHeight),
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 680),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false
         )

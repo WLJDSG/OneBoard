@@ -32,17 +32,17 @@ struct AnnotationToolbarView: View {
     var body: some View {
         HStack(spacing: 8) {
             toolGroup
+            Divider().frame(height: 20)
             styleGroup
+            Divider().frame(height: 20)
             historyGroup
+            Divider().frame(height: 20)
             outputGroup
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: OneBoardRadius.lg))
         .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
-        .popover(isPresented: $showColorPicker, arrowEdge: .bottom) {
-            colorPickerPopover
-        }
     }
 
     // MARK: - 工具组
@@ -54,16 +54,14 @@ struct AnnotationToolbarView: View {
             }
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
+
     }
 
     // MARK: - 样式组
 
     private var styleGroup: some View {
         HStack(spacing: 7) {
-            ForEach(annotationService.presetColors, id: \.self) { color in
-                colorSwatch(color)
-            }
+            colorPickerButton
 
             Divider().frame(height: 22)
 
@@ -87,19 +85,10 @@ struct AnnotationToolbarView: View {
             .buttonStyle(.plain)
             .help("增大样式 Right Option")
 
-            Button(action: { showColorPicker.toggle() }) {
-                Image(systemName: "ellipsis")
-                    .oneBoardFont(.body).bold()
-                    .frame(width: 28, height: 28)
-                    .background(RoundedRectangle(cornerRadius: OneBoardRadius.lg).fill(OneBoardColors.accent.opacity(0.10)))
-                    .foregroundColor(OneBoardColors.textPrimary)
-            }
-            .buttonStyle(.plain)
-            .help("更多颜色")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
+
     }
 
     private var styleValueText: String {
@@ -132,7 +121,7 @@ struct AnnotationToolbarView: View {
             .disabled(!annotationService.canRedo)
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
+
     }
 
     // MARK: - 输出操作组
@@ -155,6 +144,18 @@ struct AnnotationToolbarView: View {
                 handleOCROutput(rendered)
             }
 
+            Button {
+                let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
+                handleTranslationOutput(rendered)
+            } label: {
+                Label("翻译", systemImage: "character.bubble")
+                    .font(OneBoardFont.callout)
+                    .padding(.horizontal, 6)
+                    .frame(height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("识别选区文字并翻译")
+
             iconActionButton("完成 Enter", icon: "checkmark", prominent: true) {
                 let rendered = annotationService.renderToImage(baseImage: baseImage, displaySize: displaySize)
                 onComplete(rendered)
@@ -165,7 +166,11 @@ struct AnnotationToolbarView: View {
             }
         }
         .padding(4)
-        .background(RoundedRectangle(cornerRadius: OneBoardRadius.xl).fill(OneBoardColors.accent.opacity(0.08)))
+
+    }
+
+    func handleTranslationOutput(_ image: NSImage) {
+        onTranslate(image)
     }
 
     func handleOCROutput(_ image: NSImage) {
@@ -211,25 +216,7 @@ struct AnnotationToolbarView: View {
         }
         .buttonStyle(.plain)
         .help("选择颜色")
-    }
-
-    private func colorSwatch(_ color: NSColor) -> some View {
-        Button(action: { annotationService.selectedColor = color }) {
-            Circle()
-                .fill(Color(nsColor: color))
-                .frame(width: 20, height: 20)
-                .overlay(
-                    Circle()
-                        .stroke(Color.white, lineWidth: annotationService.selectedColor == color ? 2.5 : 1)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(color == .white ? OneBoardColors.border : OneBoardColors.borderSubtle, lineWidth: 1)
-                )
-                .shadow(color: OneBoardShadow.sm.color, radius: OneBoardShadow.sm.radius, x: 0, y: OneBoardShadow.sm.y)
-        }
-        .buttonStyle(.plain)
-        .help("选择颜色")
+        .popover(isPresented: $showColorPicker, arrowEdge: .bottom) { colorPickerPopover }
     }
 
     // MARK: - 颜色选择弹窗

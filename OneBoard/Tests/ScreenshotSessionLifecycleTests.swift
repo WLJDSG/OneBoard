@@ -59,6 +59,21 @@ final class ScreenshotSessionLifecycleTests: XCTestCase {
         XCTAssertEqual(ScreenshotLockedRoute.route(for: .ocr), .ocr)
     }
 
+    func testTranslationToolbarActionReturnsToScreenshotSession() {
+        let image = NSImage(size: CGSize(width: 120, height: 80))
+        let service = AnnotationService(baseImage: image)
+        var routedImage: NSImage?
+        let toolbar = AnnotationToolbarView(
+            annotationService: service,
+            viewModel: AnnotationViewModel(annotationService: service),
+            onComplete: { _ in }, onSave: { _ in }, onPin: { _ in }, onOCR: { _ in },
+            onTranslate: { routedImage = $0 }, onClose: {}, baseImage: image, displaySize: image.size
+        )
+        toolbar.handleTranslationOutput(image)
+        XCTAssertTrue(routedImage === image)
+        XCTAssertEqual(ScreenshotLockedRoute.route(for: .translate), .translate)
+    }
+
     func testOCRToolbarActionReturnsToScreenshotSession() {
         let image = NSImage(size: CGSize(width: 120, height: 80))
         let service = AnnotationService(baseImage: image)

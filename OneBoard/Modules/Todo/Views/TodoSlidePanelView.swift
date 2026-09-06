@@ -14,7 +14,7 @@ struct TodoSlidePanelView: View {
         VStack(spacing: 0) {
             // 拖拽手柄
             RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                .fill(OneBoardColors.textSecondary.opacity(0.3))
+                .fill(FeaturePalette.secondary.opacity(0.3))
                 .frame(width: 32, height: 4)
                 .padding(.top, OneBoardSpacing.xs)
                 .padding(.bottom, OneBoardSpacing.twoXS)
@@ -37,7 +37,7 @@ struct TodoSlidePanelView: View {
             width: TodoSlidePanelWindowManager.panelSize.width,
             height: TodoSlidePanelWindowManager.panelSize.height
         )
-        .oneBoardPanelStyle()
+        .featurePanelStyle()
         .onChange(of: viewModel.manualAddRequestID) { _ in
             beginAddingTodo()
         }
@@ -49,35 +49,15 @@ struct TodoSlidePanelView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checklist")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(OneBoardColors.accent)
-            Text("待办")
-                .font(.system(size: 13, weight: .semibold))
-
-            if !viewModel.activeItems.isEmpty {
-                Text("\(viewModel.activeItems.count)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(OneBoardColors.textSecondary)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: OneBoardRadius.sm).fill(OneBoardColors.textSecondary.opacity(0.12)))
+        FeaturePanelHeader(title: "待办", subtitle: "\(viewModel.activeItems.count) 项待完成", icon: "checklist") {
+            FeaturePanelIconButton(icon: isPinned ? "pin.fill" : "pin", title: isPinned ? "取消固定" : "固定面板") {
+                isPinned.toggle()
+                TodoSlidePanelWindowManager.shared.setPinned(isPinned)
             }
-
-            Spacer()
-
-            OneBoardPinButton(
-                isPinned: isPinned,
-                action: {
-                    isPinned.toggle()
-                    TodoSlidePanelWindowManager.shared.setPinned(isPinned)
-                }
-            )
-            OneBoardCloseButton { TodoSlidePanelWindowManager.shared.hide() }
+            FeaturePanelIconButton(icon: "xmark", title: "关闭") {
+                TodoSlidePanelWindowManager.shared.hide()
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .overlay(Rectangle().fill(OneBoardColors.headerBorder).frame(height: 1), alignment: .bottom)
     }
 
     // MARK: - 搜索 + 添加
@@ -87,7 +67,7 @@ struct TodoSlidePanelView: View {
             HStack(spacing: OneBoardSpacing.xs) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
-                    .foregroundColor(OneBoardColors.textSecondary)
+                    .foregroundColor(FeaturePalette.secondary)
                 TextField("搜索或添加待办...", text: $viewModel.searchQuery)
                     .textFieldStyle(.plain)
                     .oneBoardFont(.body)
@@ -102,14 +82,14 @@ struct TodoSlidePanelView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(OneBoardColors.textSecondary)
+                            .foregroundColor(FeaturePalette.secondary)
                     }
                     .buttonStyle(.plain)
                 }
                 Button(action: { beginAddingTodo() }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundColor(OneBoardColors.accent)
+                        .foregroundColor(FeaturePalette.accent)
                 }
                 .buttonStyle(.plain)
             }
@@ -138,7 +118,7 @@ struct TodoSlidePanelView: View {
                     Button("取消") { cancelAddingTodo() }
                         .buttonStyle(.borderless)
                         .font(.system(size: 11))
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(FeaturePalette.secondary)
                 }
                 .padding(.horizontal, OneBoardSpacing.sm)
                 .padding(.vertical, OneBoardSpacing.xs)
@@ -146,7 +126,7 @@ struct TodoSlidePanelView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                .fill(OneBoardColors.accent.opacity(0.04))
+                .fill(FeaturePalette.accent.opacity(0.04))
         )
         .padding(.horizontal, OneBoardSpacing.sm)
         .padding(.vertical, OneBoardSpacing.xs)
@@ -161,10 +141,10 @@ struct TodoSlidePanelView: View {
                 VStack(spacing: OneBoardSpacing.sm) {
                     Image(systemName: "tray")
                         .font(.system(size: 32))
-                        .foregroundColor(OneBoardColors.textSecondary.opacity(0.3))
+                        .foregroundColor(FeaturePalette.secondary.opacity(0.3))
                     Text(viewModel.isSearching ? "无匹配结果" : "暂无待办")
                         .oneBoardFont(.body)
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(FeaturePalette.secondary)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 48)
@@ -194,7 +174,7 @@ struct TodoSlidePanelView: View {
                     if let msg = viewModel.feedbackMessage {
                         Text(msg)
                             .font(.system(size: 10))
-                            .foregroundColor(OneBoardColors.textSecondary)
+                            .foregroundColor(FeaturePalette.secondary)
                             .padding(.horizontal, OneBoardSpacing.sm)
                             .padding(.bottom, OneBoardSpacing.twoXS)
                     }
@@ -223,7 +203,7 @@ struct TodoSlidePanelView: View {
                     Text("历史")
                         .font(.system(size: 11))
                 }
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
             }
             .buttonStyle(.plain)
 

@@ -20,7 +20,7 @@ struct ClipboardEntry: Codable, Identifiable {
     /// 预览文本（截取前 100 个字符）
     var previewText: String {
         if let text = plainText, !text.isEmpty {
-            let trimmed = text.replacingOccurrences(of: "\n", with: " ")
+            let trimmed = String(text.prefix(100)).replacingOccurrences(of: "\n", with: " ")
             return String(trimmed.prefix(100))
         }
         return contentTypeEnum?.displayName ?? "未知内容"

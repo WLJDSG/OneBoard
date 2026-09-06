@@ -13,49 +13,69 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
     case aiModels
     case codexAccounts
     case recognition
+    case translation
+    case files
     case todo
+    case calendar
+    case macStatus
+    case iCloud
     case about
 
     public var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .general: return "通用"
+        case .general: return "剪贴板"
         case .authorization: return "授权"
         case .hotkeys: return "快捷键"
         case .gateway: return "网关"
         case .aiModels: return "AI 模型"
         case .codexAccounts: return "Codex 账号"
-        case .recognition: return "识别·翻译"
-        case .todo: return "待办·文件"
+        case .recognition: return "文字识别"
+        case .translation: return "翻译"
+        case .files: return "文件与 Finder"
+        case .todo: return "待办"
+        case .calendar: return "日历"
+        case .macStatus: return "Mac 状态"
+        case .iCloud: return "iCloud 同步"
         case .about: return "关于"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .general: return "调整日常偏好，让工作空间更适合你。"
+        case .general: return "管理剪贴板历史容量和自动清理周期。"
         case .authorization: return "管理系统权限与扩展能力。"
         case .hotkeys: return "让常用操作，始终触手可及。"
         case .gateway: return "查看网络状态，快速切换连接配置。"
         case .aiModels: return "连接你的模型供应商，掌握额度与用量。"
         case .codexAccounts: return "统一管理账号、订阅和可用额度。"
-        case .recognition: return "从文字识别到翻译，选择适合你的服务。"
-        case .todo: return "管理待办提醒、文件暂存与 Finder 扩展。"
+        case .recognition: return "选择文字识别服务和默认识别语言。"
+        case .translation: return "设置默认翻译服务、API Key 和语言。"
+        case .files: return "暂存常用文件，配置 Finder 右键新建类型。"
+        case .todo: return "管理待办提醒、历史保留和面板收起行为。"
+        case .calendar: return "设置月历的周起始日和菜单栏入口。"
+        case .macStatus: return "选择菜单栏显示的图标与实时指标。"
+        case .iCloud: return "在你的 Mac 之间安全同步 OneBoard 配置。"
         case .about: return "一个轻巧、专注的 macOS 效率工具。"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .general: return "gear"
+        case .general: return "doc.on.clipboard"
         case .authorization: return "lock.shield"
         case .hotkeys: return "keyboard"
         case .gateway: return "network"
         case .aiModels: return "point.3.connected.trianglepath.dotted"
         case .codexAccounts: return "person.2"
         case .recognition: return "text.viewfinder"
+        case .translation: return "globe"
+        case .files: return "tray.full"
         case .todo: return "checklist"
+        case .calendar: return "calendar"
+        case .macStatus: return "gauge.with.dots.needle.50percent"
+        case .iCloud: return "icloud"
         case .about: return "info.circle"
         }
     }
@@ -148,9 +168,9 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        navigationGroup("工作空间", tabs: [.general, .hotkeys, .recognition, .todo])
+                        navigationGroup("日常工具", tabs: [.general, .recognition, .translation, .todo, .calendar, .files])
                         navigationGroup("连接与账号", tabs: [.aiModels, .codexAccounts, .gateway])
-                        navigationGroup("应用", tabs: [.authorization, .about])
+                        navigationGroup("应用", tabs: [.macStatus, .iCloud, .hotkeys, .authorization, .about])
                     }
                 }.scrollIndicators(.hidden)
                 Spacer(minLength: 12)
@@ -238,9 +258,19 @@ struct SettingsView: View {
         case .codexAccounts:
             CodexAccountSettingsView()
         case .recognition:
-            ocrTranslationSettings
+            ocrSettings
+        case .translation:
+            TranslationSettingsView()
+        case .files:
+            FileSettingsView()
         case .todo:
             TodoSettingsView()
+        case .calendar:
+            CalendarSettingsView()
+        case .macStatus:
+            MacStatusSettingsView()
+        case .iCloud:
+            CloudSyncSettingsView()
         case .about:
             aboutView
         }
@@ -363,6 +393,7 @@ struct SettingsView: View {
 
     private var hotkeySettings: some View {
         SettingsForm {
+            Section { QuickLaunchSettingsView() } header: { Text("可视化快捷启动") }
             Section { HStack { Text("显示剪贴板"); Spacer(); KeyboardShortcuts.Recorder(for: .showClipboard) } } header: { Text("剪贴板快捷键") }
             Section { HStack { Text("截图"); Spacer(); KeyboardShortcuts.Recorder(for: .captureScreenshot) }; HStack { Text("翻译选中文字"); Spacer(); KeyboardShortcuts.Recorder(for: .translateSelectedText) } } header: { Text("截图快捷键") }
             Section { HStack { Text("文件暂存架"); Spacer(); KeyboardShortcuts.Recorder(for: .showFileShelf) } } header: { Text("文件暂存快捷键") }
@@ -374,7 +405,7 @@ struct SettingsView: View {
         }
     }
 
-    private var ocrTranslationSettings: some View {
+    private var ocrSettings: some View {
         SettingsForm {
             Section {
                 LabeledContent("OCR 服务") {
@@ -390,6 +421,11 @@ struct SettingsView: View {
                 }.labelsHidden().frame(width: 230)
                 }
             } header: { Text("OCR 文字识别") }
+        }
+    }
+
+    private var translationSettings: some View {
+        SettingsForm {
             Section {
                 LabeledContent("翻译服务") {
                     Picker("翻译服务", selection: translationServiceSelection) { ForEach(TranslationServiceType.allCases) { Text($0.settingsDisplayName).tag($0.rawValue) } }.labelsHidden().frame(width: 230)

@@ -1,6 +1,15 @@
 import Foundation
 
-final class GatewayService: @unchecked Sendable {
+protocol GatewayServicing: Sendable {
+    func currentSnapshot() -> NetworkSnapshot
+    func switchGateway(to profile: GatewayProfile, snapshot: NetworkSnapshot) throws
+    func isHelperInstalled() -> Bool
+    func syncWhitelist(ips: [String]) throws
+    func installHelper(allowedIPs: [String]) throws
+    func uninstallHelper() throws
+}
+
+final class GatewayService: GatewayServicing, @unchecked Sendable {
     private let runner: GatewayCommandRunning
 
     init(runner: GatewayCommandRunning = ProcessGatewayCommandRunner()) {

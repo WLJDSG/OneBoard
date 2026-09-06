@@ -70,5 +70,7 @@
     <string>OneBoard 需要此权限以将内容粘贴到其他应用程序。</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>OneBoard 需要此权限以进行屏幕截图。</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>OneBoard 需要此权限以在桌面（包括 iCloud 桌面）新建文件和保存截图。</string>
 </dict>
 </plist>

@@ -44,6 +44,11 @@ final class FinderSyncController: FIFinderSync {
 
         let menu = NSMenu(title: "")
 
+        let terminalItem = NSMenuItem(title: "在当前路径打开终端", action: #selector(openTerminalHere), keyEquivalent: "")
+        terminalItem.target = self
+        terminalItem.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+        menu.addItem(terminalItem)
+
         // 读取启用的文件类型（从共享 UserDefaults）
         let shared = UserDefaults(suiteName: "group.com.oneboard.mac")
         let enabledTypes = shared?.stringArray(forKey: "enabled_file_types") ?? ["txt", "docx", "xlsx"]
@@ -51,51 +56,41 @@ final class FinderSyncController: FIFinderSync {
         // 新建文件子菜单
         let newFileSubmenu = NSMenu(title: "新建文件")
 
-        if enabledTypes.contains("txt") {
-            let item = NSMenuItem(title: "新建文本文档 (.txt)", action: #selector(createTXTFile), keyEquivalent: "")
+        for kind in enabledTypes.compactMap(FinderFileKind.init(rawValue:)) {
+            let item = NSMenuItem(title: kind.title, action: #selector(createCustomFile(_:)), keyEquivalent: "")
             item.target = self
-            item.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            item.representedObject = kind.rawValue
+            item.image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: nil)
             newFileSubmenu.addItem(item)
         }
 
-        if enabledTypes.contains("docx") {
-            let item = NSMenuItem(title: "新建 Word 文档 (.docx)", action: #selector(createDOCXFile), keyEquivalent: "")
-            item.target = self
-            item.image = NSImage(systemSymbolName: "doc.richtext", accessibilityDescription: nil)
-            newFileSubmenu.addItem(item)
+        if newFileSubmenu.items.contains(where: { !$0.isSeparatorItem }) {
+            let mainItem = NSMenuItem(title: "新建文件", action: nil, keyEquivalent: "")
+            mainItem.submenu = newFileSubmenu
+            mainItem.image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: nil)
+            menu.addItem(mainItem)
         }
-
-        if enabledTypes.contains("xlsx") {
-            let item = NSMenuItem(title: "新建 Excel 表格 (.xlsx)", action: #selector(createXLSXFile), keyEquivalent: "")
-            item.target = self
-            item.image = NSImage(systemSymbolName: "tablecells", accessibilityDescription: nil)
-            newFileSubmenu.addItem(item)
-        }
-
-        guard newFileSubmenu.items.contains(where: { !$0.isSeparatorItem }) else {
-            return nil
-        }
-
-        let mainItem = NSMenuItem(title: "新建文件", action: nil, keyEquivalent: "")
-        mainItem.submenu = newFileSubmenu
-        mainItem.image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: nil)
-        menu.addItem(mainItem)
 
         return menu
     }
 
     // MARK: - 文件创建
 
-    @objc private func createTXTFile() {
-        requestFileCreation(kind: .txt)
+    @objc private func createCustomFile(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let kind = FinderFileKind(rawValue: raw) else { return }
+        requestFileCreation(kind: kind)
     }
 
-    @objc private func createDOCXFile() {
-        requestFileCreation(kind: .docx)
-    }
-
-    @objc private func createXLSXFile() {
-        requestFileCreation(kind: .xlsx)
+    @objc private func openTerminalHere() {
+        guard let targetURL = targetDirectoryURL() else {
+            showCreationFailure("无法获取 Finder 当前目录。请在文件夹空白处右键，或先选中文件夹后重试。")
+            return
+        }
+        let request = FinderTerminalRequest(directoryURL: targetURL)
+        guard let commandURL = request.commandURL, NSWorkspace.shared.open(commandURL) else {
+            showCreationFailure("无法唤起 OneBoard 主应用。请确认 OneBoard 已正确安装后重试。")
+            return
+        }
     }
 
     private func requestFileCreation(kind: FinderFileKind) {

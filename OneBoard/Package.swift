@@ -7,6 +7,7 @@ let package = Package(
         .macOS("15.0")
     ],
     dependencies: [
+        .package(url: "https://github.com/6tail/lunar-swift.git", revision: "a7ec0e9b29f84a5d98b09b9ffd31145f17470d56"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "6.29.0"),
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
         .package(url: "https://github.com/sindresorhus/LaunchAtLogin", from: "4.0.0"),
@@ -22,6 +23,7 @@ let package = Package(
         .target(
             name: "OneBoardKit",
             dependencies: [
+                .product(name: "LunarSwift", package: "lunar-swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                 .product(name: "LaunchAtLogin", package: "LaunchAtLogin"),
@@ -32,6 +34,7 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("LocalAuthentication"),
                 .linkedFramework("Security"),
+                .linkedFramework("CloudKit"),
             ]
         ),
         .testTarget(

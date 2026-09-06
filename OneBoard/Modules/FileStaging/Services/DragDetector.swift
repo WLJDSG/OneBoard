@@ -18,10 +18,17 @@ final class DragDetector {
     private var lastTriggerTime: TimeInterval = 0
     private var isDragConfirmed: Bool = false  // 当前拖拽已确认是文件拖拽
 
-    private init() {}
+    private var idlePasteboardChangeCount: Int
+    private let pasteboard: NSPasteboard
+
+    init(pasteboard: NSPasteboard = NSPasteboard(name: .drag)) {
+        self.pasteboard = pasteboard
+        self.idlePasteboardChangeCount = pasteboard.changeCount
+    }
 
     func start() {
         guard pollTimer == nil else { return }
+        finishCurrentDrag()
         let strategy = Self.startupStrategy(
             inputMonitoringGranted: PermissionManager.shared.hasInputMonitoringPermission
         )
@@ -31,7 +38,7 @@ final class DragDetector {
             print("[DragDetector] 未授权输入监听，使用鼠标状态轮询检测文件摇晃")
         }
         if strategy.startPolling { startPolling() }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
             self?.handleMouseEvent(event)
             return event
         }
@@ -83,7 +90,7 @@ final class DragDetector {
     // MARK: - CGEventTap
 
     private func startEventTap() {
-        let mask = (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
+        let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
         let userInfo = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
         guard let tap = CGEvent.tapCreate(
@@ -118,8 +125,8 @@ final class DragDetector {
                 recentPositions.removeAll()
                 break
             }
-            handleDrag(at: event.location)
-        case .leftMouseUp:
+            handleDrag(at: NSEvent.mouseLocation)
+        case .leftMouseDown, .leftMouseUp:
             finishCurrentDrag()
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
@@ -135,7 +142,7 @@ final class DragDetector {
                 break
             }
             handleDrag(at: NSEvent.mouseLocation)
-        case .leftMouseUp:
+        case .leftMouseDown, .leftMouseUp:
             finishCurrentDrag()
         default: break
         }
@@ -151,9 +158,6 @@ final class DragDetector {
         recentPositions.append((position, now))
         recentPositions = recentPositions.filter { now - $0.timestamp < 0.6 }
 
-        // 更新 pasteboard change count 防止过期数据重复触发
-        _ = isDraggingSupportedContent
-
         if detectShake(), now - lastTriggerTime > 1.5 {  // 冷却 1.5s
             lastTriggerTime = now
             recentPositions.removeAll()
@@ -166,11 +170,12 @@ final class DragDetector {
 
     // MARK: - 拖拽内容检测
 
-    private var isDraggingSupportedContent: Bool {
+    var isDraggingSupportedContent: Bool {
         // 已确认的拖拽直接返回 true（同一拖拽操作中 changeCount 不变，避免后续帧误判）
         if isDragConfirmed { return true }
 
-        let pasteboard = NSPasteboard(name: .drag)
+        // .drag 松手后保留上次文件，必须有本次按下期间的新写入才能确认。
+        guard pasteboard.changeCount != idlePasteboardChangeCount else { return false }
         let types = pasteboard.types ?? []
 
         if canReadSupportedFileURL(from: pasteboard, types: types) {
@@ -231,9 +236,10 @@ final class DragDetector {
         (NSEvent.pressedMouseButtons & 1) == 1
     }
 
-    private func finishCurrentDrag() {
+    func finishCurrentDrag() {
         recentPositions.removeAll()
         isDragConfirmed = false
+        idlePasteboardChangeCount = pasteboard.changeCount
     }
 
     private func detectShake() -> Bool {

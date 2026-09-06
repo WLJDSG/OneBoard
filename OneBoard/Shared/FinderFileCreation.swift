@@ -1,9 +1,21 @@
+import AppKit
 import Foundation
 
-enum FinderFileKind: String, CaseIterable {
-    case txt
-    case docx
-    case xlsx
+struct FinderFileKind: RawRepresentable, Hashable, CaseIterable {
+    let rawValue: String
+    init?(rawValue: String) {
+        guard rawValue.count <= 32,
+              rawValue.range(of: "\\A[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*\\z", options: .regularExpression) != nil else { return nil }
+        self.rawValue = rawValue.lowercased()
+    }
+    static let txt = Self(rawValue: "txt")!
+    static let docx = Self(rawValue: "docx")!
+    static let xlsx = Self(rawValue: "xlsx")!
+    static let allCases = ["txt", "md", "rtf", "xml", "json", "csv", "html", "yaml", "sql", "js", "ts", "py", "swift", "docx", "xlsx"].compactMap(Self.init(rawValue:))
+    var title: String {
+        let names = ["txt": "文本文档", "md": "Markdown", "rtf": "富文本", "xml": "XML", "json": "JSON", "csv": "CSV 表格", "html": "HTML", "docx": "Word 文档", "xlsx": "Excel 表格"]
+        return "\(names[rawValue] ?? rawValue.uppercased()) (.\(rawValue))"
+    }
 }
 
 struct FinderFileCreationRequest: Equatable {
@@ -50,6 +62,7 @@ struct FinderFileCreationRequest: Equatable {
             URL(fileURLWithPath: "/", isDirectory: true),
             homeURL,
             homeURL.appendingPathComponent("Desktop", isDirectory: true),
+            homeURL.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs", isDirectory: true),
             homeURL.appendingPathComponent(
                 "Library/Mobile Documents/com~apple~CloudDocs/Desktop",
                 isDirectory: true
@@ -65,6 +78,44 @@ struct FinderFileCreationRequest: Equatable {
     }
 }
 
+struct FinderTerminalRequest: Equatable {
+    static let scheme = "oneboard"
+    static let host = "open-terminal"
+
+    let directoryURL: URL
+
+    var commandURL: URL? {
+        var components = URLComponents()
+        components.scheme = Self.scheme
+        components.host = Self.host
+        components.queryItems = [URLQueryItem(name: "directory", value: directoryURL.path)]
+        return components.url
+    }
+
+    init(directoryURL: URL) { self.directoryURL = directoryURL.standardizedFileURL }
+
+    init?(commandURL: URL) {
+        guard commandURL.scheme == Self.scheme,
+              commandURL.host == Self.host,
+              let components = URLComponents(url: commandURL, resolvingAgainstBaseURL: false),
+              let path = components.queryItems?.first(where: { $0.name == "directory" })?.value,
+              path.hasPrefix("/") else { return nil }
+        self.init(directoryURL: URL(fileURLWithPath: path, isDirectory: true))
+    }
+}
+
+@MainActor
+enum FinderTerminalOpener {
+    static func open(directoryURL: URL, workspace: NSWorkspace = .shared) {
+        let terminalURL = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app", isDirectory: true)
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        workspace.open([directoryURL], withApplicationAt: terminalURL, configuration: configuration) { _, error in
+            if let error { print("[FinderTerminal] 打开失败: \(error.localizedDescription)") }
+        }
+    }
+}
+
 enum FinderFileCreator {
     static func create(kind: FinderFileKind, in directoryURL: URL) throws -> URL {
         let fileManager = FileManager.default
@@ -75,13 +126,14 @@ enum FinderFileCreator {
         }
 
         let destinationURL = uniqueDestination(kind: kind, in: directoryURL, fileManager: fileManager)
-        switch kind {
-        case .txt:
-            try Data().write(to: destinationURL, options: [.withoutOverwriting])
-        case .docx:
+        switch kind.rawValue {
+        case "docx":
             try createOfficeArchive(files: docxTemplateFiles, at: destinationURL, fileManager: fileManager)
-        case .xlsx:
+        case "xlsx":
             try createOfficeArchive(files: xlsxTemplateFiles, at: destinationURL, fileManager: fileManager)
+        default:
+            let bodies = ["rtf": "{\\rtf1\\ansi\\deff0\n}\n", "json": "{}\n", "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root/>\n", "html": "<!doctype html>\n<html><head><meta charset=\"utf-8\"><title></title></head><body></body></html>\n"]
+            try Data((bodies[kind.rawValue] ?? "").utf8).write(to: destinationURL, options: [.withoutOverwriting])
         }
         return destinationURL
     }

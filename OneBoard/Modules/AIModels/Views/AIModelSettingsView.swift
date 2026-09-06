@@ -149,7 +149,8 @@ struct AIModelSettingsView: View {
     }
 }
 
-private struct AIProviderEditorView: View {
+struct AIProviderEditorView: View {
+    let allowsSwitch: Bool
     let client: AIClient
     let profile: AIProviderProfile?
     let onSave: (AIProviderProfile, String?) async throws -> Void
@@ -200,11 +201,13 @@ private struct AIProviderEditorView: View {
         client: AIClient,
         profile: AIProviderProfile?,
         savedAPIKey: String?,
+        allowsSwitch: Bool = true,
         onSave: @escaping (AIProviderProfile, String?) async throws -> Void,
         onSaveAndSwitch: @escaping (AIProviderProfile, String?) async throws -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.client = client
+        self.allowsSwitch = allowsSwitch
         self.profile = profile
         self.onSave = onSave
         self.onSaveAndSwitch = onSaveAndSwitch
@@ -524,10 +527,12 @@ private struct AIProviderEditorView: View {
                     .disabled(isSaving)
                 Button("保存") { save(activate: false) }
                     .disabled(isSaving)
+                if allowsSwitch {
                 Button("保存并切换") { save(activate: true) }
                     .buttonStyle(SettingsActionStyle(prominent: true))
                     .keyboardShortcut(.defaultAction)
                     .disabled(isSaving)
+                }
             }
             .padding(16)
         }

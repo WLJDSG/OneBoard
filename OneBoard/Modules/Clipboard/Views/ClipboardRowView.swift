@@ -6,9 +6,10 @@ struct ClipboardRowView: View {
     let onTap: () -> Void
     let onPin: () -> Void
     let onDelete: () -> Void
+    var onDoubleTap: (() -> Void)? = nil
 
     @State private var isHovered = false
-    @State private var showDeleteConfirm = false
+    @State private var thumbnail: NSImage?
 
     var body: some View {
         HStack(spacing: 10) {
@@ -31,7 +32,7 @@ struct ClipboardRowView: View {
             // 时间
             Text(entry.createdAt.timeAgoDescription)
                 .oneBoardFont(.captionSmall)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
                 .frame(width: 44, alignment: .trailing)
         }
         .padding(.horizontal, 10)
@@ -40,17 +41,19 @@ struct ClipboardRowView: View {
         .overlay(alignment: .leading) {
             if entry.isPinned {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(OneBoardColors.accent)
+                    .fill(FeaturePalette.accent)
                     .frame(width: 2)
                     .padding(.vertical, 4)
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture { onTap() }
+        .onTapGesture(count: 2) { onDoubleTap?() }
+        .simultaneousGesture(TapGesture(count: 1).onEnded { onTap() })
+        .task(id: entry.id) {
+            thumbnail = await ClipboardThumbnailCache.image(for: entry)
+        }
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
         }
     }
 
@@ -58,7 +61,7 @@ struct ClipboardRowView: View {
 
     @ViewBuilder
     private var typeIcon: some View {
-        if entry.isImage, let nsImage = entry.nsImage {
+        if entry.isImage, let nsImage = thumbnail {
             Image(nsImage: nsImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -67,11 +70,11 @@ struct ClipboardRowView: View {
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: OneBoardRadius.sm)
-                    .fill(OneBoardColors.accent.opacity(0.15))
+                    .fill(FeaturePalette.accent.opacity(0.15))
 
                 Image(systemName: entry.contentTypeEnum?.iconName ?? "doc")
                     .oneBoardFont(.callout)
-                    .foregroundColor(OneBoardColors.accent)
+                    .foregroundColor(FeaturePalette.accent)
             }
             .frame(width: 28, height: 28)
         }
@@ -85,12 +88,12 @@ struct ClipboardRowView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "pin.fill")
                         .oneBoardFont(.captionSmall)
-                        .foregroundColor(OneBoardColors.accent)
+                        .foregroundColor(FeaturePalette.accent)
                     Text(entry.previewText)
                         .oneBoardFont(.callout)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .foregroundColor(OneBoardColors.textPrimary)
+                        .foregroundColor(FeaturePalette.text)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .clipped()
@@ -99,7 +102,7 @@ struct ClipboardRowView: View {
                     .oneBoardFont(.callout)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundColor(OneBoardColors.textPrimary)
+                    .foregroundColor(FeaturePalette.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .clipped()
             }
@@ -107,7 +110,7 @@ struct ClipboardRowView: View {
             if let sourceApp = entry.sourceAppBundleId {
                 Text(sourceApp)
                     .oneBoardFont(.captionSmall)
-                    .foregroundColor(OneBoardColors.textSecondary.opacity(0.7))
+                    .foregroundColor(FeaturePalette.secondary.opacity(0.7))
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -125,9 +128,9 @@ struct ClipboardRowView: View {
 
     private var backgroundColor: Color {
         if entry.isPinned {
-            OneBoardColors.accent.opacity(0.06)
+            FeaturePalette.accent.opacity(0.06)
         } else if isHovered {
-            OneBoardColors.accent.opacity(0.06)
+            FeaturePalette.accent.opacity(0.06)
         } else {
             Color.clear
         }
@@ -141,7 +144,7 @@ struct ClipboardRowView: View {
             Button(action: onPin) {
                 Image(systemName: entry.isPinned ? "pin.slash" : "pin")
                     .oneBoardFont(.caption)
-                    .foregroundColor(entry.isPinned ? OneBoardColors.accent : OneBoardColors.textSecondary)
+                    .foregroundColor(entry.isPinned ? FeaturePalette.accent : FeaturePalette.secondary)
             }
             .buttonStyle(.plain)
             .help(entry.isPinned ? "取消置顶" : "置顶")

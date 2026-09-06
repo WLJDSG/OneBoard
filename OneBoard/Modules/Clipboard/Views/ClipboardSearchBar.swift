@@ -13,7 +13,7 @@ struct ClipboardSearchBar: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .oneBoardFont(.callout)
-                .foregroundColor(OneBoardColors.textSecondary)
+                .foregroundColor(FeaturePalette.secondary)
 
             TextField("搜索剪贴板历史...", text: $searchText)
                 .textFieldStyle(.plain)
@@ -31,7 +31,7 @@ struct ClipboardSearchBar: View {
                 }) {
                     Image(systemName: "xmark.circle.fill")
                         .oneBoardFont(.callout)
-                        .foregroundColor(OneBoardColors.textSecondary)
+                        .foregroundColor(FeaturePalette.secondary)
                 }
                 .buttonStyle(.plain)
             }
@@ -40,11 +40,11 @@ struct ClipboardSearchBar: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                .fill(OneBoardColors.accent.opacity(0.06))
+                .fill(FeaturePalette.accent.opacity(0.06))
         )
         .overlay(
             RoundedRectangle(cornerRadius: OneBoardRadius.lg)
-                .stroke(isFocused ? OneBoardColors.accent.opacity(0.10) : Color.clear, lineWidth: 1)
+                .stroke(isFocused ? FeaturePalette.accent.opacity(0.10) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {

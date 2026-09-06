@@ -17,13 +17,13 @@ final class GatewayViewModel: ObservableObject {
     @Published private(set) var isHelperInstalled = false
     @Published var statusMessage: String?
 
-    private let service: GatewayService
+    private let service: any GatewayServicing
     private let profileStore: GatewayProfileStore
     private let authorizer: SensitiveOperationAuthorizing
     private var refreshTimer: Timer?
 
     init(
-        service: GatewayService = GatewayService(),
+        service: any GatewayServicing = GatewayService(),
         profileStore: GatewayProfileStore = .shared,
         authorizer: SensitiveOperationAuthorizing = SensitiveOperationAuthorizer()
     ) {
@@ -117,11 +117,25 @@ final class GatewayViewModel: ObservableObject {
         isSwitching = true
         statusMessage = "正在切换到 \(profile.title)..."
 
-        Task { [service, snapshot, authorizer] in
+        let ips = Array(Set(whitelistIPs + profile.dnsServers + [profile.gateway])).filter(GatewayProfile.isValidIPv4)
+        Task { [service, authorizer] in
             do {
+                let installed = await Task.detached { service.isHelperInstalled() }.value
+                if !installed {
+                    self.statusMessage = "请先授权安装网关 Helper…"
+                    try await Task.detached(priority: .userInitiated) {
+                        try service.installHelper(allowedIPs: ips)
+                    }.value
+                    self.isHelperInstalled = await Task.detached { service.isHelperInstalled() }.value
+                    guard self.isHelperInstalled else {
+                        throw GatewayError.commandFailed("Helper 尚未启用，请完成系统管理员授权后重试")
+                    }
+                    NotificationCenter.default.post(name: .systemCapabilityStatusDidChange, object: nil)
+                }
+                self.statusMessage = "请验证身份以切换到 \(profile.title)…"
                 try await authorizer.authorize(reason: "确认切换到网关“\(profile.title)”")
                 let result = try await Task.detached(priority: .userInitiated) {
-                    try service.switchGateway(to: profile, snapshot: snapshot)
+                    try service.switchGateway(to: profile, snapshot: service.currentSnapshot())
                     return (service.currentSnapshot(), service.isHelperInstalled())
                 }.value
                 self.snapshot = result.0
@@ -131,6 +145,7 @@ final class GatewayViewModel: ObservableObject {
             } catch {
                 self.statusMessage = error.localizedDescription
                 self.isSwitching = false
+                self.refreshHelperStatus()
             }
         }
     }

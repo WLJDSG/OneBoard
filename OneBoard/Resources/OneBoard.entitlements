@@ -20,6 +20,16 @@
         <string>group.com.oneboard.mac</string>
     </array>
 
+    <!-- OneBoard 配置只写入当前用户的 CloudKit 私有数据库 -->
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>iCloud.com.oneboard.mac</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudKit</string>
+    </array>
+
     <!-- Apple Events（用于粘贴到其他应用） -->
     <key>com.apple.security.temporary-exception.apple-events</key>
     <array>

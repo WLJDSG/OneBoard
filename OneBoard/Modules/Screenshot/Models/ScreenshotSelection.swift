@@ -37,6 +37,7 @@ enum ScreenshotSelectionAction: Equatable {
     case pin
     case ocr
     case translate
+    case longCapture
 }
 
 enum ScreenshotLockedRoute: Equatable {
@@ -46,6 +47,7 @@ enum ScreenshotLockedRoute: Equatable {
     case pin
     case ocr
     case translate
+    case longCapture
 
     static func route(for action: ScreenshotSelectionAction) -> ScreenshotLockedRoute {
         switch action {
@@ -55,6 +57,7 @@ enum ScreenshotLockedRoute: Equatable {
         case .pin: return .pin
         case .ocr: return .ocr
         case .translate: return .translate
+        case .longCapture: return .longCapture
         }
     }
 }

@@ -3,13 +3,23 @@ import XCTest
 
 @MainActor
 final class SystemCapabilityViewModelTests: XCTestCase {
+    func testSettingsInitializationNeverRunsHelperProbeOnMainThread() async {
+        let helper = BackgroundProbeHelper()
+        let model = SystemCapabilityViewModel(
+            permissions: StubPermissionProvider(accessibility: true, screenRecording: true),
+            gatewayHelper: helper, launchAtLogin: StubLaunchAtLoginProvider(enabled: false))
+        await waitUntil { model.gatewayHelperInstalled }
+        XCTAssertTrue(model.gatewayHelperInstalled)
+        XCTAssertFalse(helper.calledOnMainThread)
+    }
+
     func testSystemRequestedTerminationIsAllowed() {
         let delegate = AppDelegate()
 
         XCTAssertEqual(delegate.applicationShouldTerminate(.shared), .terminateNow)
     }
 
-    func testRefreshReadsAllCapabilityStates() {
+    func testRefreshReadsAllCapabilityStates() async {
         let permissions = StubPermissionProvider(accessibility: true, screenRecording: false)
         let helper = StubGatewayHelperProvider(installed: true)
         let login = StubLaunchAtLoginProvider(enabled: false)
@@ -21,6 +31,7 @@ final class SystemCapabilityViewModelTests: XCTestCase {
         )
 
         viewModel.refresh()
+        await waitUntil { viewModel.gatewayHelperInstalled }
 
         XCTAssertTrue(viewModel.accessibilityGranted)
         XCTAssertFalse(viewModel.screenRecordingGranted)
@@ -230,4 +241,16 @@ private final class StubSensitiveOperationAuthorizer: SensitiveOperationAuthoriz
             throw error
         }
     }
+}
+
+private final class BackgroundProbeHelper: GatewayHelperStatusProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var mainThread = false
+    var calledOnMainThread: Bool { lock.withLock { mainThread } }
+    func isHelperInstalled() -> Bool {
+        lock.withLock { mainThread = mainThread || Thread.isMainThread }
+        return true
+    }
+    func installHelper() throws {}
+    func uninstallHelper() throws {}
 }

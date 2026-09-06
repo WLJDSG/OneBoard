@@ -26,6 +26,14 @@
         "revision" : "e8171b3e38a2816f579f58f3dac1522aa39efe41",
         "version" : "4.2.0"
       }
+    },
+    {
+      "identity" : "lunar-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/6tail/lunar-swift.git",
+      "state" : {
+        "revision" : "a7ec0e9b29f84a5d98b09b9ffd31145f17470d56"
+      }
     }
   ],
   "version" : 2

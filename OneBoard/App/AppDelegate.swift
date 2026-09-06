@@ -3,6 +3,7 @@ import LaunchAtLogin
 
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     public static private(set) weak var shared: AppDelegate?
+    private var configurationSyncObserver: NSObjectProtocol?
 
     public func applicationWillFinishLaunching(_ notification: Notification) {
         // 尽早设置 activation policy，避免 SwiftUI App 初始化覆盖
@@ -37,6 +38,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             AIModelSwitcherViewModel.shared.resumeProxyIfNeeded()
         }
         setupDefaultSettings()
+        configurationSyncObserver = NotificationCenter.default.addObserver(forName: .oneBoardConfigurationDidSync, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                AIModelSwitcherViewModel.shared.reload()
+                CodexAccountViewModel.shared.refreshState()
+                MenuBarManager.shared.updateCalendarStatusItemVisibility()
+            }
+        }
+        Task { @MainActor in CloudSyncViewModel.shared.startIfEnabled() }
 
         // Cmd+Q 修复：设置隐藏主菜单
         setupHiddenMainMenu()
@@ -62,6 +71,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
+            if let request = FinderTerminalRequest(commandURL: url) {
+                FinderTerminalOpener.open(directoryURL: request.directoryURL)
+                continue
+            }
             guard let request = FinderFileCreationRequest(commandURL: url) else { continue }
             do {
                 let fileURL = try FinderFileCreator.create(kind: request.kind, in: request.directoryURL)
@@ -79,6 +92,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        if let configurationSyncObserver { NotificationCenter.default.removeObserver(configurationSyncObserver) }
         AIProxyCoordinator.shared.stop()
         PasteboardMonitor.shared.stop()
         DragDetector.shared.stop()
@@ -170,5 +184,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if defaults.object(forKey: keys.todoRetentionDays) == nil { defaults.set(-1, forKey: keys.todoRetentionDays) }
         if defaults.object(forKey: keys.todoAutoRetractDelay) == nil { defaults.set(1.0, forKey: keys.todoAutoRetractDelay) }
         if defaults.object(forKey: keys.todoShowNotifications) == nil { defaults.set(true, forKey: keys.todoShowNotifications) }
+        if defaults.object(forKey: keys.calendarWeekStart) == nil { defaults.set(CalendarWeekStart.monday.rawValue, forKey: keys.calendarWeekStart) }
+        if defaults.object(forKey: keys.calendarShowInMenuBar) == nil { defaults.set(true, forKey: keys.calendarShowInMenuBar) }
     }
 }
