@@ -16,6 +16,7 @@ final class ExperienceRenderTests: XCTestCase {
         annotations.addCallout(target: CGRect(x: 40, y: 30, width: 150, height: 100), label: CGRect(x: 270, y: 230, width: 260, height: 50), text: "在这里输入标注文字")
         let model = AnnotationViewModel(annotationService: annotations)
         for dark in [false, true] {
+            try render(ClaudeOAuthAccountView(onSave: { _ in }, onCancel: {}), size: CGSize(width: 560, height: 430), dark: dark, path: directory + "/claude-oauth-\(dark).png")
             let editor = AIProviderEditorView(client: .claude, profile: nil, savedAPIKey: nil, onSave: { _, _ in }, onSaveAndSwitch: { _, _ in }, onCancel: {})
             try render(editor, size: CGSize(width: 860, height: 820), dark: dark, path: directory + "/provider-\(dark).png")
             for tool in [AnnotationTool.cursor, .text, .callout, .number, .mosaic] {

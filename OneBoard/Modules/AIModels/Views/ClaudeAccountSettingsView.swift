@@ -76,8 +76,6 @@ struct ClaudeAccountSettingsView: View {
             }.padding(.horizontal, 28).padding(.bottom, 28)
         }
         .sheet(isPresented: $showingLogin) {
-            VStack(spacing: 0) {
-                TextField("账号名称", text: $accountName).textFieldStyle(.roundedBorder).padding(.horizontal, 24).padding(.top, 24)
                 ClaudeOAuthAccountView(onSave: { credential in
                     Task {
                         do {
@@ -91,8 +89,7 @@ struct ClaudeAccountSettingsView: View {
                             error = nil
                         } catch { self.error = error.localizedDescription; showingLogin = false }
                     }
-                }, onCancel: { showingLogin = false })
-            }.background(SettingsBackdrop())
+                }, onCancel: { showingLogin = false }, accountName: $accountName)
         }
         .sheet(item: $editing) { profile in
             AIProviderEditorView(client: .claude, profile: profile, savedAPIKey: nil,
