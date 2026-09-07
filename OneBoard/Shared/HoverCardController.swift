@@ -22,11 +22,22 @@ final class HoverCardController: ObservableObject {
         self.title = title; self.size = size; self.content = content
     }
     func attach(to anchor: NSView) {
+        hoverSince = nil
+        suppressHover = false
         self.anchor = anchor
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.pollPointer() }
         }
+    }
+    /// 图标移除前解除监听，避免菜单栏重排后旧按钮仍触发浮窗。
+    func detach() {
+        timer?.invalidate()
+        timer = nil
+        anchor = nil
+        hoverSince = nil
+        suppressHover = false
+        hide()
     }
     func toggle() {
         if panel?.isVisible == true { hide(); suppressHover = true }
@@ -40,9 +51,7 @@ final class HoverCardController: ObservableObject {
             window.isReleasedWhenClosed = false; window.hidesOnDeactivate = false
             window.hasShadow = true
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.contentView = NSHostingView(rootView: content()
-                .clipShape(RoundedRectangle(cornerRadius: 22))
-                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)))
+            window.contentView = NSHostingView(rootView: content())
             panel = window
         }
         guard let panel else { return }

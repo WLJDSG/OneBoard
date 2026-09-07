@@ -1,46 +1,57 @@
 import SwiftUI
 
-/// 设置窗口独立视觉令牌，避免影响截图画布和悬浮工具栏。
+/// 设置与工具外壳共用视觉令牌，不参与截图原图或标注颜色。
 enum SettingsPalette {
     static let accent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 0.52, green: 0.64, blue: 1, alpha: 1)
             : NSColor(red: 0.22, green: 0.36, blue: 0.88, alpha: 1)
     })
-    static let teal = Color(red: 0.05, green: 0.62, blue: 0.65)
+    static let teal = Color(nsColor: .systemTeal)
     static let ink = Color.primary
     static let muted = Color.secondary
+    static let canvas = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 0.105, alpha: 1) : NSColor(white: 0.96, alpha: 1)
+    })
+    static let surface = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 0.145, alpha: 1) : .white
+    })
+    static let border = Color.primary.opacity(0.09)
+    static let hover = Color.primary.opacity(0.055)
+    static let onAccent = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .black : .white
+    })
+}
+
+enum InterfaceMetrics {
+    static let panelRadius: CGFloat = 16
+    static let cardRadius: CGFloat = 12
+    static let controlRadius: CGFloat = 8
+    static let controlHeight: CGFloat = 30
+    static let panelInset: CGFloat = 16
+    static let pageInset: CGFloat = 28
 }
 
 struct SettingsBackdrop: View {
-    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-            LinearGradient(colors: [SettingsPalette.accent.opacity(scheme == .dark ? 0.12 : 0.075),
-                                    .clear, SettingsPalette.teal.opacity(0.05)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        .ignoresSafeArea()
+        SettingsPalette.canvas.ignoresSafeArea()
     }
 }
 
 struct SettingsCard<Content: View>: View {
-    @Environment(\.colorScheme) private var scheme
     @ViewBuilder var content: Content
     var body: some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(scheme == .dark ? Color(nsColor: .controlBackgroundColor) : .white,
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.055), lineWidth: 1))
-            .shadow(color: .black.opacity(scheme == .dark ? 0.08 : 0.025), radius: 12, y: 5)
+            .featureCardStyle()
     }
 }
 
 /// 使用 Section 的公开子视图 API 保留现有控件及绑定，只调整排版。
 struct SettingsForm<Content: View>: View {
+    var inset: CGFloat = InterfaceMetrics.pageInset
     @ViewBuilder var content: Content
     var body: some View {
         ScrollView {
@@ -62,7 +73,7 @@ struct SettingsForm<Content: View>: View {
                                     row
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.horizontal, 20)
-                                        .padding(.vertical, 17)
+                                        .padding(.vertical, 14)
                                 }
                             }
                         }
@@ -76,7 +87,7 @@ struct SettingsForm<Content: View>: View {
                     }
                 }
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, inset)
             .padding(.top, 8)
             .padding(.bottom, 28)
         }
@@ -93,14 +104,31 @@ struct SettingsActionStyle: ButtonStyle {
     var prominent = false
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 13)
-            .padding(.vertical, 8)
-            .foregroundStyle(prominent ? .white : SettingsPalette.ink)
-            .background(prominent ? SettingsPalette.accent : Color.primary.opacity(0.045),
-                        in: RoundedRectangle(cornerRadius: 9))
-            .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
+        Action(configuration: configuration, prominent: prominent, enabled: enabled)
+    }
+
+    private struct Action: View {
+        let configuration: ButtonStyleConfiguration
+        let prominent: Bool
+        let enabled: Bool
+        @State private var hovered = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 12)
+                .frame(minHeight: InterfaceMetrics.controlHeight)
+                .foregroundStyle(prominent ? SettingsPalette.onAccent : SettingsPalette.ink)
+                .background(prominent ? SettingsPalette.accent : SettingsPalette.hover,
+                            in: RoundedRectangle(cornerRadius: InterfaceMetrics.controlRadius))
+                .overlay(RoundedRectangle(cornerRadius: InterfaceMetrics.controlRadius)
+                    .strokeBorder(hovered && enabled ? SettingsPalette.accent.opacity(0.45) : .clear))
+                .contentShape(RoundedRectangle(cornerRadius: InterfaceMetrics.controlRadius))
+                .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
+                .animation(reduceMotion ? nil : InterfaceMotion.feedback, value: hovered)
+                .onHover { hovered = $0 }
+        }
     }
 }
 
@@ -109,6 +137,7 @@ struct SettingsNavigationItem: View {
     let selected: Bool
     let action: () -> Void
     @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         Button(action: action) {
             HStack(spacing: 11) {
@@ -130,6 +159,7 @@ struct SettingsNavigationItem: View {
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : InterfaceMotion.feedback, value: hovered)
         .onHover { hovered = $0 }
         .accessibilityAddTraits(selected ? .isSelected : [])
     }

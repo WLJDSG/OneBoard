@@ -10,9 +10,9 @@ struct CodexAccountEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("编辑账号名称")
-                .font(.headline)
+                .font(.system(size: 17, weight: .semibold))
 
-            SettingsForm {
+            SettingsForm(inset: 0) {
                 LabeledContent("账号名称") { TextField("账号名称", text: $viewModel.title).labelsHidden() }
             }
 

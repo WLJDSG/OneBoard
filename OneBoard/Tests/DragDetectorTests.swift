@@ -3,6 +3,13 @@ import AppKit
 import XCTest
 
 final class DragDetectorTests: XCTestCase {
+    func testDragDetectionDoesNotRequireAccessToFile() {
+        let inaccessible = URL(fileURLWithPath: "/unavailable-folder/document.txt", isDirectory: false)
+        XCTAssertTrue(DragDetector.canConfirmFileDrag(types: [.fileURL], urls: [inaccessible]),
+                      "拖动检测只能检查载荷，不能在用户投放前读取受保护目录")
+        XCTAssertFalse(DragDetector.canConfirmFileDrag(types: [.fileURL], urls: [URL(fileURLWithPath: "/Example.app", isDirectory: true)]))
+        XCTAssertFalse(DragDetector.canConfirmFileDrag(types: [.fileURL], urls: [URL(string: "https://example.com/file.txt")!]))
+    }
     func testPreviousFileDragCannotConfirmLaterWindowDrag() throws {
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }

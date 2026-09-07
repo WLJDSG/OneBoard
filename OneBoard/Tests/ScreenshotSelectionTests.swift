@@ -34,6 +34,27 @@ final class ScreenshotSelectionTests: XCTestCase {
         XCTAssertEqual(actions, [.translate])
     }
 
+    @MainActor
+    func testFullScreenToolbarFallsBackToBottomInsteadOfNotch() throws {
+        let view = ScreenshotOverlayContentView(screenshot: try makeRasterImage(size: bounds.size), eventManager: OverlayEventManager())
+        view.frame = bounds
+        let toolbar = view.inlineToolbarFrame(selectionRect: bounds, toolbarSize: CGSize(width: 600, height: 44))
+        XCTAssertEqual(toolbar.minY, 12)
+        XCTAssertEqual(toolbar.midX, bounds.midX)
+        let small = view.inlineToolbarFrame(selectionRect: CGRect(x: 200, y: 200, width: 500, height: 300), toolbarSize: CGSize(width: 600, height: 44))
+        XCTAssertEqual(small.minY, 144)
+    }
+
+    @MainActor
+    func testFullScreenToolbarStaysAboveDockOnItsDisplay() throws {
+        let visible = CGRect(x: 0, y: 72, width: 1000, height: 600)
+        let view = ScreenshotOverlayContentView(screenshot: try makeRasterImage(size: bounds.size), eventManager: OverlayEventManager(), toolbarVisibleFrame: visible)
+        view.frame = bounds
+        let toolbar = view.inlineToolbarFrame(selectionRect: bounds, toolbarSize: CGSize(width: 600, height: 44))
+        XCTAssertEqual(toolbar.minY, visible.minY + 12)
+        XCTAssertLessThan(toolbar.maxY, visible.maxY)
+    }
+
     func testMovingSelectionClampsToScreenBounds() {
         let result = ScreenshotSelectionGeometry.moved(
             CGRect(x: 800, y: 500, width: 180, height: 160),

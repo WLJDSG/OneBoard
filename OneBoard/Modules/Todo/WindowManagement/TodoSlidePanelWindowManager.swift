@@ -69,6 +69,7 @@ final class TodoSlidePanelWindowManager: NSObject {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
+        panel.animationBehavior = .none
         panel.contentView = trackingHostingView
         panel.isMovableByWindowBackground = true
 
@@ -76,15 +77,16 @@ final class TodoSlidePanelWindowManager: NSObject {
 
         // 动画：从右侧轻微滑入
         let finalOrigin = panel.frame.origin
-        let startX = finalOrigin.x + 24
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let startX = finalOrigin.x + (reduceMotion ? 0 : 12)
         panel.setFrameOrigin(NSPoint(x: startX, y: finalOrigin.y))
 
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
 
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.25
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            ctx.duration = InterfaceMotion.panelDuration(presenting: true, reduceMotion: reduceMotion)
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.05, 0.7, 0.1, 1)
             panel.animator().setFrameOrigin(finalOrigin)
         }
 
@@ -98,10 +100,11 @@ final class TodoSlidePanelWindowManager: NSObject {
         retractTimer?.invalidate()
         retractTimer = nil
 
-        let finalX = panel.frame.origin.x + 24
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let finalX = panel.frame.origin.x + (reduceMotion ? 0 : 12)
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.2
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            ctx.duration = InterfaceMotion.panelDuration(presenting: false, reduceMotion: reduceMotion)
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.3, 0, 0.8, 0.15)
             panel.animator().setFrameOrigin(NSPoint(x: finalX, y: panel.frame.origin.y))
         }) { [weak self] in
             Task { @MainActor in

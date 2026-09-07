@@ -8,11 +8,11 @@ struct OneBoardPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(OneBoardColors.accent).opacity(configuration.isPressed ? 0.8 : (isEnabled ? 1.0 : 0.5)))
-            .foregroundColor(.white)
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 12)
+            .frame(minHeight: InterfaceMetrics.controlHeight)
+            .background(RoundedRectangle(cornerRadius: InterfaceMetrics.controlRadius).fill(OneBoardColors.accent).opacity(configuration.isPressed ? 0.8 : (isEnabled ? 1.0 : 0.5)))
+            .foregroundColor(SettingsPalette.onAccent)
     }
 }
 
@@ -21,10 +21,10 @@ struct OneBoardPrimaryButtonStyle: ButtonStyle {
 struct OneBoardSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(OneBoardColors.accent.opacity(configuration.isPressed ? 0.12 : 0.08)))
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 12)
+            .frame(minHeight: InterfaceMetrics.controlHeight)
+            .background(RoundedRectangle(cornerRadius: InterfaceMetrics.controlRadius).fill(OneBoardColors.accent.opacity(configuration.isPressed ? 0.12 : 0.08)))
             .foregroundColor(OneBoardColors.accent)
     }
 }

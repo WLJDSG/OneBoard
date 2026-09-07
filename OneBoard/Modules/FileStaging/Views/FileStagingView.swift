@@ -29,7 +29,7 @@ struct FileStagingView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
             Text("移除暂存项不会删除原文件")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .font(.system(size: 11)).foregroundStyle(.secondary)
                 .padding(.bottom, 14)
         }
         .frame(width: FileStagingViewModel.shelfSize.width, height: FileStagingViewModel.shelfSize.height)
@@ -93,7 +93,7 @@ struct FileStagingView: View {
                     }
 
                 Text(file.fileName)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(width: 80)

@@ -50,7 +50,7 @@ struct TodoSlidePanelView: View {
 
     private var header: some View {
         FeaturePanelHeader(title: "待办", subtitle: "\(viewModel.activeItems.count) 项待完成", icon: "checklist") {
-            FeaturePanelIconButton(icon: isPinned ? "pin.fill" : "pin", title: isPinned ? "取消固定" : "固定面板") {
+            FeaturePanelIconButton(icon: isPinned ? "pin.fill" : "pin", title: isPinned ? "取消固定" : "固定面板", selected: isPinned) {
                 isPinned.toggle()
                 TodoSlidePanelWindowManager.shared.setPinned(isPinned)
             }
@@ -126,10 +126,11 @@ struct TodoSlidePanelView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: OneBoardRadius.md)
-                .fill(FeaturePalette.accent.opacity(0.04))
+                .fill(FeaturePalette.surface)
         )
-        .padding(.horizontal, OneBoardSpacing.sm)
-        .padding(.vertical, OneBoardSpacing.xs)
+        .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.md).strokeBorder(FeaturePalette.border))
+        .padding(.horizontal, InterfaceMetrics.panelInset)
+        .padding(.vertical, 10)
     }
 
     // MARK: - 列表
@@ -138,16 +139,8 @@ struct TodoSlidePanelView: View {
     private var todoList: some View {
         Group {
             if viewModel.activeItems.isEmpty {
-                VStack(spacing: OneBoardSpacing.sm) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 32))
-                        .foregroundColor(FeaturePalette.secondary.opacity(0.3))
-                    Text(viewModel.isSearching ? "无匹配结果" : "暂无待办")
-                        .oneBoardFont(.body)
-                        .foregroundColor(FeaturePalette.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 48)
+                FeatureEmptyState(title: viewModel.isSearching ? "无匹配结果" : "暂无待办",
+                    subtitle: viewModel.isSearching ? "试试其他关键词" : "点击加号，记录接下来要做的事", icon: "checklist")
             } else {
                 let items = sortedItems(viewModel.activeItems)
                 VStack(spacing: 0) {
@@ -173,7 +166,7 @@ struct TodoSlidePanelView: View {
 
                     if let msg = viewModel.feedbackMessage {
                         Text(msg)
-                            .font(.system(size: 10))
+                            .font(.system(size: 11))
                             .foregroundColor(FeaturePalette.secondary)
                             .padding(.horizontal, OneBoardSpacing.sm)
                             .padding(.bottom, OneBoardSpacing.twoXS)
@@ -213,15 +206,15 @@ struct TodoSlidePanelView: View {
             if overdueCount > 0 {
                 HStack(spacing: OneBoardSpacing.twoXS) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                     Text("\(overdueCount) 项已过期")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                 }
-                .foregroundColor(OneBoardColors.destructive.opacity(0.7))
+                .foregroundColor(OneBoardColors.destructive)
             }
         }
-        .padding(.horizontal, OneBoardSpacing.sm)
-        .padding(.vertical, OneBoardSpacing.xs)
+        .padding(.horizontal, InterfaceMetrics.panelInset)
+        .padding(.vertical, 10)
         .sheet(isPresented: $showHistory) {
             TodoHistoryView()
         }

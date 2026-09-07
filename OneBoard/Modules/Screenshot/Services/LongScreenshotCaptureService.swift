@@ -188,18 +188,18 @@ private struct LongCaptureControls: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "rectangle.expand.vertical")
-                .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-                .frame(width: 38, height: 38).background(Color.accentColor, in: RoundedRectangle(cornerRadius: 11))
+                .font(.system(size: 20, weight: .medium)).foregroundStyle(FeaturePalette.accent)
+                .frame(width: 24, height: 30)
             VStack(alignment: .leading, spacing: 3) {
-                Text("长截图 · \(model.count) 帧").font(.system(size: 12, weight: .semibold))
-                Text(model.message).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(2)
+                Text("长截图 · \(model.count) 帧").font(.system(size: 13, weight: .semibold)).monospacedDigit()
+                Text(model.message).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
             }.frame(maxWidth: .infinity, alignment: .leading)
-            Button { model.cancel() } label: { Image(systemName: "xmark").frame(width: 30, height: 30).background(Color.primary.opacity(0.06), in: Circle()) }.help("取消")
-            Button { model.finish() } label: { Label("完成", systemImage: "checkmark").font(.system(size: 12, weight: .semibold)).padding(.horizontal, 12).frame(height: 32).foregroundStyle(.white).background(Color.accentColor, in: Capsule()) }.help("完成")
-        }.buttonStyle(.plain).padding(12).frame(width: 390, height: 76)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.22)))
-            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+            FeaturePanelIconButton(icon: "xmark", title: "取消") { model.cancel() }
+            Button { model.finish() } label: { Label("完成", systemImage: "checkmark") }
+                .buttonStyle(SettingsActionStyle(prominent: true))
+        }.padding(12).frame(width: 390, height: 76)
+            .featurePanelStyle()
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
     }
 }
 
@@ -208,10 +208,9 @@ private struct LongCapturePreview: View {
     var body: some View {
         VStack(spacing: 6) {
             if let image = model.preview { Image(nsImage: image).resizable().scaledToFit() }
-            Text("实时预览 · \(model.count) 帧").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+            Text("实时预览 · \(model.count) 帧").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
         }.padding(8).frame(width: 140, height: 240)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.2)))
+            .featurePanelStyle()
             .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 }

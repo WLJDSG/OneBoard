@@ -163,12 +163,12 @@ struct SettingsView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "square.stack.3d.up.fill")
                         .font(.system(size: 21))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(SettingsPalette.onAccent)
                         .frame(width: 42, height: 42)
-                        .background(LinearGradient(colors: [SettingsPalette.accent, SettingsPalette.teal], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 13))
+                        .background(SettingsPalette.accent, in: RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("OneBoard").font(.system(size: 18, weight: .bold))
-                        Text("你的桌面工作空间").font(.system(size: 10)).foregroundStyle(.secondary)
+                        Text("你的桌面工作空间").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -183,7 +183,7 @@ struct SettingsView: View {
                 }.scrollIndicators(.hidden)
                 Spacer(minLength: 12)
                 HStack(spacing: 6) {
-                    Circle().fill(SettingsPalette.teal).frame(width: 6, height: 6)
+                    Image(systemName: "command").font(.system(size: 11))
                     Text("OneBoard for macOS").font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                 }.padding(12)
@@ -191,8 +191,7 @@ struct SettingsView: View {
             .padding(14)
             .padding(.top, 14)
             .frame(width: 214)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.primary.opacity(0.04)))
+            .featureCardStyle()
             .padding(.leading, 18)
             .padding(.top, 18)
             .padding(.bottom, 18)
@@ -201,17 +200,16 @@ struct SettingsView: View {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(selectedSettingsTab.title)
-                            .font(.system(size: 27, weight: .bold))
+                            .font(.system(size: 24, weight: .semibold))
                         Text(selectedSettingsTab.subtitle)
-                            .font(.system(size: 12))
+                            .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Image(systemName: selectedSettingsTab.systemImage)
-                        .font(.system(size: 24, weight: .light))
-                        .foregroundStyle(SettingsPalette.accent.opacity(0.65))
-                        .frame(width: 52, height: 52)
-                        .background(SettingsPalette.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(SettingsPalette.accent)
+                        .frame(width: 40, height: 40)
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 22)
@@ -239,7 +237,7 @@ struct SettingsView: View {
 
     private func navigationGroup(_ title: String, tabs: [SettingsTab]) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+            Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                 .padding(.horizontal, 13).padding(.top, 10).padding(.bottom, 5)
             ForEach(tabs) { tab in
                 SettingsNavigationItem(tab: tab, selected: tab == selectedSettingsTab) {
@@ -313,6 +311,21 @@ struct SettingsView: View {
             } header: { Text("隐私权限") }
 
             Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("完全磁盘访问权限").font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        Text("在系统设置中管理").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("可选授权：统一访问下载、桌面、文稿等受保护位置，权限范围较大。实际文件访问被拒绝时会提示授权，不在启动时探测文件。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Button("管理完全磁盘访问权限") { PermissionManager.shared.openFullDiskAccessSettings() }
+                        Button("在 Finder 中显示 OneBoard") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
+                    }
+                    Text("在系统列表中开启 OneBoard；未列出时点击 + 添加当前应用。开启后退出并重新打开。截图、辅助功能和备份目录选择仍单独管理。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 FolderAuthorizationView()
             } header: { Text("文件访问与其他授权") }
 
@@ -494,7 +507,7 @@ struct SettingsView: View {
                         Image(systemName: "square.stack.3d.up.fill")
                             .font(.system(size: 38)).foregroundStyle(.white)
                             .frame(width: 88, height: 88)
-                            .background(LinearGradient(colors: [SettingsPalette.accent, SettingsPalette.teal], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 26))
+                            .background(SettingsPalette.accent, in: RoundedRectangle(cornerRadius: 26))
                             .shadow(color: SettingsPalette.accent.opacity(0.15), radius: 15, y: 8)
                         Text(Constants.appName).font(.system(size: 30, weight: .bold))
                         Text("让桌面上的每一步，更轻松。")

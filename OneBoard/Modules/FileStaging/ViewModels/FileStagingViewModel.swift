@@ -9,8 +9,8 @@ private final class NotchShelfPanel: NSPanel {
 
 enum NotchShelfAnimationLayout {
     static let expandedSize = CGSize(width: 440, height: 250)
-    static let showDuration: TimeInterval = 0.38
-    static let hideDuration: TimeInterval = 0.24
+    static let showDuration = InterfaceMotion.revealDuration
+    static let hideDuration = InterfaceMotion.dismissDuration
     static let collapsedScale = CGSize(width: 150 / expandedSize.width, height: 8 / expandedSize.height)
 
     /// 包含刘海下方可抵达的区域，鼠标无需进入物理摄像头遮挡区。
@@ -156,9 +156,15 @@ final class FileStagingViewModel: NSObject, ObservableObject {
         let normalizedURL = url.standardizedFileURL
         let path = normalizedURL.path
 
-        guard !DragDetector.supportedDraggedFileURLs([normalizedURL]).isEmpty else {
-            stagingError = "无法暂存“\(url.lastPathComponent)”：请选择可读取的普通文件"
-            print("[FileStaging] 仅支持暂存普通文件，已忽略: \(url.lastPathComponent)")
+        do {
+            guard normalizedURL.isFileURL, normalizedURL.pathExtension.lowercased() != "app",
+                  try normalizedURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
+                stagingError = "无法暂存“\(url.lastPathComponent)”：请选择普通文件"
+                return
+            }
+        } catch {
+            stagingError = "暂存失败：\(error.localizedDescription)"
+            PermissionManager.shared.handleFileAccessError(error)
             return
         }
 
@@ -188,6 +194,7 @@ final class FileStagingViewModel: NSObject, ObservableObject {
             }
         } catch {
             pendingFilePaths.remove(path)
+            PermissionManager.shared.handleFileAccessError(error)
             stagingError = "暂存失败：\(error.localizedDescription)"
             print("[FileStaging] 暂存失败: \(error)")
         }
@@ -217,7 +224,7 @@ final class FileStagingViewModel: NSObject, ObservableObject {
         guard !isShelfVisible else { return }
         animationGeneration += 1
         isShelfVisible = true
-        isShelfExpanded = false
+        isShelfExpanded = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         floatingWindow?.close()
         floatingWindow = nil
         createFloatingWindow()
@@ -237,10 +244,11 @@ final class FileStagingViewModel: NSObject, ObservableObject {
             floatingWindow = nil
             return
         }
-        withAnimation(.timingCurve(0.55, 0, 0.85, 0.4, duration: NotchShelfAnimationLayout.hideDuration)) {
+        let duration = InterfaceMotion.panelDuration(presenting: false, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        withAnimation(duration == 0 ? nil : .timingCurve(0.3, 0, 0.8, 0.15, duration: duration)) {
             isShelfExpanded = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + NotchShelfAnimationLayout.hideDuration) { [weak self, weak panel] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak panel] in
             guard let self, self.animationGeneration == generation else { return }
             panel?.close()
             self.floatingWindow = nil
@@ -292,7 +300,8 @@ final class FileStagingViewModel: NSObject, ObservableObject {
             let generation = animationGeneration
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.animationGeneration == generation, self.isShelfVisible else { return }
-                withAnimation(.timingCurve(0.16, 1, 0.3, 1, duration: NotchShelfAnimationLayout.showDuration)) {
+                let duration = InterfaceMotion.panelDuration(presenting: true, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                withAnimation(duration == 0 ? nil : .timingCurve(0.05, 0.7, 0.1, 1, duration: duration)) {
                     self.isShelfExpanded = true
                 }
             }

@@ -17,11 +17,11 @@ struct ClaudeOAuthAccountView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Label("添加 Claude Code 账号", systemImage: "person.crop.circle.badge.plus")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 17, weight: .semibold))
                 Spacer()
-                Button(action: close) { Image(systemName: "xmark") }.buttonStyle(.borderless)
+                FeaturePanelIconButton(icon: "xmark", title: "关闭", action: close)
             }
-            SettingsForm {
+            SettingsForm(inset: 0) {
                 Section("待授权账号") {
                     LabeledContent("Claude 账号邮箱") {
                         TextField("Claude 账号邮箱", text: accountName ?? $email).labelsHidden()
@@ -37,7 +37,7 @@ struct ClaudeOAuthAccountView: View {
                             Text(waiting ? "等待浏览器授权…" : "在浏览器中打开")
                                 .frame(maxWidth: .infinity)
                         }
-                    }.buttonStyle(.borderedProminent).controlSize(.large)
+                    }.buttonStyle(SettingsActionStyle(prominent: true)).controlSize(.large)
                         .disabled(waiting || busy || (accountName?.wrappedValue ?? email).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     if let url = authorization.authorizationURL {
                         LabeledContent("授权链接") {

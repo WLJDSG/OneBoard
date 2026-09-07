@@ -9,6 +9,45 @@ final class PermissionManager {
     static let shared = PermissionManager()
     private init() {}
 
+    private var didShowFileAccessGuide = false
+
+    @MainActor func openFullDiskAccessSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!)
+    }
+
+    /// 只检查路径形态，不通过读文件探测系统授权状态。
+    static func isOtherAppDataURL(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        let library = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library").path
+        return ["Containers", "Group Containers"].contains { directory in
+            let root = library + "/" + directory
+            return path == root || path.hasPrefix(root + "/")
+        }
+    }
+
+    static func isFileAccessDenied(_ error: Error) -> Bool {
+        let error = error as NSError
+        if error.domain == NSCocoaErrorDomain,
+           [NSFileReadNoPermissionError, NSFileWriteNoPermissionError].contains(error.code) { return true }
+        if error.domain == NSPOSIXErrorDomain, [Int(EACCES), Int(EPERM)].contains(error.code) { return true }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return isFileAccessDenied(underlying)
+        }
+        return false
+    }
+
+    /// 只响应实际访问失败，不读取受保护文件探测权限；本次运行取消后不反复打扰。
+    @MainActor func handleFileAccessError(_ error: Error) {
+        guard Self.isFileAccessDenied(error), !didShowFileAccessGuide else { return }
+        didShowFileAccessGuide = true
+        let alert = NSAlert()
+        alert.messageText = "文件访问被拒绝"
+        alert.informativeText = "可在系统设置中为 OneBoard 开启完全磁盘访问权限，统一访问下载、桌面和文稿等目录。该权限范围较大，由你选择是否授予；开启后退出并重新打开 OneBoard，再重试操作。文件自身的访问限制仍可能导致失败。"
+        alert.addButton(withTitle: "前往授权")
+        alert.addButton(withTitle: "暂不授权")
+        if alert.runModal() == .alertFirstButtonReturn { openFullDiskAccessSettings() }
+    }
+
     var hasAccessibilityPermission: Bool { AXIsProcessTrusted() }
     var hasScreenRecordingPermission: Bool { CGPreflightScreenCaptureAccess() }
 
@@ -244,7 +283,7 @@ final class PermissionGuideWindowManager {
             self?.hide()
         })
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 250, height: 118),
+            contentRect: NSRect(origin: .zero, size: PermissionGuideView.size),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered, defer: false
         )
@@ -344,7 +383,8 @@ final class PermissionGuideWindowManager {
 
 // MARK: - 权限引导视图
 
-private struct PermissionGuideView: View {
+struct PermissionGuideView: View {
+    static let size = CGSize(width: 280, height: 140)
     let kind: OneBoardPermissionKind
     let onClose: () -> Void
 
@@ -382,12 +422,7 @@ private struct PermissionGuideView: View {
             .buttonStyle(.plain)
             .padding(8)
         }
-        .frame(width: 250, height: 118)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.white.opacity(0.35), lineWidth: 1)
-        )
+        .frame(width: Self.size.width, height: Self.size.height)
+        .featurePanelStyle()
     }
 }

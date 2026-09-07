@@ -4,15 +4,25 @@ import XCTest
 @testable import OneBoardKit
 
 final class ExperienceRenderTests: XCTestCase {
+    func testReducedMotionSkipsPanelTravelAndExitIsShorter() {
+        XCTAssertEqual(InterfaceMotion.panelDuration(presenting: true, reduceMotion: true), 0)
+        XCTAssertEqual(InterfaceMotion.panelDuration(presenting: false, reduceMotion: true), 0)
+        XCTAssertLessThan(InterfaceMotion.panelDuration(presenting: false, reduceMotion: false),
+                          InterfaceMotion.panelDuration(presenting: true, reduceMotion: false))
+    }
+
     @MainActor
     func testCalendarAndStatusBackgroundsStayOpaqueInBothAppearances() throws {
         let requested = ProcessInfo.processInfo.environment["ONEBOARD_CARD_RENDER"]
         let directory = requested ?? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         defer { if requested == nil { try? FileManager.default.removeItem(atPath: directory) } }
+        let originalApps = MacStatusModel.shared.apps
+        MacStatusModel.shared.apps = (1...3).map { AppNetworkUsage(id: "Preview.\($0)", name: "测试应用 \($0)", received: 30_000_000, sent: 2_000_000) }
+        defer { MacStatusModel.shared.apps = originalApps }
         for dark in [false, true] {
             let calendar = try render(CalendarPanelView(), size: CGSize(width: 960, height: 590), dark: dark, path: directory + "/calendar-\(dark).png")
-            let status = try render(MacStatusView(), size: CGSize(width: 400, height: 600), dark: dark, path: directory + "/status-\(dark).png")
+            let status = try render(MacStatusView(), size: CGSize(width: 400, height: 660), dark: dark, path: directory + "/status-\(dark).png")
             for bitmap in [calendar, status] {
                 let background = try XCTUnwrap(bitmap.colorAt(x: 10, y: 10))
                 XCTAssertEqual(background.alphaComponent, 1, accuracy: 0.01, "卡片底色必须隔离壁纸，避免背景影响文字对比")

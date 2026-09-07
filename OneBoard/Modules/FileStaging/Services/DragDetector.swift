@@ -131,7 +131,10 @@ final class DragDetector {
         types: [NSPasteboard.PasteboardType],
         urls: [URL]
     ) -> Bool {
-        supportsDraggedFileTypes(types) && !supportedDraggedFileURLs(urls).isEmpty
+        // 这里只识别载荷；全局拖动尚未投放给 OneBoard，不能读取文件属性触发目录授权。
+        supportsDraggedFileTypes(types) && urls.contains {
+            $0.isFileURL && !$0.hasDirectoryPath && $0.pathExtension.lowercased() != "app"
+        }
     }
 
     static func supportedDraggedFileURLs(_ urls: [URL]) -> [URL] {

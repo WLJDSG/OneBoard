@@ -103,6 +103,7 @@ final class ScreenshotOverlayContentView: NSView {
     private let imagePixelSize: CGSize
     private var selectionModel = ScreenshotSelectionModel()
     private let windowCandidates: [CGRect]
+    private let toolbarVisibleFrame: CGRect?
     private var hoveredWindowRect: CGRect?
     private var windowClickAnchor: CGPoint?
     private var pendingWindowRect: CGRect?
@@ -127,7 +128,8 @@ final class ScreenshotOverlayContentView: NSView {
         selectionRect.flatMap { croppedImage(for: $0) } != nil
     }
 
-    init(screenshot: NSImage, eventManager: OverlayEventManager, windowCandidates: [CGRect] = []) {
+    init(screenshot: NSImage, eventManager: OverlayEventManager, windowCandidates: [CGRect] = [], toolbarVisibleFrame: CGRect? = nil) {
+        self.toolbarVisibleFrame = toolbarVisibleFrame
         self.windowCandidates = windowCandidates
         self.screenshot = screenshot
         self.eventManager = eventManager
@@ -539,15 +541,26 @@ final class ScreenshotOverlayContentView: NSView {
         longCaptureButton?.isHidden = true
     }
 
-    private func inlineToolbarFrame(selectionRect: CGRect, toolbarSize: CGSize) -> CGRect {
+    func inlineToolbarFrame(selectionRect: CGRect, toolbarSize: CGSize) -> CGRect {
         let horizontalInset: CGFloat = 12
         let gap: CGFloat = 12
         let width = min(toolbarSize.width, bounds.width - horizontalInset * 2)
         let height = toolbarSize.height
         let belowY = selectionRect.minY - gap - height
-        let y = belowY >= bounds.minY + horizontalInset
-            ? belowY
-            : min(selectionRect.maxY + gap, bounds.maxY - height - horizontalInset)
+        // 使用本屏 visibleFrame 避开 Dock；上下均放不下时置于选区底部内侧。
+        let screen = window?.screen
+        let visible = toolbarVisibleFrame ?? screen.map { $0.visibleFrame.offsetBy(dx: -$0.frame.minX, dy: -$0.frame.minY) } ?? bounds
+        let bottom = max(bounds.minY, visible.minY) + gap
+        let top = min(bounds.maxY, visible.maxY) - gap
+        let aboveY = selectionRect.maxY + gap
+        let y: CGFloat
+        if belowY >= bottom {
+            y = belowY
+        } else if aboveY + height <= top {
+            y = aboveY
+        } else {
+            y = min(bottom, bounds.maxY - height - gap)
+        }
         let x = min(
             max(selectionRect.midX - width / 2, bounds.minX + horizontalInset),
             bounds.maxX - width - horizontalInset

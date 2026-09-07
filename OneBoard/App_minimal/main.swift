@@ -18,7 +18,11 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
 let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-MenuBarManager.shared.configure(statusItem: statusItem)
+let calendarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+let macItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+MainActor.assumeIsolated {
+    MenuBarManager.shared.configure(statusItem: statusItem, calendarItem: calendarItem, macItem: macItem)
+}
 
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate

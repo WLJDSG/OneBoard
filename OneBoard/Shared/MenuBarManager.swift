@@ -29,7 +29,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
 
     // MARK: - 菜单栏配置（statusItem 由 main.swift 预创建后传入）
 
-    public func configure(statusItem: NSStatusItem) {
+    @MainActor public func configure(statusItem: NSStatusItem, calendarItem: NSStatusItem, macItem: NSStatusItem) {
         self.statusItem = statusItem
         guard let button = statusItem.button else { return }
         button.image = createMenuBarIcon()
@@ -42,8 +42,7 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
         button.action = #selector(handleClick)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem.isVisible = true
-        updateCalendarStatusItemVisibility()
-        Task { @MainActor in updateMacStatusItemVisibility() }
+        configureAuxiliaryStatusItems(calendar: calendarItem, macStatus: macItem)
         macStatusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateMacStatusLabel() }
         }
@@ -167,39 +166,44 @@ public final class MenuBarManager: NSObject, NSMenuDelegate {
     }
     @objc private func openMacStatus() { Task { @MainActor in MacStatusWindowManager.shared.card.toggle() } }
 
+    @MainActor func configureAuxiliaryStatusItems(calendar: NSStatusItem, macStatus: NSStatusItem) {
+        calendarStatusItem = calendar
+        macStatusItem = macStatus
+        calendar.button?.image = Self.menuSymbol("calendar")
+        calendar.button?.target = self
+        calendar.button?.action = #selector(openCalendar)
+        calendar.button?.toolTip = "OneBoard 日历"
+        macStatus.button?.target = self
+        macStatus.button?.action = #selector(openMacStatus)
+        macStatus.button?.toolTip = "Mac 状态"
+        updateCalendarStatusItemVisibility()
+        updateMacStatusItemVisibility()
+    }
+
     @MainActor func updateMacStatusItemVisibility() {
+        guard let item = macStatusItem else { return }
         let defaults = UserDefaults.standard
         let visible = defaults.object(forKey: Constants.UserDefaultsKeys.macStatusShowInMenuBar) == nil
             || defaults.bool(forKey: Constants.UserDefaultsKeys.macStatusShowInMenuBar)
-        if visible, macStatusItem == nil {
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item.button?.target = self
-            item.button?.action = #selector(openMacStatus)
-            item.button?.toolTip = "Mac 状态"
-            macStatusItem = item
+        item.isVisible = visible
+        if visible {
             updateMacStatusLabel()
-            if let button = item.button { Task { @MainActor in MacStatusWindowManager.shared.card.attach(to: button) } }
-        } else if !visible, let item = macStatusItem {
-            NSStatusBar.system.removeStatusItem(item)
-            macStatusItem = nil
+            if let button = item.button { MacStatusWindowManager.shared.card.attach(to: button) }
+        } else {
+            MacStatusWindowManager.shared.card.detach()
         }
     }
 
-    func updateCalendarStatusItemVisibility() {
+    @MainActor func updateCalendarStatusItemVisibility() {
+        guard let item = calendarStatusItem else { return }
         let defaults = UserDefaults.standard
         let visible = defaults.object(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar) == nil
             || defaults.bool(forKey: Constants.UserDefaultsKeys.calendarShowInMenuBar)
-        if visible, calendarStatusItem == nil {
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-            item.button?.image = Self.menuSymbol("calendar")
-            item.button?.target = self
-            item.button?.action = #selector(openCalendar)
-            item.button?.toolTip = "OneBoard 日历"
-            calendarStatusItem = item
-            if let button = item.button { Task { @MainActor in CalendarPanelWindowManager.shared.attach(to: button) } }
-        } else if !visible, let item = calendarStatusItem {
-            NSStatusBar.system.removeStatusItem(item)
-            calendarStatusItem = nil
+        item.isVisible = visible
+        if visible {
+            if let button = item.button { CalendarPanelWindowManager.shared.attach(to: button) }
+        } else {
+            CalendarPanelWindowManager.shared.card.detach()
         }
     }
 

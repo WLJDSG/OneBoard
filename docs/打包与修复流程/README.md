@@ -30,7 +30,7 @@ script/package_app.sh
 
 默认情况下，脚本会尝试查找可用的 `Developer ID Application` 或 `Apple Development` 签名身份。
 
-如果自动选择到的证书不可用，或只是本地测试安装包，可以显式使用 ad-hoc 签名：
+日常安装测试使用同一本机开发证书；证书不可用时先解决签名问题，不降级为 ad-hoc 安装包。仅用于不安装的临时构建时，可以显式使用 ad-hoc 签名：
 
 ```bash
 ONEBOARD_CODESIGN_IDENTITY=- script/package_app.sh

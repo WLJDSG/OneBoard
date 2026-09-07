@@ -24,8 +24,8 @@ struct TranslationPanelView: View {
                 statusBar
                 actionBar
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, InterfaceMetrics.panelInset)
+            .padding(.bottom, InterfaceMetrics.panelInset)
         }
         .translationTask(viewModel.appleTranslationConfiguration) { session in
             await viewModel.translateWithAppleSession(session)
@@ -90,12 +90,12 @@ struct TranslationPanelView: View {
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 24, height: 24)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(FeatureSelectionStyle(selected: false))
             .disabled(viewModel.sourceLanguage == .auto || viewModel.isTranslating)
             .help("交换语言")
 
             Image(systemName: "arrow.right")
-                .font(.system(size: 10))
+                .font(.system(size: 11))
                 .foregroundColor(FeaturePalette.secondary)
 
             Picker("目标语言", selection: $viewModel.targetLanguage) {
@@ -117,14 +117,14 @@ struct TranslationPanelView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("原文")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(FeaturePalette.secondary)
-                    .textCase(.uppercase)
+
                 Spacer()
                 if !viewModel.sourceText.isEmpty {
                     Button("清空") { viewModel.clearSourceText() }
-                        .buttonStyle(.borderless)
-                        .font(.system(size: 10))
+                        .buttonStyle(FeatureSelectionStyle(selected: false))
+                        .font(.system(size: 11))
                         .foregroundColor(FeaturePalette.secondary)
                 }
             }
@@ -146,9 +146,9 @@ struct TranslationPanelView: View {
     private var translationSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("译文")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(FeaturePalette.secondary)
-                .textCase(.uppercase)
+
 
             if viewModel.isTranslating {
                 HStack(spacing: 8) {
@@ -203,7 +203,7 @@ struct TranslationPanelView: View {
                 }.frame(height: 44)
             } else {
                 Text(serviceHint)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundColor(FeaturePalette.secondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: false, vertical: true)

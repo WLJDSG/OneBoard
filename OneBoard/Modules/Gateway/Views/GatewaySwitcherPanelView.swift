@@ -27,18 +27,13 @@ struct GatewaySwitcherPanelView: View {
                             .textSelection(.enabled)
                     }
                     if viewModel.profiles.isEmpty {
-                        VStack(spacing: 10) {
-                            Image(systemName: "network").font(.system(size: 28)).foregroundStyle(FeaturePalette.accent)
-                            Text("尚未添加网关配置").font(.system(size: 13, weight: .medium))
-                            Text("在管理配置中添加网关和 DNS，再从这里切换。")
-                                .font(.system(size: 11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        }.frame(maxWidth: .infinity).padding(.vertical, 36)
+                        FeatureEmptyState(title: "尚未添加网关配置", subtitle: "在管理配置中添加网关和 DNS，再从这里切换。", icon: "network")
                     }
                     ForEach(viewModel.profiles) { profile in
                         profileCard(profile)
                     }
                 }
-                .padding(12)
+                .padding(InterfaceMetrics.panelInset)
             }
 
             HStack(spacing: 10) {
@@ -113,11 +108,11 @@ struct GatewaySwitcherPanelView: View {
             .padding(11)
             .contentShape(Rectangle())
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: InterfaceMetrics.cardRadius)
                     .fill(isActive ? FeaturePalette.accent.opacity(0.08) : FeaturePalette.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: InterfaceMetrics.cardRadius)
                     .stroke(isActive ? FeaturePalette.accent.opacity(0.35) : FeaturePalette.border, lineWidth: 1)
             )
         }

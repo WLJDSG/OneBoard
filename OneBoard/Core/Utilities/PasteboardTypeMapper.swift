@@ -137,18 +137,12 @@ enum PasteboardTypeMapper {
         guard path != Bundle.main.bundleURL.standardizedFileURL.path else { return false }
 
         let ext = standardized.pathExtension.lowercased()
-        if ext == "app" { return false }
+        if ["app", "bundle", "framework", "plugin"].contains(ext) { return false }
 
-        let values = try? standardized.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey, .contentTypeKey])
-        if values?.contentType?.conforms(to: .applicationBundle) == true {
+        // 后台记录仅按路径判断，不读取其他 App 容器内的属性，避免触发系统授权窗。
+        if let type = UTType(filenameExtension: ext),
+           type.conforms(to: .applicationBundle) || type.conforms(to: .package) {
             return false
-        }
-        if values?.contentType?.conforms(to: .application) == true, ext == "app" {
-            return false
-        }
-
-        if values?.isDirectory == true {
-            return values?.isPackage != true
         }
 
         return true

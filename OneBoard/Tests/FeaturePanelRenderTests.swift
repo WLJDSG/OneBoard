@@ -24,31 +24,40 @@ final class FeaturePanelRenderTests: XCTestCase {
         }
         let model = TranslationPanelViewModel(sourceText: "让桌面上的每一步，更轻松。\nKeep your tools close and your workspace clear.")
         model.translatedText = "Make every step on your desktop easier.\n让工具触手可及，让工作空间井然有序。"
+        let clipboard = ClipboardListViewModel()
+        clipboard.entries = ["检查界面布局与文字可读性", "https://example.com", "#5877DE"].enumerated().map { index, text in
+            ClipboardEntry(id: Int64(index + 1), contentType: "text", plainText: text, data: Data(text.utf8))
+        }
         for dark in [false, true] {
             let screenshot = NSImage(size: CGSize(width: 300, height: 200))
             let annotations = AnnotationService(baseImage: screenshot)
             let views: [(String, AnyView, CGSize)] = [
+                ("permission-guide", AnyView(PermissionGuideView(kind: .accessibility, onClose: {})), PermissionGuideView.size),
                 ("shortcut-bindings", AnyView(QuickLaunchSettingsView().padding(16).background(Color(nsColor: .windowBackgroundColor))), CGSize(width: 720, height: 460)),
                 ("menu-icons", AnyView(HStack(spacing: 16) {
                     Image(nsImage: MenuBarManager.menuSymbol("square.stack.3d.up")!)
                     Image(nsImage: MenuBarManager.menuSymbol("calendar")!)
                     Image(nsImage: MenuBarManager.networkImage(upload: 125_000, download: 3_500_000))
                 }.padding(16).background(Color(nsColor: .windowBackgroundColor))), CGSize(width: 180, height: 50)),
-                ("screenshot-toolbar", AnyView(AnnotationToolbarView(annotationService: annotations, viewModel: AnnotationViewModel(annotationService: annotations), onComplete: { _ in }, onSave: { _ in }, onPin: { _ in }, onOCR: { _ in }, onTranslate: { _ in }, onLongCapture: {}, onClose: {}, baseImage: screenshot, displaySize: screenshot.size)), CGSize(width: 820, height: 80)),
+                ("screenshot-toolbar", AnyView(AnnotationToolbarView(annotationService: annotations, viewModel: AnnotationViewModel(annotationService: annotations), onComplete: { _ in }, onSave: { _ in }, onPin: { _ in }, onOCR: { _ in }, onTranslate: { _ in }, onLongCapture: {}, onClose: {}, baseImage: screenshot, displaySize: screenshot.size)), CGSize(width: 960, height: 80)),
                 ("ocr", AnyView(OCRBubbleView(text: "识别结果支持选中、编辑和复制。\nOCR keeps the original text available for review.", panelSize: CGSize(width: 440, height: 320), onClose: {})), CGSize(width: 440, height: 320)),
                 ("translation", AnyView(TranslationPanelView(viewModel: model, onTranslate: {}, onSelectService: { _ in }, onClose: {})), CGSize(width: 520, height: 600)),
                 ("gateway", AnyView(GatewaySwitcherPanelView()), GatewaySwitcherPanelLayout.size),
                 ("files", AnyView(FileStagingView(viewModel: .shared, onClose: {})), FileStagingViewModel.shelfSize),
                 ("clipboard", AnyView(ClipboardPopoverView()), CGSize(width: 920, height: 680)),
                 ("calendar", AnyView(CalendarPanelView()), CGSize(width: 960, height: 590)),
-                ("mac-status", AnyView(MacStatusView()), CGSize(width: 400, height: 600)),
-                ("notch", AnyView(NotchShelfView(viewModel: .shared)), CGSize(width: 440, height: 220)),
+                ("mac-status", AnyView(MacStatusView()), CGSize(width: 400, height: 660)),
+                ("notch", AnyView(NotchShelfView(viewModel: .shared)), NotchShelfAnimationLayout.expandedSize),
                 ("todo", AnyView(TodoSlidePanelView()), TodoSlidePanelWindowManager.panelSize),
                 ("history", AnyView(TodoHistoryView()), CGSize(width: 360, height: 440))
             ]
             for (name, view, size) in views {
                 try render(view.defaultAppStorage(defaults), size: size, dark: dark, path: "\(directory)/\(name)-\(dark ? "dark" : "light").png")
             }
+            try render(VStack(spacing: 0) {
+                FeaturePanelHeader(title: "剪贴板", subtitle: "分类筛选 · 点击预览 · 复制或粘贴", icon: "doc.on.clipboard") { EmptyView() }
+                ClipboardBrowserView(viewModel: clipboard)
+            }.featurePanelStyle(), size: CGSize(width: 820, height: 480), dark: dark, path: "\(directory)/clipboard-content-\(dark ? "dark" : "light").png")
             try render(TranslationPanelView(viewModel: model, onTranslate: {}, onSelectService: { _ in }, onClose: {}), size: CGSize(width: 520, height: 480), dark: dark, path: "\(directory)/translation-minimum-\(dark ? "dark" : "light").png")
             model.errorMessage = String(repeating: "HTTP 503：上游暂时不可用，请稍后重试。", count: 8)
             try render(TranslationPanelView(viewModel: model, onTranslate: {}, onSelectService: { _ in }, onClose: {}), size: CGSize(width: 520, height: 480), dark: dark, path: "\(directory)/translation-error-\(dark ? "dark" : "light").png")

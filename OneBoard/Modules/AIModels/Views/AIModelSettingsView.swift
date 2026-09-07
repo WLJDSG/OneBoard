@@ -15,17 +15,12 @@ struct AIModelSettingsView: View {
                     ForEach(AIClient.allCases) { client in
                         Button { selectedClient = client } label: {
                             Label(client.title, systemImage: client.systemImage)
-                                .font(.system(size: 12, weight: .semibold))
-                                .padding(.horizontal, 17).padding(.vertical, 10)
-                                .foregroundStyle(selectedClient == client ? SettingsPalette.accent : .secondary)
-                                .background(selectedClient == client ? SettingsPalette.accent.opacity(0.09) : .clear,
-                                            in: Capsule())
-                        }.buttonStyle(.plain)
+
+                        }.buttonStyle(FeatureSelectionStyle(selected: selectedClient == client))
                     }
                 }
                 .padding(4)
-                .background(.background, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.05)))
+                .featureCardStyle()
                 Spacer()
                 Button { isAddingProfile = true } label: {
                     Label("添加供应商", systemImage: "plus")
@@ -51,9 +46,7 @@ struct AIModelSettingsView: View {
                         } label: {
                             Label(usageViewModel.isRefreshing ? "正在刷新…" : "刷新额度与用量", systemImage: "arrow.clockwise")
                         }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(SettingsPalette.accent)
+                        .buttonStyle(SettingsActionStyle())
                         .disabled(usageViewModel.isRefreshing || !codexAccountViewModel.refreshingAccountIDs.isEmpty)
                     }
                     .padding(.horizontal, 4)

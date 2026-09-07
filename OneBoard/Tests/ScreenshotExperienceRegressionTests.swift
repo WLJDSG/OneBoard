@@ -79,6 +79,32 @@ extension ScreenshotExperienceRegressionTests {
         XCTAssertEqual(frames, [popup, back].map { ScreenshotWindowCandidate.appKitRect(from: $0, primaryScreenHeight: 900) })
     }
 
+    func testDockFullScreenSurfaceDoesNotMaskAppOrCalendarCandidates() {
+        func info(_ rect: CGRect, layer: Int, pid: Int32) -> [String: Any] {
+            [kCGWindowBounds as String: rect.dictionaryRepresentation, kCGWindowLayer as String: layer,
+             kCGWindowAlpha as String: 1, kCGWindowOwnerPID as String: pid]
+        }
+        let screen = CGRect(x: 0, y: 0, width: 1710, height: 1112)
+        let wechat = CGRect(x: 292, y: 121, width: 1135, height: 766)
+        let calendar = CGRect(x: 740, y: 47, width: 960, height: 590)
+        let background = CGRect(x: 0, y: 39, width: 1710, height: 1008)
+        let dock = info(screen, layer: 20, pid: 100)
+        for foreground in [info(wechat, layer: 0, pid: 200), info(calendar, layer: 3, pid: 300)] {
+            for backdrop in [[], [info(background, layer: 0, pid: 400)]] {
+                let candidates = ScreenshotWindowCandidate.frames(from: [dock, foreground] + backdrop,
+                    primaryScreenHeight: screen.height, excludedOwnerPIDs: [100])
+                let target = CGRect(dictionaryRepresentation: foreground[kCGWindowBounds as String] as! CFDictionary)!
+                let expected = ScreenshotWindowCandidate.appKitRect(from: target, primaryScreenHeight: screen.height)
+                XCTAssertEqual(candidates.first { $0.contains(CGPoint(x: expected.midX, y: expected.midY)) }, expected)
+                XCTAssertEqual(candidates.count, 1 + backdrop.count)
+            }
+        }
+        // 同层的第三方浮窗必须保留，不能以 layer == 20 作为排除条件。
+        let appPanel = ScreenshotWindowCandidate.frames(from: [info(calendar, layer: 20, pid: 300)],
+            primaryScreenHeight: screen.height, excludedOwnerPIDs: [100])
+        XCTAssertEqual(appPanel.count, 1)
+    }
+
     func testAppendPreservesEveryRowWithoutDuplicatingOverlap() throws {
         func frame(offset: Int) -> NSImage {
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 40, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 32, bitsPerPixel: 32)!

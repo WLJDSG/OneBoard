@@ -10,9 +10,9 @@ struct GatewayProfileEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(viewModel.title.isEmpty ? "新增网关" : "编辑网关")
-                .font(.headline)
+                .font(.system(size: 17, weight: .semibold))
 
-            SettingsForm {
+            SettingsForm(inset: 0) {
                 LabeledContent("标题") { TextField("标题", text: $viewModel.title).labelsHidden() }
 
                 LabeledContent("模式") {

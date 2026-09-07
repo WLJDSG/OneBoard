@@ -33,18 +33,18 @@ struct CalendarPanelView: View {
     private var grid: CalendarGrid { CalendarGrid(weekStart: CalendarWeekStart(rawValue: weekStartRaw) ?? .monday) }
     private var days: [CalendarDay] { grid.days(containing: month) }
     private var countdowns: [CalendarCountdown] { (try? JSONDecoder().decode([CalendarCountdown].self, from: countdownData)) ?? [] }
-    private let blue = Color(red: 0.04, green: 0.49, blue: 0.98)
+    private let blue = FeaturePalette.accent
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 14) {
                 HStack(spacing: 12) {
                     HStack(spacing: 14) {
-                        Button { move(-1) } label: { Image(systemName: "chevron.left") }
+                        FeaturePanelIconButton(icon: "chevron.left", title: "上个月") { move(-1) }
                         Text(month, format: .dateTime.year().month(.twoDigits)).font(.system(size: 20, weight: .semibold)).monospacedDigit()
-                        Button { move(1) } label: { Image(systemName: "chevron.right") }
-                    }.buttonStyle(.plain).padding(11).background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
-                    Button { month = Date(); selected = Date() } label: { Label("今天", systemImage: "calendar.badge.clock") }.buttonStyle(.bordered)
+                        FeaturePanelIconButton(icon: "chevron.right", title: "下个月") { move(1) }
+                    }
+                    Button { month = Date(); selected = Date() } label: { Label("今天", systemImage: "calendar.badge.clock") }.buttonStyle(SettingsActionStyle())
                     Spacer(minLength: 0)
                     CalendarClock().font(.system(size: 12, weight: .medium))
                 }.frame(height: 44)
@@ -53,7 +53,7 @@ struct CalendarPanelView: View {
                     ForEach(Array(grid.weekdaySymbols(locale: Locale(identifier: "zh_CN")).enumerated()), id: \.offset) { _, value in
                         Text(value).frame(maxWidth: .infinity)
                     }
-                }.font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary).frame(height: 24)
+                }.font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary).frame(height: 30)
                 Divider()
                 GeometryReader { geometry in
                     VStack(spacing: 0) {
@@ -75,10 +75,11 @@ struct CalendarPanelView: View {
                     if Calendar.current.component(.year, from: month) > 2026 { Text("该年调休安排尚未发布").foregroundStyle(.orange) }
                 }.font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(20).frame(minWidth: 530, maxWidth: .infinity)
+                .background(CalendarMonthScrollView(onMove: move))
             Divider().padding(.vertical, 16)
             sidebar.frame(width: 300).padding(20)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .featurePanelStyle()
         .sheet(isPresented: $adding) {
             VStack(spacing: 16) {
                 Text(tab == 0 ? "添加倒数日" : "添加待办").font(.headline)
@@ -92,7 +93,7 @@ struct CalendarPanelView: View {
                         title = ""; adding = false
                     }.disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-            }.padding(24).frame(width: 340)
+            }.padding(24).frame(width: 340).background(SettingsBackdrop()).buttonStyle(SettingsActionStyle()).textFieldStyle(.roundedBorder)
         }
     }
 
@@ -108,7 +109,8 @@ struct CalendarPanelView: View {
                     .overlay(alignment: .topTrailing) {
                         if let work = info.work {
                             Text(work ? "班" : "休").font(.system(size: 8, weight: .bold)).foregroundStyle(.white)
-                                .padding(3).background(work ? Color.orange : Color.green, in: Circle()).offset(x: 14, y: -5)
+                                .frame(width: 14, height: 14).fixedSize()
+                                .background(work ? Color.orange : Color.green, in: Circle()).offset(x: 14, y: -5)
                         }
                     }
                 Text(info.festival ?? info.term ?? info.lunar)
@@ -137,36 +139,31 @@ struct CalendarPanelView: View {
                     ForEach(0..<2) { index in
                         Button { tab = index } label: {
                             Label(index == 0 ? "倒数日" : "待办", systemImage: index == 0 ? "hourglass" : "checklist")
-                                .font(.system(size: 12, weight: .semibold)).padding(.horizontal, 14).padding(.vertical, 9)
-                                .foregroundStyle(tab == index ? blue : .secondary)
-                                .background(tab == index ? blue.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 10))
-                        }.buttonStyle(.plain)
+
+                        }.buttonStyle(FeatureSelectionStyle(selected: tab == index))
                     }
-                }.padding(3).background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+                }.padding(3).featureCardStyle()
                 Spacer(minLength: 0)
-                Button { card.setPinned(!card.pinned) } label: {
-                    Image(systemName: card.pinned ? "pin.fill" : "pin").foregroundStyle(card.pinned ? blue : .secondary)
-                        .frame(width: 34, height: 34).background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-                }.buttonStyle(.plain).help(card.pinned ? "取消置顶" : "置顶")
+                FeaturePanelIconButton(icon: card.pinned ? "pin.fill" : "pin", title: card.pinned ? "取消置顶" : "置顶", selected: card.pinned) { card.setPinned(!card.pinned) }
             }.frame(height: 44)
             if tab == 0 {
                 HStack {
                     ForEach(["全部", "节假日", "24 节气", "自定义"], id: \.self) { item in
                         Button { filter = item } label: {
                             VStack(spacing: 0) {
-                                Text(item).font(.system(size: 11, weight: .semibold)).foregroundStyle(filter == item ? blue : .secondary)
+                                Text(item).font(.system(size: 11, weight: .medium))
                             }
-                        }.buttonStyle(.plain).frame(maxWidth: .infinity)
+                        }.buttonStyle(FeatureSelectionStyle(selected: filter == item, horizontalPadding: 6)).frame(maxWidth: .infinity)
                     }
-                }.frame(height: 24)
+                }.frame(height: 30)
             } else {
-                Color.clear.frame(height: 24)
+                Color.clear.frame(height: 30)
             }
             Divider()
             Button { adding = true } label: {
                 Label(tab == 0 ? "添加倒数日" : "添加待办", systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-            }.buttonStyle(.plain).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+            }.buttonStyle(SettingsActionStyle())
             ScrollView {
                 LazyVStack(spacing: 10) {
                     if tab == 0 {
@@ -182,8 +179,7 @@ struct CalendarPanelView: View {
                                 Spacer()
                                 let remaining = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()), to: event.date).day ?? 0
                                 Text(remaining == 0 ? "今天" : "\(abs(remaining)) 天\(remaining < 0 ? "前" : "后")").foregroundStyle(blue).font(.system(size: 13, weight: .medium))
-                            }.padding(10).background(.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.primary.opacity(0.06)))
+                            }.padding(12).featureCardStyle()
                             .contextMenu { if let id = event.customID { Button("删除", role: .destructive) { save(countdowns.filter { $0.id != id }) } } }
                         }
                         if events.isEmpty { Text("暂无倒数日").foregroundStyle(.secondary).padding() }
@@ -192,7 +188,7 @@ struct CalendarPanelView: View {
                             HStack {
                                 Button { todos.toggleComplete(item) } label: { Image(systemName: "circle") }.buttonStyle(.plain)
                                 Text(item.text).lineLimit(3); Spacer()
-                            }.padding(12).background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+                            }.padding(12).featureCardStyle()
                         }
                     }
                 }

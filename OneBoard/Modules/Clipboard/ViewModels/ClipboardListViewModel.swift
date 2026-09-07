@@ -197,14 +197,12 @@ final class ClipboardListViewModel: ObservableObject {
                     // 直接文件路径
                     url = URL(fileURLWithPath: rawString)
                 }
-                // 检查文件是否存在（避免写入无效引用）
-                let fileExists = FileManager.default.fileExists(atPath: url.path)
                 // 写入多种格式以确保兼容性
                 pasteboard.setString(url.path, forType: NSPasteboard.PasteboardType.string)  // 文件路径文本
                 pasteboard.setString(url.absoluteString, forType: NSPasteboard.PasteboardType.fileURL)  // file:// URL
                 // 写入实际文件引用（NSURL 对象，Finder 可识别）
                 pasteboard.writeObjects([url as NSURL])
-                print("[ViewModel] ✅ 已写入剪贴板(文件): \(url.path) exists: \(fileExists)")
+                print("[ViewModel] ✅ 已写入剪贴板(文件): \(url.path)")
             } else {
                 print("[ViewModel] ⚠️ 文件路径解析失败")
             }

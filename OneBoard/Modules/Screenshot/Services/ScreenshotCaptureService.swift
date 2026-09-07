@@ -60,7 +60,8 @@ final class ScreenshotCaptureService: NSObject {
                     let overlayView = ScreenshotOverlayContentView(
                         screenshot: capture.image,
                         eventManager: eventManager,
-                        windowCandidates: ScreenshotWindowCandidate.localRects(windowFrames, screenFrame: capture.plan.screenFrame)
+                        windowCandidates: ScreenshotWindowCandidate.localRects(windowFrames, screenFrame: capture.plan.screenFrame),
+                        toolbarVisibleFrame: capture.screen.visibleFrame.offsetBy(dx: -capture.plan.screenFrame.minX, dy: -capture.plan.screenFrame.minY)
                     )
                     overlayView.onConfirm = { img, rect, action in
                         finish(ScreenshotResult(image: img, selectionRect: rect, action: action))

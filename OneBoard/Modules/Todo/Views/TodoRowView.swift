@@ -9,6 +9,7 @@ struct TodoRowView: View {
     var onDelete: () -> Void
     var onPriorityChange: (Priority) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showPriorityMenu = false
     @State private var showDueDatePicker = false
 
@@ -84,8 +85,8 @@ struct TodoRowView: View {
             RoundedRectangle(cornerRadius: OneBoardRadius.md)
                 .fill(item.isOverdue ? OneBoardColors.destructive.opacity(0.08) : Color.clear)
         )
-        .opacity(isFadingOut ? 0 : 1)
-        .animation(.easeOut(duration: 2.5), value: isFadingOut)
+        .opacity(isFadingOut ? 0.45 : 1)
+        .animation(reduceMotion ? nil : InterfaceMotion.feedback, value: isFadingOut)
         .popover(isPresented: $showDueDatePicker) {
             dueDatePicker
         }
@@ -112,11 +113,12 @@ struct TodoRowView: View {
                     .padding(.horizontal, OneBoardSpacing.sm)
                     .padding(.vertical, OneBoardSpacing.xs)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FeatureSelectionStyle(selected: item.priority == p))
             }
         }
-        .padding(.vertical, OneBoardSpacing.twoXS)
-        .frame(width: 100)
+        .padding(8)
+        .frame(width: 120)
+        .featurePanelStyle()
     }
 
     private var dueDatePicker: some View {
@@ -145,6 +147,7 @@ struct TodoRowView: View {
                 .oneBoardFont(.callout)
         }
         .padding()
+        .featurePanelStyle()
     }
 
     private func formatDueDate(_ date: Date) -> String {

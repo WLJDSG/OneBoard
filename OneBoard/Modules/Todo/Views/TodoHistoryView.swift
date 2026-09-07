@@ -89,22 +89,22 @@ struct TodoHistoryView: View {
                         ForEach(viewModel.dailyCounts, id: \.date) { entry in
                             VStack(spacing: 2) {
                                 Text("\(entry.count)")
-                                    .font(.system(size: 8))
+                                    .font(.system(size: 11))
                                     .foregroundColor(entry.count > 0 ? FeaturePalette.accent : .clear)
                                 RoundedRectangle(cornerRadius: OneBoardRadius.sm)
                                     .fill(entry.count > 0 ? FeaturePalette.accent : FeaturePalette.secondary.opacity(0.1))
                                     .frame(
-                                        width: 8,
+                                        width: 32,
                                         height: max(4, CGFloat(entry.count) / CGFloat(max(maxCount, 1)) * 60)
                                     )
                                 Text(String(entry.date.suffix(5)))  // MM-DD
-                                    .font(.system(size: 7))
+                                    .font(.system(size: 11))
                                     .foregroundColor(FeaturePalette.secondary)
                             }
                         }
                     }
                 }
-                .frame(height: 80)
+                .frame(height: 96)
             }
         }
     }

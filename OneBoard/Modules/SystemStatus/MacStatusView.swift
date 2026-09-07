@@ -3,28 +3,26 @@ import SwiftUI
 @MainActor
 final class MacStatusWindowManager {
     static let shared = MacStatusWindowManager()
-    let card = HoverCardController(title: "Mac 状态", size: CGSize(width: 400, height: 600)) { AnyView(MacStatusView()) }
+    let card = HoverCardController(title: "Mac 状态", size: CGSize(width: 400, height: 660)) { AnyView(MacStatusView()) }
 }
 
 struct MacStatusView: View {
     @ObservedObject private var model = MacStatusModel.shared
-    @State private var networkHovered = false
     private func bytes(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .memory) }
     // 磁盘使用十进制容量；内存保留二进制格式。
     static func diskBytes(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }
     var body: some View {
-        ScrollView {
-        VStack(spacing: 12) {
-            HStack {
-                Label("Mac 状态", systemImage: "desktopcomputer").font(.system(size: 18, weight: .semibold))
-                Spacer(); Label("实时", systemImage: "circle.fill").font(.caption).foregroundStyle(.green)
-            }.padding(.bottom, 6)
+        VStack(spacing: 0) {
+            FeaturePanelHeader(title: "Mac 状态", subtitle: "网络、性能与存储空间", icon: "desktopcomputer") {
+                Label("实时", systemImage: "circle.fill").font(.system(size: 11)).foregroundStyle(.green)
+            }
+            VStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack { Text("实时网速").font(.headline); Spacer(); Text("近 60 次采样").font(.caption).foregroundStyle(.secondary) }
                 HStack {
                     Label(bytes(Int64(model.upload)) + "/s", systemImage: "arrow.up").foregroundStyle(.purple)
                     Spacer()
-                    Label(bytes(Int64(model.download)) + "/s", systemImage: "arrow.down").foregroundStyle(.blue)
+                    Label(bytes(Int64(model.download)) + "/s", systemImage: "arrow.down").foregroundStyle(FeaturePalette.accent)
                 }.font(.system(size: 18, weight: .semibold)).monospacedDigit()
                 GeometryReader { geometry in
                     let maximum = max(1024, model.history.flatMap { [$0.0, $0.1] }.max() ?? 1024)
@@ -34,7 +32,7 @@ struct MacStatusView: View {
                                 let point = CGPoint(x: CGFloat(index) / 59 * geometry.size.width, y: geometry.size.height * (1 - (line == 0 ? sample.0 : sample.1) / maximum))
                                 if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
                             }
-                        }.stroke(line == 0 ? Color.purple : .blue, lineWidth: 2)
+                        }.stroke(line == 0 ? Color.purple : FeaturePalette.accent, lineWidth: 2)
                     }
                 }.frame(height: 50)
                 Divider()
@@ -47,25 +45,24 @@ struct MacStatusView: View {
                 }
                 if model.apps.isEmpty { Text("等待应用产生网络流量").font(.caption).foregroundStyle(.secondary) }
                 Text(model.networkStatus).font(.system(size: 11)).foregroundStyle(.secondary)
-            }.padding(14).background(networkHovered ? Color.blue.opacity(0.08) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 20))
-                .onHover { networkHovered = $0 }
+            }.padding(14).featureCardStyle()
             HStack(spacing: 8) {
-                metric("CPU", value: "\(Int(model.cpu * 100))%", progress: model.cpu, color: .blue)
+                metric("CPU", value: "\(Int(model.cpu * 100))%", progress: model.cpu, color: FeaturePalette.accent)
                 metric("内存", value: "\(Int(model.memory * 100))%", progress: model.memory, color: .teal)
                 metric("温控", value: model.thermal, progress: nil, color: .green)
             }
             Button { openStorage() } label: {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("Macintosh HD", systemImage: "internaldrive"); Spacer(); Text(Self.diskBytes(model.freeDisk) + " 空闲").foregroundStyle(.blue) }.font(.system(size: 12, weight: .semibold))
-                coloredProgress(model.totalDisk > 0 ? Double(model.totalDisk - model.freeDisk) / Double(model.totalDisk) : 0, color: .blue)
+                HStack { Label("Macintosh HD", systemImage: "internaldrive"); Spacer(); Text(Self.diskBytes(model.freeDisk) + " 空闲").foregroundStyle(FeaturePalette.accent) }.font(.system(size: 12, weight: .semibold))
+                coloredProgress(model.totalDisk > 0 ? Double(model.totalDisk - model.freeDisk) / Double(model.totalDisk) : 0, color: FeaturePalette.accent)
                 Text("总容量 \(Self.diskBytes(model.totalDisk)) · 内存 \(bytes(Int64(model.usedMemory))) / \(bytes(Int64(ProcessInfo.processInfo.physicalMemory)))").font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(14)
             }.buttonStyle(StatusTileStyle()).help("空闲空间不含系统可清理空间；点击打开系统存储空间设置")
-            HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 " + MacStatusModel.uptimeText(ProcessInfo.processInfo.systemUptime)) }.font(.system(size: 11)).padding(12).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+            HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 " + MacStatusModel.uptimeText(ProcessInfo.processInfo.systemUptime)) }.font(.system(size: 11)).padding(12).featureCardStyle()
             Spacer(minLength: 0)
-        }.padding(20)
-        }.scrollIndicators(.hidden).frame(width: 400, height: 600)
-            .background(Color(nsColor: .windowBackgroundColor))
+            }.padding(.horizontal, InterfaceMetrics.panelInset).padding(.bottom, InterfaceMetrics.panelInset)
+        }.frame(width: 400, height: 660)
+            .featurePanelStyle()
             .task { model.start() }
     }
     private func appIcon(_ app: AppNetworkUsage) -> NSImage {
@@ -92,9 +89,9 @@ struct MacStatusView: View {
         Button { openActivityMonitor() } label: {
         VStack(alignment: .leading, spacing: 8) {
             Label(title, systemImage: title == "CPU" ? "cpu" : title == "内存" ? "memorychip" : "thermometer.medium").font(.caption).foregroundStyle(color)
-            Text(value).font(.system(size: 23, weight: .bold))
+            Text(value).font(.system(size: 21, weight: .semibold)).monospacedDigit()
             if let progress { coloredProgress(progress, color: color) }
-            else { Text("系统状态").font(.system(size: 10)).foregroundStyle(.secondary) }
+            else { Text("系统状态").font(.system(size: 11)).foregroundStyle(.secondary) }
         }.frame(maxWidth: .infinity, alignment: .leading).frame(height: 64).padding(12)
         }.buttonStyle(StatusTileStyle()).help("打开活动监视器")
     }
@@ -107,12 +104,14 @@ private struct StatusTileStyle: ButtonStyle {
     private struct Tile: View {
         let configuration: ButtonStyleConfiguration
         @State private var hovered = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         var body: some View {
             configuration.label
-                .contentShape(RoundedRectangle(cornerRadius: 16))
-                .background(hovered ? Color.blue.opacity(0.09) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(hovered ? Color.blue.opacity(0.25) : .clear))
+                .contentShape(RoundedRectangle(cornerRadius: InterfaceMetrics.cardRadius))
+                .background(hovered ? FeaturePalette.hover : FeaturePalette.surface, in: RoundedRectangle(cornerRadius: InterfaceMetrics.cardRadius))
+                .overlay(RoundedRectangle(cornerRadius: InterfaceMetrics.cardRadius).stroke(hovered ? FeaturePalette.accent.opacity(0.35) : FeaturePalette.border))
                 .opacity(configuration.isPressed ? 0.75 : 1)
+                .animation(reduceMotion ? nil : InterfaceMotion.feedback, value: hovered)
                 .onHover { hovered = $0 }
         }
     }

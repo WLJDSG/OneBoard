@@ -12,15 +12,12 @@ struct CodexOAuthAccountView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Label("添加 Codex 账号", systemImage: "person.crop.circle.badge.plus")
-                    .font(.title3.weight(.semibold))
+                    .font(.system(size: 17, weight: .semibold))
                 Spacer()
-                Button(action: close) {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless)
+                FeaturePanelIconButton(icon: "xmark", title: "关闭", action: close)
             }
 
-            SettingsForm {
+            SettingsForm(inset: 0) {
                 Section("待授权账号") {
                     LabeledContent("OpenAI 账号邮箱") { TextField("OpenAI 账号邮箱", text: $email).labelsHidden() }
                         .textContentType(.emailAddress)
@@ -50,7 +47,7 @@ struct CodexOAuthAccountView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(SettingsActionStyle(prominent: true))
                     .controlSize(.large)
                     .disabled(viewModel.isAuthorizing || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 

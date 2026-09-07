@@ -50,8 +50,9 @@ struct AnnotationToolbarView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(.white.opacity(0.22)))
+        .background(SettingsPalette.canvas, in: RoundedRectangle(cornerRadius: InterfaceMetrics.panelRadius))
+        .overlay(RoundedRectangle(cornerRadius: InterfaceMetrics.panelRadius).strokeBorder(FeaturePalette.border))
+        .tint(FeaturePalette.accent)
         .shadow(color: OneBoardShadow.lg.color, radius: OneBoardShadow.lg.radius, x: 0, y: OneBoardShadow.lg.y)
     }
 
@@ -222,7 +223,7 @@ struct AnnotationToolbarView: View {
                 )
                 .overlay(RoundedRectangle(cornerRadius: OneBoardRadius.sm).strokeBorder(annotationService.selectedTool == tool ? OneBoardColors.accent.opacity(0.55) : .clear))
                 .foregroundColor(
-                    annotationService.selectedTool == tool ? Color.accentColor : Color.primary
+                    annotationService.selectedTool == tool ? FeaturePalette.accent : Color.primary
                 )
         }
         .buttonStyle(.plain)
@@ -325,7 +326,7 @@ struct AnnotationToolbarView: View {
                     RoundedRectangle(cornerRadius: OneBoardRadius.lg)
                         .fill(buttonBackgroundColor(prominent: prominent, muted: muted))
                 )
-                .foregroundColor(prominent ? .white : Color.primary.opacity(muted ? 0.55 : 0.85))
+                .foregroundColor(prominent ? SettingsPalette.onAccent : Color.primary.opacity(muted ? 0.55 : 0.85))
         }
         .buttonStyle(.plain)
         .help(label)
@@ -333,7 +334,7 @@ struct AnnotationToolbarView: View {
 
     private func buttonBackgroundColor(prominent: Bool, muted: Bool) -> Color {
         if prominent {
-            return Color.accentColor
+            return FeaturePalette.accent
         }
         return Color.clear
     }
@@ -429,7 +430,7 @@ private struct AnnotationResultView: View {
         }
         .padding(14)
         .frame(width: 320, height: 260)
-        .background(.regularMaterial)
+        .background(SettingsPalette.canvas)
         .clipShape(RoundedRectangle(cornerRadius: OneBoardRadius.lg))
     }
 }

@@ -125,14 +125,14 @@ struct QuickLaunchSettingsView: View {
                                     } else if binding.kind == "web" {
                                         webThumbnail(binding)
                                     } else {
-                                        Image(systemName: toolIcon(binding.target)).font(.system(size: 23)).foregroundStyle(.blue).frame(height: 30)
+                                        Image(systemName: toolIcon(binding.target)).font(.system(size: 23)).foregroundStyle(SettingsPalette.accent).frame(height: 30)
                                     }
                                 } else { Text(key).font(.system(size: 19, weight: .semibold)).frame(height: 30) }
                                 Text("⌥" + key).font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
                                 Text(bindings[key]?.displayTitle ?? "绑定")
                                     .font(.system(size: 9)).lineLimit(1)
                             }.frame(maxWidth: .infinity).frame(height: 82)
-                                .background(bindings[key] == nil ? Color.primary.opacity(0.035) : Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                                .background(bindings[key] == nil ? Color.primary.opacity(0.035) : SettingsPalette.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08)))
                         }.buttonStyle(.plain)
                         .popover(isPresented: Binding(get: { menuKey == key }, set: { if !$0 { menuKey = nil } }), arrowEdge: .bottom) {
@@ -233,7 +233,7 @@ struct QuickLaunchSettingsView: View {
                 .font(.system(size: 10, weight: .bold))
                 .frame(width: 30, height: 30)
                 .foregroundStyle(.white)
-                .background(Color.blue.gradient, in: RoundedRectangle(cornerRadius: 7))
+                .background(SettingsPalette.accent, in: RoundedRectangle(cornerRadius: 7))
         }
     }
 

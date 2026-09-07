@@ -62,7 +62,8 @@ struct FileDropTarget: NSViewRepresentable {
 
         static func urls(fromLegacyPropertyList value: Any?) -> [URL] {
             let paths = value as? [String] ?? []
-            return paths.map(URL.init(fileURLWithPath:))
+            // 旧载荷仅提供路径；避免 URL 初始化时自动探测目录属性。
+            return paths.map { URL(fileURLWithPath: $0, isDirectory: false) }
         }
     }
 }

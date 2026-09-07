@@ -8,25 +8,23 @@ struct CodexAccountSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("已保存 \(viewModel.profiles.count) 个账号").font(.system(size: 13)).foregroundStyle(.secondary)
+                Spacer()
+                Button { isAddingAccount = true } label: { Label("添加账号", systemImage: "plus") }
+                    .buttonStyle(SettingsActionStyle(prominent: true))
+            }.padding(.horizontal, InterfaceMetrics.pageInset)
             SettingsForm {
                 Section {
                     LabeledContent("Codex 状态", value: viewModel.isCodexRunning ? "正在运行" : "未运行")
                     LabeledContent("当前账号", value: viewModel.activeProfile?.title ?? "尚未保存")
                     LabeledContent("登录凭据", value: viewModel.hasCurrentAuthCache ? "已检测到" : "未检测到")
 
-                    HStack {
-                        Button {
-                            isAddingAccount = true
-                        } label: {
-                            Label("添加 Codex 账号…", systemImage: "plus")
+                    if viewModel.activeProfile != nil {
+                        Button("更新当前账号凭据") {
+                            viewModel.refreshActiveAuthCache()
                         }
-
-                        if viewModel.activeProfile != nil {
-                            Button("更新当前账号凭据") {
-                                viewModel.refreshActiveAuthCache()
-                            }
-                            .disabled(!viewModel.hasCurrentAuthCache)
-                        }
+                        .disabled(!viewModel.hasCurrentAuthCache)
                     }
                 } header: {
                     Text("账号授权")
@@ -52,7 +50,7 @@ struct CodexAccountSettingsView: View {
                         } label: {
                             Label("刷新额度", systemImage: "arrow.clockwise")
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(SettingsActionStyle())
                         .disabled(!viewModel.refreshingAccountIDs.isEmpty)
                     }
                 } footer: {

@@ -32,9 +32,8 @@ struct ClipboardBrowserView: View {
             HStack(spacing: 8) {
                 ForEach(ClipboardCategory.allCases) { item in
                     Button { category = item; selectedID = nil } label: {
-                        Text(item.rawValue).font(.system(size: 12, weight: .medium)).padding(.horizontal, 10).padding(.vertical, 8)
-                            .background(category == item ? Color.accentColor.opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: 9))
-                    }.buttonStyle(.plain)
+                        Text(item.rawValue)
+                    }.buttonStyle(FeatureSelectionStyle(selected: category == item))
                 }
                 Spacer()
                 Text("共 \(filtered.count) 条").font(.caption).foregroundStyle(.secondary)
@@ -48,7 +47,7 @@ struct ClipboardBrowserView: View {
                                 onDelete: { Task { await viewModel.delete(entry) } },
                                 onDoubleTap: { viewModel.selectAndPaste(entry) })
                             .padding(.vertical, 8)
-                            .background(selected?.id == entry.id ? Color.accentColor.opacity(0.13) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
+                            .background(selected?.id == entry.id ? FeaturePalette.accent.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
                             .contextMenu {
                                 Button("复制") { viewModel.copy(entry) }
                                 Button("粘贴到原应用") { viewModel.selectAndPaste(entry) }
@@ -60,7 +59,7 @@ struct ClipboardBrowserView: View {
                     if let entry = selected {
                         ClipboardDetailView(entry: entry, viewModel: viewModel).id(entry.id)
                     } else {
-                        ContentUnavailableView("暂无内容", systemImage: "doc.on.clipboard", description: Text("复制内容后会自动记录，也可以切换筛选条件"))
+                        FeatureEmptyState(title: "暂无内容", subtitle: "复制内容后会自动记录，也可以切换筛选条件", icon: "doc.on.clipboard")
                     }
                 }.frame(minWidth: 350, maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -83,9 +82,9 @@ private struct ClipboardDetailView: View {
                 Text("预览").font(.headline)
                 Spacer()
                 Button("复制") { viewModel.copy(entry) }
-                Button("粘贴") { viewModel.selectAndPaste(entry) }
-                Button { Task { await viewModel.togglePin(entry) } } label: { Image(systemName: entry.isPinned ? "pin.fill" : "pin") }
-                Button { Task { await viewModel.delete(entry) } } label: { Image(systemName: "trash") }
+                Button("粘贴") { viewModel.selectAndPaste(entry) }.buttonStyle(SettingsActionStyle(prominent: true))
+                FeaturePanelIconButton(icon: entry.isPinned ? "pin.fill" : "pin", title: entry.isPinned ? "取消置顶" : "置顶", selected: entry.isPinned) { Task { await viewModel.togglePin(entry) } }
+                FeaturePanelIconButton(icon: "trash", title: "删除记录") { Task { await viewModel.delete(entry) } }
             }
             Group {
                 if entry.isImage {
@@ -93,9 +92,7 @@ private struct ClipboardDetailView: View {
                         Image(nsImage: image).resizable().scaledToFit().frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
                 } else if let url = fileURL {
-                    if FileManager.default.fileExists(atPath: url.path) {
-                        ClipboardFilePreview(url: url)
-                    } else { ContentUnavailableView("文件已移动或删除", systemImage: "doc.badge.ellipsis", description: Text(url.lastPathComponent)) }
+                    ClipboardFilePreview(url: url)
                 } else {
                     ScrollView {
                         Text(entry.plainText ?? String(data: entry.data, encoding: .utf8) ?? "无法预览此内容")
@@ -109,7 +106,7 @@ private struct ClipboardDetailView: View {
                 Spacer()
                 Text(ByteCountFormatter.string(fromByteCount: Int64(entry.data.count), countStyle: .file))
             }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        }.padding(18).background(.background.opacity(0.65), in: RoundedRectangle(cornerRadius: 20)).padding(10)
+        }.padding(16).featureCardStyle().padding(10)
         .task {
             guard entry.isImage else { return }
             previewImage = await ClipboardThumbnailCache.image(for: entry)
@@ -128,24 +125,41 @@ struct ClipboardFilePreview: View {
     @State private var thumbnail: NSImage?
     @State private var failed = false
     @State private var previewURL: URL?
+    @State private var allowedProtectedPreview = false
+    private var needsAccessGuide: Bool {
+        PermissionManager.isOtherAppDataURL(url) && !allowedProtectedPreview
+    }
     var body: some View {
         VStack {
-            if let thumbnail { Image(nsImage: thumbnail).resizable().scaledToFit() }
+            if needsAccessGuide {
+                Image(systemName: "lock.doc").font(.system(size: 36)).foregroundStyle(.secondary)
+                Text("此文件位于其他 App 的数据目录")
+                Text("可先为 OneBoard 开启完全磁盘访问，重启后重试；已授权时可继续预览。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("管理完全磁盘访问权限") { PermissionManager.shared.openFullDiskAccessSettings() }
+                Button("继续预览") { allowedProtectedPreview = true }
+            } else if let thumbnail { Image(nsImage: thumbnail).resizable().scaledToFit() }
             else if failed { Image(systemName: "doc").font(.system(size: 54)).foregroundStyle(.secondary) }
             else { ProgressView() }
             Text(url.lastPathComponent).lineLimit(2)
-            Button("快速查看") { previewURL = url }
+            Button("快速查看") { previewURL = url }.disabled(needsAccessGuide)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .quickLookPreview($previewURL)
-        .task(id: url) {
+        .task(id: "\(url.absoluteString)|\(needsAccessGuide)") {
             thumbnail = nil; failed = false
+            guard !needsAccessGuide else { return }
             let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: 1000, height: 1000), scale: 1, representationTypes: .all)
             do {
                 let result = try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
                 guard !Task.isCancelled else { return }
                 thumbnail = result.nsImage
-            } catch { if !Task.isCancelled { failed = true } }
+            } catch {
+                if !Task.isCancelled {
+                    failed = true
+                    PermissionManager.shared.handleFileAccessError(error)
+                }
+            }
         }
     }
 }
