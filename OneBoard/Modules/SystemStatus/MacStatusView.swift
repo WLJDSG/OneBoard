@@ -10,6 +10,8 @@ struct MacStatusView: View {
     @ObservedObject private var model = MacStatusModel.shared
     @State private var networkHovered = false
     private func bytes(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .memory) }
+    // 磁盘使用十进制容量；内存保留二进制格式。
+    static func diskBytes(_ value: Int64) -> String { ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }
     var body: some View {
         ScrollView {
         VStack(spacing: 12) {
@@ -54,11 +56,11 @@ struct MacStatusView: View {
             }
             Button { openStorage() } label: {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("Macintosh HD", systemImage: "internaldrive"); Spacer(); Text(bytes(model.freeDisk) + " 可用").foregroundStyle(.blue) }.font(.system(size: 12, weight: .semibold))
+                HStack { Label("Macintosh HD", systemImage: "internaldrive"); Spacer(); Text(Self.diskBytes(model.freeDisk) + " 空闲").foregroundStyle(.blue) }.font(.system(size: 12, weight: .semibold))
                 coloredProgress(model.totalDisk > 0 ? Double(model.totalDisk - model.freeDisk) / Double(model.totalDisk) : 0, color: .blue)
-                Text("总容量 \(bytes(model.totalDisk)) · 内存 \(bytes(Int64(model.usedMemory))) / \(bytes(Int64(ProcessInfo.processInfo.physicalMemory)))").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("总容量 \(Self.diskBytes(model.totalDisk)) · 内存 \(bytes(Int64(model.usedMemory))) / \(bytes(Int64(ProcessInfo.processInfo.physicalMemory)))").font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(14)
-            }.buttonStyle(StatusTileStyle()).help("打开系统存储空间设置")
+            }.buttonStyle(StatusTileStyle()).help("空闲空间不含系统可清理空间；点击打开系统存储空间设置")
             HStack { Label(model.battery, systemImage: "battery.100percent"); Spacer(); Text("运行 " + MacStatusModel.uptimeText(ProcessInfo.processInfo.systemUptime)) }.font(.system(size: 11)).padding(12).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
             Spacer(minLength: 0)
         }.padding(20)

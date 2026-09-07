@@ -2,6 +2,11 @@ import XCTest
 @testable import OneBoardKit
 
 final class MacStatusTests: XCTestCase {
+    func testDiskCapacityUsesDecimalUnits() {
+        XCTAssertEqual(MacStatusView.diskBytes(494_384_795_648), ByteCountFormatter.string(fromByteCount: 494_384_795_648, countStyle: .file))
+        XCTAssertEqual(MacStatusView.diskBytes(216_584_196_096), ByteCountFormatter.string(fromByteCount: 216_584_196_096, countStyle: .file))
+    }
+
     @MainActor
     func testLiveSystemSamplingReturnsRealCapacityAndHistory() async throws {
         let model = MacStatusModel()
